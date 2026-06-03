@@ -5,6 +5,7 @@ import { apiFetch, apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import Link from 'next/link';
 import { useLocale } from '@/context/LocaleContext';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 type ChannelResult = { platform: string; success: boolean; message: string; at: string };
 
@@ -80,6 +81,29 @@ export default function ScheduleBotPage() {
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [smartGoldenHour, setSmartGoldenHour] = useState(false);
+  const [fetchingGoldenHour, setFetchingGoldenHour] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleSmartGoldenHour = async (checked: boolean) => {
+    setSmartGoldenHour(checked);
+    if (!checked) return;
+
+    setFetchingGoldenHour(true);
+    try {
+      const res = await apiJson<{ recommendedHours: number[]; isFallback: boolean; message: string }>('/schedules/golden-hour');
+      if (res && res.recommendedHours && res.recommendedHours.length > 0) {
+        const hour = res.recommendedHours[0];
+        setGoldenHour(hour);
+        setSuccess(`${t('Đã tự điền giờ vàng tối ưu:')} ${hour}:00. (${res.message})`);
+      }
+    } catch (err: any) {
+      setError(err?.message || t('Lỗi khi tải giờ vàng đề xuất'));
+    } finally {
+      setFetchingGoldenHour(false);
+    }
+  };
 
   const platformLabel = (raw: string): string => {
     return raw
@@ -155,6 +179,7 @@ export default function ScheduleBotPage() {
     setImageFile(null);
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
+    setSmartGoldenHour(false);
   };
 
   const startEdit = (item: Schedule) => {
@@ -295,13 +320,24 @@ export default function ScheduleBotPage() {
     }
   };
 
-  const remove = async (id: number) => {
-    if (!confirm(t('Xóa lịch này?'))) return;
+  const remove = (id: number) => {
+    setDeleteConfirmId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    setDeleting(true);
+    setError('');
+    setSuccess('');
     try {
-      await apiJson(`/schedules/${id}`, { method: 'DELETE' });
+      await apiJson(`/schedules/${deleteConfirmId}`, { method: 'DELETE' });
       await load();
+      setSuccess(t('Đã xóa lịch đăng bài thành công.'));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('Không xóa được'));
+    } finally {
+      setDeleting(false);
+      setDeleteConfirmId(null);
     }
   };
 
@@ -409,6 +445,21 @@ export default function ScheduleBotPage() {
               onChange={(e) => setScheduledAt(e.target.value)}
               required
             />
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                id="smartGoldenHour"
+                checked={smartGoldenHour}
+                onChange={(e) => handleSmartGoldenHour(e.target.checked)}
+                className="w-4 h-4 accent-brand border-slate-300 rounded cursor-pointer"
+              />
+              <label htmlFor="smartGoldenHour" className="text-xs text-slate-600 font-semibold cursor-pointer flex items-center gap-1.5 select-none">
+                {t('smartGoldenHour')}
+                {fetchingGoldenHour && (
+                  <span className="w-3 h-3 border-2 border-brand border-t-transparent rounded-full animate-spin inline-block" />
+                )}
+              </label>
+            </div>
             <div className="flex gap-1.5 flex-wrap items-center mt-1">
               <span className="text-xs text-slate-500 font-semibold mr-1">{t('Khung giờ vàng:')}</span>
               {[
@@ -622,8 +673,8 @@ export default function ScheduleBotPage() {
                     <td className="text-xs text-slate-500 max-w-[280px]">
                       {chResults.length > 0 ? (
                         <div className="flex flex-col gap-1">
-                          {chResults.map((r) => (
-                            <div key={r.platform} className="flex items-center gap-1.5">
+                          {chResults.map((r, idx) => (
+                            <div key={`${r.platform}-${idx}`} className="flex items-center gap-1.5">
                               <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold capitalize ${
                                 r.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                               }`}>
@@ -642,36 +693,32 @@ export default function ScheduleBotPage() {
                       )}
                     </td>
                     <td className="space-x-2 whitespace-nowrap">
-                      {(i.status === 'PENDING' || i.status === 'FAILED' || i.status === 'PARTIAL' || i.status === 'DRAFT') && (
-                        <>
-                          {(i.status === 'PENDING' || i.status === 'FAILED' || i.status === 'DRAFT') && (
-                            <button
-                              type="button"
-                              className="text-xs text-slate-600 hover:underline"
-                              onClick={() => startEdit(i)}
-                            >
-                              {t('Sửa')}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="text-xs text-brand font-semibold hover:underline"
-                            disabled={sendingId === i.id}
-                            onClick={() => sendNow(i.id)}
-                          >
-                            {sendingId === i.id ? t('⏳ Đang gửi...') : t('Gửi thử / gửi ngay')}
-                          </button>
-                          {(i.status === 'PENDING' || i.status === 'DRAFT') && (
-                            <button
-                              type="button"
-                              className="text-xs text-red-500 hover:underline"
-                              onClick={() => remove(i.id)}
-                            >
-                              {t('Xóa')}
-                            </button>
-                          )}
-                        </>
+                      {(i.status === 'PENDING' || i.status === 'FAILED' || i.status === 'DRAFT') && (
+                        <button
+                          type="button"
+                          className="text-xs text-slate-600 hover:underline"
+                          onClick={() => startEdit(i)}
+                        >
+                          {t('Sửa')}
+                        </button>
                       )}
+                      {(i.status === 'PENDING' || i.status === 'FAILED' || i.status === 'PARTIAL' || i.status === 'DRAFT') && (
+                        <button
+                          type="button"
+                          className="text-xs text-brand font-semibold hover:underline"
+                          disabled={sendingId === i.id}
+                          onClick={() => sendNow(i.id)}
+                        >
+                          {sendingId === i.id ? t('⏳ Đang gửi...') : t('Gửi thử / gửi ngay')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="text-xs text-red-500 hover:underline"
+                        onClick={() => remove(i.id)}
+                      >
+                        {t('Xóa')}
+                      </button>
                     </td>
                   </tr>
                 );
@@ -680,6 +727,18 @@ export default function ScheduleBotPage() {
           </table>
         </div>
       )}
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        title={t('Xóa lịch hẹn giờ')}
+        description={t('Bạn có chắc chắn muốn xóa lịch đăng bài này? Hành động này sẽ loại bỏ hoàn toàn lịch ra khỏi hệ thống.')}
+        highlight={items.find((item) => item.id === deleteConfirmId)?.title}
+        confirmLabel={t('Xóa lịch')}
+        cancelLabel={t('Hủy')}
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }
@@ -792,10 +851,23 @@ function CalendarView({ items, startEdit, sendNow, remove }: { items: Schedule[]
                     <div
                       key={s.id}
                       onClick={() => ['PENDING', 'FAILED', 'DRAFT'].includes(s.status) && startEdit(s)}
-                      className={`text-[10px] p-1 rounded font-medium truncate cursor-pointer transition-all hover:scale-105 ${badgeColor}`}
+                      className={`text-[10px] p-1 rounded font-medium cursor-pointer transition-all hover:scale-[1.02] ${badgeColor} flex justify-between items-center group`}
                       title={`${s.title} (${new Date(s.scheduledAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`}
                     >
-                      {new Date(s.scheduledAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {s.title}
+                      <span className="truncate flex-1">
+                        {new Date(s.scheduledAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {s.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remove(s.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 ml-1 text-red-500 hover:text-red-700 font-bold px-0.5 text-xs transition-opacity"
+                        title={t('Xóa')}
+                      >
+                        ×
+                      </button>
                     </div>
                   );
                 })}

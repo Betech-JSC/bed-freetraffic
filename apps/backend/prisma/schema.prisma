@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client"
 }
 
 datasource db {
@@ -7,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id          Int      @id @default(autoincrement())
-  email       String   @unique
+  id          Int             @id @default(autoincrement())
+  email       String          @unique
   name        String?
   password    String
-  role        Role     @default(EDITOR)
-  isActive    Boolean  @default(true)
+  role        Role            @default(EDITOR)
+  isActive    Boolean         @default(true)
   totpSecret  String?
-  totpEnabled Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  totpEnabled Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  workspaces  UserWorkspace[]
 }
 
 enum Role {
@@ -25,24 +27,62 @@ enum Role {
   VIEWER
 }
 
+model Workspace {
+  id                Int                 @id @default(autoincrement())
+  name              String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  users             UserWorkspace[]
+  channels          Channel[]
+  keywordGroups     KeywordGroup[]
+  seoKeywords       SeoKeyword[]
+  googleInts        GoogleIntegration[]
+  automations       AutomationTask[]
+  templates         PostTemplate[]
+  schedules         ContentSchedule[]
+  seoAudits         SeoAudit[]
+  backlinks         Backlink[]
+  emailCampaigns    EmailCampaign[]
+  customers         Customer[]
+  alertRules        AlertRule[]
+  abTests           AbTest[]
+  socialConnections SocialConnection[]
+  analyticsSnapshots AnalyticsSnapshot[]
+}
+
+model UserWorkspace {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  workspaceId Int
+  role        String    @default("MEMBER") // OWNER, MEMBER, VIEWER
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+}
+
 model Channel {
-  id                Int      @id @default(autoincrement())
+  id                Int              @id @default(autoincrement())
   name              String
   type              String
   url               String?
-  status            String   @default("ACTIVE")
+  status            String           @default("ACTIVE")
   apiConfig         String?
-  connectionStatus  String   @default("DISCONNECTED")
+  connectionStatus  String           @default("DISCONNECTED")
   keywords          SeoKeyword[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  workspaceId       Int?
+  workspace         Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 }
 
 model KeywordGroup {
-  id        Int          @id @default(autoincrement())
-  name      String
-  keywords  SeoKeyword[]
-  createdAt DateTime     @default(now())
+  id          Int          @id @default(autoincrement())
+  name        String
+  keywords    SeoKeyword[]
+  workspaceId Int?
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
 }
 
 model SeoKeyword {
@@ -56,6 +96,8 @@ model SeoKeyword {
   channel         Channel?             @relation(fields: [channelId], references: [id], onDelete: SetNull)
   group           KeywordGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
   rankHistory     KeywordRankHistory[]
+  workspaceId     Int?
+  workspace       Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 }
@@ -81,6 +123,8 @@ model GoogleIntegration {
   lastSyncAt    DateTime?
   syncStatus    String    @default("DISCONNECTED")
   syncError     String?
+  workspaceId   Int?
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -95,9 +139,11 @@ model AnalyticsSnapshot {
   clicks      Int      @default(0)
   impressions Int      @default(0)
   bounceRate  Float?
+  workspaceId Int?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
 
-  @@unique([date, channelType])
+  @@unique([date, channelType, workspaceId])
 }
 
 model AutomationTask {
@@ -116,6 +162,8 @@ model AutomationTask {
   aiGenerateImage Boolean        @default(false)
   rssUrl          String?
   rssLastPubDate  String?
+  workspaceId     Int?
+  workspace       Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   logs            BotLog[]
@@ -133,14 +181,18 @@ model BotLog {
 }
 
 model SocialConnection {
-  id          Int      @id @default(autoincrement())
-  platform    String   @unique
+  id          Int        @id @default(autoincrement())
+  platform    String
   accessToken String
   pageName    String?
   pageId      String?
-  status      String   @default("CONNECTED")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      String     @default("CONNECTED")
+  workspaceId Int?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([platform, workspaceId])
 }
 
 model PostTemplate {
@@ -150,18 +202,20 @@ model PostTemplate {
   imageUrl     String?
   thumbnailUrl String?
   taskId       Int?
-  task      AutomationTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  isActive  Boolean         @default(true)
-  abTestsA  AbTest[]        @relation("VariantA")
-  abTestsB  AbTest[]        @relation("VariantB")
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  task         AutomationTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  isActive     Boolean         @default(true)
+  abTestsA     AbTest[]        @relation("VariantA")
+  abTestsB     AbTest[]        @relation("VariantB")
+  workspaceId  Int?
+  workspace    Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
 }
 
 // ——— Phase 2 ———
 
 model ContentSchedule {
-  id              Int       @id @default(autoincrement())
+  id              Int        @id @default(autoincrement())
   title           String
   content         String
   imageUrl        String?
@@ -173,14 +227,16 @@ model ContentSchedule {
   repeatUntil     DateTime?
   cronExpression  String?
   abTestId        Int?
-  abTest          AbTest?   @relation(fields: [abTestId], references: [id], onDelete: SetNull)
-  status          String    @default("PENDING")
+  abTest          AbTest?    @relation(fields: [abTestId], references: [id], onDelete: SetNull)
+  status          String     @default("PENDING")
   publishedAt     DateTime?
   errorMessage    String?
   channelResults  String?
-  attemptCount    Int       @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  attemptCount    Int        @default(0)
+  workspaceId     Int?
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 model SeoAudit {
@@ -190,6 +246,8 @@ model SeoAudit {
   technicalScore  Int
   contentScore    Int
   uxScore         Int
+  workspaceId     Int?
+  workspace       Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   auditedAt       DateTime        @default(now())
   issues          SeoAuditIssue[]
 }
@@ -205,32 +263,37 @@ model SeoAuditIssue {
 }
 
 model Backlink {
-  id               Int      @id @default(autoincrement())
-  sourceUrl        String
-  targetUrl        String
-  domainAuthority  Int?
-  linkType         String   @default("inbound")
-  status           String   @default("active")
-  checkedAt        DateTime?
-  statusDetail     String?
-  discoveredAt     DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              Int        @id @default(autoincrement())
+  sourceUrl       String
+  targetUrl       String
+  domainAuthority Int?
+  pageAuthority   Int?
+  linkType        String     @default("inbound")
+  status          String     @default("active")
+  checkedAt       DateTime?
+  statusDetail    String?
+  workspaceId     Int?
+  workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  discoveredAt    DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 model EmailCampaign {
-  id          Int       @id @default(autoincrement())
+  id          Int          @id @default(autoincrement())
   name        String
   subject     String
   htmlContent String
   recipients  String
-  status      String    @default("DRAFT")
+  status      String       @default("DRAFT")
   scheduledAt DateTime?
   sentAt      DateTime?
-  sentCount   Int       @default(0)
-  openCount   Int       @default(0)
-  clickCount  Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  sentCount   Int          @default(0)
+  openCount   Int          @default(0)
+  clickCount  Int          @default(0)
+  workspaceId Int?
+  workspace   Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   events      EmailEvent[]
 }
 
@@ -246,15 +309,17 @@ model EmailEvent {
 // ——— Khách hàng & chăm sóc ———
 
 model Customer {
-  id            Int               @id @default(autoincrement())
+  id            Int                @id @default(autoincrement())
   name          String
-  email         String            @unique
+  email         String             @unique
   phone         String?
   company       String?
-  status        String            @default("NEW")
+  status        String             @default("NEW")
   lastContactAt DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  workspaceId   Int?
+  workspace     Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
   notes         CustomerNote[]
   emailLogs     CustomerEmailLog[]
 }
@@ -288,6 +353,8 @@ model AlertRule {
   comparison  String     @default("lt")
   enabled     Boolean    @default(true)
   notifyEmail String?
+  workspaceId Int?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt   DateTime   @default(now())
   logs        AlertLog[]
 }
@@ -316,6 +383,8 @@ model AbTest {
   winner       String?
   schedules    ContentSchedule[]
   automations  AutomationTask[]
+  workspaceId  Int?
+  workspace    Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 }

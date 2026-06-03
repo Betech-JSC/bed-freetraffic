@@ -5,8 +5,9 @@ import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
 const router = Router();
 router.use(authenticate);
 
-router.get('/groups', async (_req: AuthRequest, res: Response): Promise<void> => {
+router.get('/groups', async (req: AuthRequest, res: Response): Promise<void> => {
   const groups = await prisma.keywordGroup.findMany({
+    where: { workspaceId: req.workspaceId },
     include: { _count: { select: { keywords: true } } },
     orderBy: { name: 'asc' },
   });
@@ -19,12 +20,18 @@ router.post('/groups', requireWrite, async (req: AuthRequest, res: Response): Pr
     res.status(400).json({ error: 'Tên nhóm là bắt buộc' });
     return;
   }
-  const group = await prisma.keywordGroup.create({ data: { name } });
+  const group = await prisma.keywordGroup.create({
+    data: {
+      name,
+      workspaceId: req.workspaceId
+    }
+  });
   res.status(201).json(group);
 });
 
-router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
+router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   const keywords = await prisma.seoKeyword.findMany({
+    where: { workspaceId: req.workspaceId },
     include: { channel: true, group: true },
     orderBy: { createdAt: 'desc' },
   });
@@ -33,6 +40,14 @@ router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
 
 router.get('/:id/history', async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
+  const keyword = await prisma.seoKeyword.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!keyword) {
+    res.status(404).json({ error: 'Không tìm thấy từ khóa' });
+    return;
+  }
+
   const history = await prisma.keywordRankHistory.findMany({
     where: { keywordId: id },
     orderBy: { recordedAt: 'desc' },
@@ -57,6 +72,7 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
       searchVolume: searchVolume ? parseInt(searchVolume) : null,
       channelId: channelId ? parseInt(channelId) : null,
       groupId: groupId ? parseInt(groupId) : null,
+      workspaceId: req.workspaceId,
     },
     include: { channel: true, group: true },
   });
@@ -77,6 +93,14 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
 router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
   const { currentPosition, ...rest } = req.body;
+
+  const existing = await prisma.seoKeyword.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy từ khóa' });
+    return;
+  }
 
   const seoKeyword = await prisma.seoKeyword.update({
     where: { id },
@@ -104,6 +128,13 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
 
 router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
+  const existing = await prisma.seoKeyword.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy từ khóa' });
+    return;
+  }
   await prisma.seoKeyword.delete({ where: { id } });
   res.status(204).send();
 });

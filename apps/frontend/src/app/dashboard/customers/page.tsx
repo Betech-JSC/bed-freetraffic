@@ -60,6 +60,13 @@ export default function CustomersPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', company: '', status: 'NEW', note: '' });
 
+  // Mailchimp sync states
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [mcLists, setMcLists] = useState<any[]>([]);
+  const [selectedMcListId, setSelectedMcListId] = useState('');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncError, setSyncError] = useState('');
+
   const [newNote, setNewNote] = useState('');
   const [careSubject, setCareSubject] = useState('Chúng tôi luôn sẵn sàng hỗ trợ bạn');
   const [careHtml, setCareHtml] = useState(DEFAULT_CARE_HTML);
@@ -194,6 +201,44 @@ export default function CustomersPage() {
     }
   };
 
+  const openSyncModal = async () => {
+    setSyncError('');
+    setSuccess('');
+    try {
+      setSyncLoading(true);
+      const data = await apiJson<any[]>('/integrations/mailchimp/lists');
+      setMcLists(data);
+      if (data.length > 0) {
+        setSelectedMcListId(data[0].id);
+      }
+      setShowSyncModal(true);
+    } catch (e: any) {
+      setActionError(e.message || t('Chưa cấu hình Mailchimp trong Cài đặt hoặc không thể kết nối.'));
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const handleMailchimpSync = async () => {
+    if (!selectedMcListId) return;
+    setSyncLoading(true);
+    setSyncError('');
+    try {
+      const res = await apiJson<{ message: string }>('/integrations/mailchimp/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listId: selectedMcListId })
+      });
+      setSuccess(res.message);
+      setShowSyncModal(false);
+      refreshList();
+    } catch (e: any) {
+      setSyncError(e.message || t('Đồng bộ thất bại'));
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
   const getStatusBadgeClass = (status: string) => {
     switch (status.toUpperCase()) {
       case 'NEW':
@@ -222,9 +267,14 @@ export default function CustomersPage() {
         title={t('customerTitle')}
         description={t('customerDesc')}
         actions={
-          <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
-            + {t('addCustomer')}
-          </button>
+          <div className="flex gap-2">
+            <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={openSyncModal} disabled={syncLoading}>
+              🐵 {syncLoading ? t('Đang tải...') : t('Đồng bộ Mailchimp')}
+            </button>
+            <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
+              + {t('addCustomer')}
+            </button>
+          </div>
         }
       />
 
@@ -563,6 +613,63 @@ export default function CustomersPage() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+      {showSyncModal && (
+        <div className="modal-overlay" onClick={() => setShowSyncModal(false)}>
+          <div className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-teal-800 flex items-center gap-2">
+                🐵 {t('Đồng bộ Mailchimp')}
+              </h3>
+              <button type="button" onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+            
+            <p className="text-xs text-slate-500">
+              {t('Đồng bộ toàn bộ danh sách khách hàng trong CRM lên danh sách Audience của Mailchimp.')}
+            </p>
+
+            {syncError && <p className="alert-error text-xs">{syncError}</p>}
+
+            {mcLists.length === 0 ? (
+              <p className="text-xs text-amber-600 font-medium">
+                ⚠️ {t('Không tìm thấy Audience List nào. Hãy tạo danh sách trên Mailchimp trước.')}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                    {t('Chọn Audience List')}
+                  </label>
+                  <select 
+                    className="input text-xs font-semibold py-2.5 w-full" 
+                    value={selectedMcListId} 
+                    onChange={(e) => setSelectedMcListId(e.target.value)}
+                  >
+                    {mcLists.map((list) => (
+                      <option key={list.id} value={list.id}>
+                        {list.name} ({list.memberCount} {t('thành viên')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button type="button" className="btn-secondary flex-1" onClick={() => setShowSyncModal(false)}>
+                {t('Hủy')}
+              </button>
+              <button 
+                type="button" 
+                className="btn-primary flex-1 bg-teal-700 hover:bg-teal-800 text-white font-bold" 
+                disabled={syncLoading || mcLists.length === 0}
+                onClick={handleMailchimpSync}
+              >
+                {syncLoading ? t('Đang đồng bộ...') : t('Đồng bộ ngay')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

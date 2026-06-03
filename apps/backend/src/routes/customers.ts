@@ -15,6 +15,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
   const customers = await prisma.customer.findMany({
     where: {
+      workspaceId: req.workspaceId,
       ...(status ? { status } : {}),
       ...(q
         ? {
@@ -41,8 +42,8 @@ router.get('/meta/statuses', (_req: AuthRequest, res: Response): void => {
 
 router.get('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
-  const customer = await prisma.customer.findUnique({
-    where: { id },
+  const customer = await prisma.customer.findFirst({
+    where: { id, workspaceId: req.workspaceId },
     include: {
       notes: { orderBy: { createdAt: 'desc' } },
       emailLogs: { orderBy: { sentAt: 'desc' }, take: 50 },
@@ -70,6 +71,7 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
         phone: phone?.trim() || null,
         company: company?.trim() || null,
         status: status && (STATUSES as readonly string[]).includes(status) ? status : 'NEW',
+        workspaceId: req.workspaceId,
         notes: note?.trim()
           ? { create: [{ content: note.trim() }] }
           : undefined,
@@ -98,6 +100,13 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
   if (status != null && (STATUSES as readonly string[]).includes(status)) data.status = status;
 
   try {
+    const existing = await prisma.customer.findFirst({
+      where: { id, workspaceId: req.workspaceId }
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+      return;
+    }
     const customer = await prisma.customer.update({ where: { id }, data });
     res.json(customer);
   } catch (err: unknown) {
@@ -107,6 +116,13 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
 
 router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
+  const existing = await prisma.customer.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy khách hàng' });
+    return;
+  }
   await prisma.customer.delete({ where: { id } });
   res.status(204).send();
 });
@@ -116,6 +132,13 @@ router.post('/:id/notes', requireWrite, async (req: AuthRequest, res: Response):
   const { content } = req.body;
   if (!content?.trim()) {
     res.status(400).json({ error: 'Nội dung ghi chú không được trống' });
+    return;
+  }
+  const existing = await prisma.customer.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy khách hàng' });
     return;
   }
   const note = await prisma.customerNote.create({
@@ -141,7 +164,7 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
     return;
   }
 
-  const transporter = await createSmtpTransporter();
+  const transporter = await createSmtpTransporter(req.workspaceId);
   if (!transporter) {
     res.status(400).json({
       error: 'Chưa cấu hình SMTP. Vào Cài đặt → Email để kết nối trước khi gửi.',
@@ -149,11 +172,14 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
     return;
   }
 
-  const smtpCfg = await getSmtpConfig();
+  const smtpCfg = await getSmtpConfig(req.workspaceId);
   const fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
 
   const customers = await prisma.customer.findMany({
-    where: { id: { in: customerIds.map((x) => parseInt(String(x))) } },
+    where: {
+      id: { in: customerIds.map((x) => parseInt(String(x))) },
+      workspaceId: req.workspaceId,
+    },
     include: { notes: { orderBy: { createdAt: 'desc' }, take: 1 } },
   });
 

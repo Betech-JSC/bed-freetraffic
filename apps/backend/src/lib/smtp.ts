@@ -10,8 +10,10 @@ export type SmtpConfig = {
   password: string;
 };
 
-export async function getSmtpConfig(): Promise<SmtpConfig | null> {
-  const conn = await prisma.socialConnection.findUnique({ where: { platform: 'email' } });
+export async function getSmtpConfig(workspaceId?: number): Promise<SmtpConfig | null> {
+  const conn = await prisma.socialConnection.findFirst({
+    where: { platform: 'email', workspaceId }
+  });
   if (conn?.status === 'CONNECTED' && conn.accessToken) {
     try {
       const c = JSON.parse(conn.accessToken) as SmtpConfig & { user?: string };
@@ -43,8 +45,8 @@ export async function getSmtpConfig(): Promise<SmtpConfig | null> {
   return null;
 }
 
-export async function createSmtpTransporter(): Promise<Transporter | null> {
-  const config = await getSmtpConfig();
+export async function createSmtpTransporter(workspaceId?: number): Promise<Transporter | null> {
+  const config = await getSmtpConfig(workspaceId);
   if (!config) return null;
   return nodemailer.createTransport({
     host: config.host,

@@ -31,6 +31,7 @@ export default function SeoPage() {
   const [history, setHistory] = useState<Audit[]>([]);
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [usePageSpeed, setUsePageSpeed] = useState(false);
   const [error, setError] = useState('');
 
   const load = () => apiJson<Audit[]>('/seo/audits').then(setAudits).catch(() => {});
@@ -54,7 +55,8 @@ export default function SeoPage() {
     setError('');
     try {
       const target = url.trim();
-      await apiJson('/seo/audit', {
+      const endpoint = usePageSpeed ? '/seo/pagespeed' : '/seo/audit';
+      await apiJson(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: target }),
@@ -112,18 +114,32 @@ export default function SeoPage() {
         </div>
       </div>
 
-      <form onSubmit={runAudit} className="card p-6 flex gap-3 flex-wrap shadow-sm">
-        <input
-          className="input flex-1 min-w-[240px]"
-          type="url"
-          placeholder={t('Ví dụ: https://website-cua-ban.com/landing-page')}
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          required
-        />
-        <button type="submit" className="btn-primary px-6" disabled={loading}>
-          {loading ? t('Đang phân tích...') : t('Chạy SEO Audit')}
-        </button>
+      <form onSubmit={runAudit} className="card p-6 flex flex-col gap-4 shadow-sm">
+        <div className="flex gap-3 flex-wrap w-full">
+          <input
+            className="input flex-1 min-w-[240px]"
+            type="url"
+            placeholder={t('Ví dụ: https://website-cua-ban.com/landing-page')}
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            required
+          />
+          <button type="submit" className="btn-primary px-6" disabled={loading}>
+            {loading ? t('Đang phân tích...') : t('Chạy SEO Audit')}
+          </button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-slate-500 font-medium select-none">
+          <input 
+            type="checkbox" 
+            id="usePageSpeed" 
+            checked={usePageSpeed} 
+            onChange={(e) => setUsePageSpeed(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand/30 cursor-pointer"
+          />
+          <label htmlFor="usePageSpeed" className="cursor-pointer flex items-center gap-1">
+            ⚡ {t('Phân tích tốc độ load & trải nghiệm di động (Google PageSpeed Insights)')}
+          </label>
+        </div>
       </form>
       
       {error && <div className="rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm border border-red-100">{error}</div>}

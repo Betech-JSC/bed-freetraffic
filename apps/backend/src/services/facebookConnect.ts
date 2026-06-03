@@ -158,7 +158,7 @@ export async function listPagesFromToken(accessToken: string): Promise<{
   return { pages };
 }
 
-export async function saveFacebookConnection(pageId: string, accessToken: string) {
+export async function saveFacebookConnection(pageId: string, accessToken: string, workspaceId: number) {
   const verified = await verifyFacebookCredentials(pageId, accessToken);
   if (!verified.valid) {
     throw new Error(verified.error || 'Không xác minh được Fanpage');
@@ -167,7 +167,12 @@ export async function saveFacebookConnection(pageId: string, accessToken: string
   const tokenToStore = verified.pageAccessToken?.trim() || accessToken.trim();
 
   await prisma.socialConnection.upsert({
-    where: { platform: 'facebook' },
+    where: {
+      platform_workspaceId: {
+        platform: 'facebook',
+        workspaceId
+      }
+    },
     update: {
       accessToken: tokenToStore,
       pageName: verified.pageName,
@@ -176,6 +181,7 @@ export async function saveFacebookConnection(pageId: string, accessToken: string
     },
     create: {
       platform: 'facebook',
+      workspaceId,
       accessToken: tokenToStore,
       pageName: verified.pageName,
       pageId: verified.pageId!,
@@ -221,9 +227,11 @@ export type FacebookBotStatus = {
   lastCheckedAt: string;
 };
 
-export async function getFacebookBotStatus(): Promise<FacebookBotStatus> {
+export async function getFacebookBotStatus(workspaceId: number): Promise<FacebookBotStatus> {
   const issues: string[] = [];
-  const fb = await prisma.socialConnection.findUnique({ where: { platform: 'facebook' } });
+  const fb = await prisma.socialConnection.findFirst({
+    where: { platform: 'facebook', workspaceId }
+  });
 
   if (!fb || fb.status !== 'CONNECTED') {
     return {

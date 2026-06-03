@@ -19,6 +19,13 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
     headers.set('Authorization', `Bearer ${token}`);
   }
 
+  if (typeof window !== 'undefined') {
+    const wsId = localStorage.getItem('workspaceId');
+    if (wsId && !headers.has('x-workspace-id')) {
+      headers.set('x-workspace-id', wsId);
+    }
+  }
+
   try {
     return await fetch(url, { ...init, headers });
   } catch {

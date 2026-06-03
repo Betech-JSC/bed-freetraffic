@@ -9,14 +9,14 @@ export type Recommendation = {
   actionPath?: string;
 };
 
-export async function buildRecommendations(): Promise<Recommendation[]> {
+export async function buildRecommendations(workspaceId?: number): Promise<Recommendation[]> {
   const items: Recommendation[] = [];
   let id = 0;
   const add = (r: Omit<Recommendation, 'id'>) => {
     items.push({ ...r, id: `r-${++id}` });
   };
 
-  const integration = await prisma.googleIntegration.findFirst();
+  const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
   if (!integration?.accessToken) {
     add({
       category: 'traffic',
@@ -30,7 +30,7 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
   const since7 = new Date();
   since7.setDate(since7.getDate() - 7);
   const snapshots = await prisma.analyticsSnapshot.findMany({
-    where: { date: { gte: since7 }, channelType: 'all' },
+    where: { date: { gte: since7 }, channelType: 'all', workspaceId },
   });
   const sessions7 = snapshots.reduce((s, r) => s + r.sessions, 0);
   if (sessions7 === 0 && integration?.accessToken) {
@@ -44,7 +44,7 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
   }
 
   const keywordsNoRank = await prisma.seoKeyword.count({
-    where: { OR: [{ currentPosition: null }, { currentPosition: { gt: 20 } }] },
+    where: { OR: [{ currentPosition: null }, { currentPosition: { gt: 20 } }], workspaceId },
   });
   if (keywordsNoRank > 0) {
     add({
@@ -56,7 +56,7 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
     });
   }
 
-  const failedSchedules = await prisma.contentSchedule.count({ where: { status: 'FAILED' } });
+  const failedSchedules = await prisma.contentSchedule.count({ where: { status: 'FAILED', workspaceId } });
   if (failedSchedules > 0) {
     add({
       category: 'automation',
@@ -67,8 +67,8 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
     });
   }
 
-  const runningBots = await prisma.automationTask.count({ where: { status: 'RUNNING' } });
-  const templateCount = await prisma.postTemplate.count({ where: { isActive: true } });
+  const runningBots = await prisma.automationTask.count({ where: { status: 'RUNNING', workspaceId } });
+  const templateCount = await prisma.postTemplate.count({ where: { isActive: true, workspaceId } });
   if (runningBots > 0 && templateCount === 0) {
     add({
       category: 'automation',
@@ -79,7 +79,7 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
     });
   }
 
-  const draftCampaigns = await prisma.emailCampaign.count({ where: { status: 'DRAFT' } });
+  const draftCampaigns = await prisma.emailCampaign.count({ where: { status: 'DRAFT', workspaceId } });
   if (draftCampaigns > 3) {
     add({
       category: 'email',
@@ -90,7 +90,7 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
     });
   }
 
-  const backlinks = await prisma.backlink.count();
+  const backlinks = await prisma.backlink.count({ where: { workspaceId } });
   if (backlinks < 5) {
     add({
       category: 'seo',
@@ -102,7 +102,7 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
   }
 
   const openRate =
-    await prisma.emailCampaign.aggregate({ _sum: { sentCount: true, openCount: true } });
+    await prisma.emailCampaign.aggregate({ where: { workspaceId }, _sum: { sentCount: true, openCount: true } });
   const sent = openRate._sum.sentCount || 0;
   const opens = openRate._sum.openCount || 0;
   if (sent > 10) {
@@ -118,7 +118,7 @@ export async function buildRecommendations(): Promise<Recommendation[]> {
     }
   }
 
-  const runningAb = await prisma.abTest.count({ where: { status: 'RUNNING' } });
+  const runningAb = await prisma.abTest.count({ where: { status: 'RUNNING', workspaceId } });
   if (runningAb === 0) {
     add({
       category: 'kpi',

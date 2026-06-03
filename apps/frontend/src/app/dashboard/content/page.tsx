@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { IconPlus } from '@/components/icons';
 import { apiFetch, apiJson } from '@/lib/api';
 import { useLocale } from '@/context/LocaleContext';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export default function ContentEditorPage() {
   const { t } = useLocale();
@@ -23,6 +24,8 @@ export default function ContentEditorPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // AI Assistant states
   const [showAiPanel, setShowAiPanel] = useState(false);
@@ -133,14 +136,25 @@ export default function ContentEditorPage() {
     setShowModal(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm(t('Bạn có chắc muốn xóa nội dung này?'))) return;
+  const handleDelete = (id: number) => {
+    setDeleteConfirmId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    setDeleting(true);
+    setError('');
+    setSuccess('');
     try {
-      const res = await apiFetch(`/templates/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/templates/${deleteConfirmId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(t('Không xóa được'));
       await fetchData();
+      setSuccess(t('Đã xóa nội dung mẫu thành công.'));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('Không xóa được'));
+    } finally {
+      setDeleting(false);
+      setDeleteConfirmId(null);
     }
   };
 
@@ -594,6 +608,18 @@ export default function ContentEditorPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={deleteConfirmId !== null}
+        title={t('Xóa nội dung mẫu')}
+        description={t('Bạn có chắc chắn muốn xóa mẫu nội dung này? Hành động này sẽ gỡ bỏ vĩnh viễn bài đăng ra khỏi danh sách xoay vòng.')}
+        highlight={templates.find((t) => t.id === deleteConfirmId)?.title}
+        confirmLabel={t('Xóa nội dung')}
+        cancelLabel={t('Hủy')}
+        variant="danger"
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteConfirmId(null)}
+      />
     </div>
   );
 }

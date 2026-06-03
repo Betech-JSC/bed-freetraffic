@@ -1,23 +1,29 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
 import prisma from '../lib/prisma';
 
 const router = Router();
 
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const [logs, tasks, connections, keywords] = await Promise.all([
       prisma.botLog.findMany({
+        where: { task: { workspaceId: req.workspaceId } },
         take: 200,
         orderBy: { createdAt: 'desc' },
         include: { task: { select: { name: true } } }
       }),
       prisma.automationTask.findMany({
+        where: { workspaceId: req.workspaceId },
         select: { id: true, name: true, status: true, platforms: true, lastRunAt: true }
       }),
       prisma.socialConnection.findMany({
+        where: { workspaceId: req.workspaceId },
         select: { platform: true, pageName: true, status: true }
       }),
-      prisma.seoKeyword.count()
+      prisma.seoKeyword.count({
+        where: { workspaceId: req.workspaceId }
+      })
     ]);
 
     const successCount = logs.filter(l => l.status === 'SUCCESS').length;

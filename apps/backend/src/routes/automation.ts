@@ -1,12 +1,14 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
+import { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
 // Lấy danh sách nhiệm vụ Automation
-router.get('/tasks', async (req: Request, res: Response): Promise<void> => {
+router.get('/tasks', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const tasks = await prisma.automationTask.findMany({
+      where: { workspaceId: req.workspaceId },
       orderBy: { createdAt: 'desc' }
     });
     res.json(tasks);
@@ -17,7 +19,7 @@ router.get('/tasks', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Tạo nhiệm vụ mới (Thêm Bot)
-router.post('/tasks', async (req: Request, res: Response): Promise<void> => {
+router.post('/tasks', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { name, urlTarget, platforms, interval, emailRecipients, abTestId, useAi, aiPrompt, aiGenerateImage, rssUrl } = req.body;
     
@@ -38,6 +40,7 @@ router.post('/tasks', async (req: Request, res: Response): Promise<void> => {
         aiPrompt: aiPrompt || null,
         aiGenerateImage: !!aiGenerateImage,
         rssUrl: rssUrl || null,
+        workspaceId: req.workspaceId,
       },
     });
 
@@ -48,10 +51,12 @@ router.post('/tasks', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Công tắc Bật/Tắt Bot
-router.post('/tasks/:id/toggle', async (req: Request, res: Response): Promise<void> => {
+router.post('/tasks/:id/toggle', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string);
-    const task = await prisma.automationTask.findUnique({ where: { id }});
+    const task = await prisma.automationTask.findFirst({
+      where: { id, workspaceId: req.workspaceId }
+    });
     
     if (!task) {
       res.status(404).json({ error: 'Không tìm thấy nhiệm vụ' });
@@ -71,7 +76,7 @@ router.post('/tasks/:id/toggle', async (req: Request, res: Response): Promise<vo
 });
 
 // Xóa chiến dịch Bot (log liên quan xóa theo cascade)
-router.delete('/tasks/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/tasks/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string, 10);
     if (Number.isNaN(id)) {
@@ -79,7 +84,9 @@ router.delete('/tasks/:id', async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    const task = await prisma.automationTask.findUnique({ where: { id } });
+    const task = await prisma.automationTask.findFirst({
+      where: { id, workspaceId: req.workspaceId }
+    });
     if (!task) {
       res.status(404).json({ error: 'Không tìm thấy chiến dịch' });
       return;
@@ -93,21 +100,23 @@ router.delete('/tasks/:id', async (req: Request, res: Response): Promise<void> =
 });
 
 // Lấy Log của tất cả Bot để hiển thị lên bảng điều khiển Hacker-style
-router.get('/logs', async (req: Request, res: Response): Promise<void> => {
+router.get('/logs', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const logs = await prisma.botLog.findMany({
-      take: 100,
-      orderBy: { createdAt: 'desc' },
+    const tasksInWorkspace = await prisma.automationTask.findMany({
+      where: { workspaceId: req.workspaceId },
+      select: { id: true, name: true }
     });
-    const taskIds = [...new Set(logs.map((l) => l.taskId))];
-    const tasks =
-      taskIds.length > 0
-        ? await prisma.automationTask.findMany({
-            where: { id: { in: taskIds } },
-            select: { id: true, name: true },
-          })
-        : [];
-    const nameById = new Map(tasks.map((t) => [t.id, t.name]));
+    
+    const taskIds = tasksInWorkspace.map((t) => t.id);
+    const logs = taskIds.length > 0
+      ? await prisma.botLog.findMany({
+          where: { taskId: { in: taskIds } },
+          take: 100,
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+      
+    const nameById = new Map(tasksInWorkspace.map((t) => [t.id, t.name]));
     res.json(
       logs.map((log) => ({
         ...log,

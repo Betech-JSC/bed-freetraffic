@@ -1,13 +1,15 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { runSeoAudit } from '../services/seoAuditService';
+import { runPageSpeedAudit } from '../services/pagespeedAuditService';
 import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
 
 const router = Router();
 router.use(authenticate);
 
-router.get('/audits', async (_req: AuthRequest, res: Response): Promise<void> => {
+router.get('/audits', async (req: AuthRequest, res: Response): Promise<void> => {
   const audits = await prisma.seoAudit.findMany({
+    where: { workspaceId: req.workspaceId },
     include: { issues: true },
     orderBy: { auditedAt: 'desc' },
     take: 50,
@@ -26,7 +28,7 @@ router.post('/audit', requireWrite, async (req: AuthRequest, res: Response): Pro
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
   const todayCount = await prisma.seoAudit.count({
-    where: { auditedAt: { gte: startOfDay } },
+    where: { auditedAt: { gte: startOfDay }, workspaceId: req.workspaceId },
   });
   if (todayCount >= maxPerDay) {
     res.status(429).json({
@@ -44,10 +46,38 @@ router.post('/audit', requireWrite, async (req: AuthRequest, res: Response): Pro
       contentScore: result.contentScore,
       uxScore: result.uxScore,
       issues: { create: result.issues },
+      workspaceId: req.workspaceId,
     },
     include: { issues: true },
   });
   res.status(201).json(audit);
+});
+
+router.post('/pagespeed', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { url } = req.body;
+  if (!url) {
+    res.status(400).json({ error: 'URL là bắt buộc' });
+    return;
+  }
+
+  try {
+    const result = await runPageSpeedAudit(url);
+    const audit = await prisma.seoAudit.create({
+      data: {
+        url,
+        score: result.score,
+        technicalScore: result.technicalScore,
+        contentScore: result.contentScore,
+        uxScore: result.uxScore,
+        issues: { create: result.issues },
+        workspaceId: req.workspaceId,
+      },
+      include: { issues: true },
+    });
+    res.status(201).json(audit);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'PageSpeed Audit thất bại' });
+  }
 });
 
 router.get('/history', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -57,7 +87,7 @@ router.get('/history', async (req: AuthRequest, res: Response): Promise<void> =>
     return;
   }
   const audits = await prisma.seoAudit.findMany({
-    where: { url },
+    where: { url, workspaceId: req.workspaceId },
     include: { issues: true },
     orderBy: { auditedAt: 'asc' },
     take: 20,
@@ -67,8 +97,8 @@ router.get('/history', async (req: AuthRequest, res: Response): Promise<void> =>
 
 router.get('/audits/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
-  const audit = await prisma.seoAudit.findUnique({
-    where: { id },
+  const audit = await prisma.seoAudit.findFirst({
+    where: { id, workspaceId: req.workspaceId },
     include: { issues: true },
   });
   if (!audit) {

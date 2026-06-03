@@ -117,8 +117,8 @@ export default function AnalyticsPage() {
             {connections.length === 0 && (
               <p className="text-sm text-gray-400">{t('Chưa có kết nối nào. Vào Settings để liên kết.')}</p>
             )}
-            {connections.map((c: any) => (
-              <div key={c.platform} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+            {connections.map((c: any, idx: number) => (
+              <div key={`${c.platform}-${idx}`} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                 <span className="text-sm font-medium text-gray-800 capitalize">{c.platform}</span>
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                   c.status === 'CONNECTED' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'

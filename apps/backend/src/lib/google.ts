@@ -23,8 +23,8 @@ function hasCredentials(): boolean {
 }
 
 /** GA4: ưu tiên OAuth (Gmail admin) — không cần thêm service account trong GA4 Admin */
-export async function getGa4Client(): Promise<BetaAnalyticsDataClient | null> {
-  const oauth = await getOAuth2Client();
+export async function getGa4Client(workspaceId?: number): Promise<BetaAnalyticsDataClient | null> {
+  const oauth = await getOAuth2Client(workspaceId);
   if (oauth) {
     try {
       return new BetaAnalyticsDataClient({ authClient: oauth });
@@ -40,8 +40,8 @@ export async function getGa4Client(): Promise<BetaAnalyticsDataClient | null> {
   }
 }
 
-export async function hasGa4Access(): Promise<boolean> {
-  if (await getOAuth2Client()) return true;
+export async function hasGa4Access(workspaceId?: number): Promise<boolean> {
+  if (await getOAuth2Client(workspaceId)) return true;
   return hasCredentials();
 }
 
@@ -77,23 +77,23 @@ export interface GscDailyRow {
   impressions: number;
 }
 
-async function getGscApiClient() {
-  const oauth = await getOAuth2Client();
+async function getGscApiClient(workspaceId?: number) {
+  const oauth = await getOAuth2Client(workspaceId);
   if (oauth) {
     return google.searchconsole({ version: 'v1', auth: oauth });
   }
   return getSearchConsoleClient();
 }
 
-export async function fetchGscSummary(days = 30): Promise<{
+export async function fetchGscSummary(days = 30, workspaceId?: number): Promise<{
   connected: boolean;
   clicks: number;
   impressions: number;
   daily: GscDailyRow[];
 }> {
-  const integration = await getGoogleTokensFromDb();
+  const integration = await getGoogleTokensFromDb(workspaceId);
   const siteUrl = integration?.gscSiteUrl || getGscSiteUrl();
-  const client = await getGscApiClient();
+  const client = await getGscApiClient(workspaceId);
   if (!client || !siteUrl) {
     return { connected: false, clicks: 0, impressions: 0, daily: [] };
   }
@@ -163,13 +163,14 @@ export function createOAuth2Client() {
   return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 }
 
-export function getGoogleAuthUrl(): string | null {
+export function getGoogleAuthUrl(workspaceId?: number): string | null {
   const oauth2 = createOAuth2Client();
   if (!oauth2) return null;
   return oauth2.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: GOOGLE_SCOPES,
+    state: workspaceId ? String(workspaceId) : undefined
   });
 }
 
@@ -180,8 +181,8 @@ export async function exchangeGoogleCode(code: string) {
   return tokens;
 }
 
-export async function getOAuth2Client() {
-  const integration = await prisma.googleIntegration.findFirst();
+export async function getOAuth2Client(workspaceId?: number) {
+  const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
   if (!integration?.refreshToken && !integration?.accessToken) return null;
 
   const oauth2 = createOAuth2Client();
@@ -208,6 +209,6 @@ export async function getOAuth2Client() {
   return oauth2;
 }
 
-export async function getGoogleTokensFromDb() {
-  return prisma.googleIntegration.findFirst();
+export async function getGoogleTokensFromDb(workspaceId?: number) {
+  return prisma.googleIntegration.findFirst({ where: { workspaceId } });
 }

@@ -5,8 +5,11 @@ import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
 const router = Router();
 router.use(authenticate);
 
-router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
-  const channels = await prisma.channel.findMany({ orderBy: { createdAt: 'desc' } });
+router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
+  const channels = await prisma.channel.findMany({
+    where: { workspaceId: req.workspaceId },
+    orderBy: { createdAt: 'desc' }
+  });
   res.json(channels);
 });
 
@@ -26,6 +29,7 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
       status: 'ACTIVE',
       apiConfig: apiConfig ? JSON.stringify(apiConfig) : null,
       connectionStatus: connectionStatus || 'DISCONNECTED',
+      workspaceId: req.workspaceId,
     },
   });
 
@@ -35,6 +39,14 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
 router.put('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
   const { name, type, url, status, apiConfig, connectionStatus } = req.body;
+
+  const existing = await prisma.channel.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy kênh' });
+    return;
+  }
 
   const channel = await prisma.channel.update({
     where: { id },
@@ -53,7 +65,9 @@ router.put('/:id', requireWrite, async (req: AuthRequest, res: Response): Promis
 
 router.post('/:id/test', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
-  const channel = await prisma.channel.findUnique({ where: { id } });
+  const channel = await prisma.channel.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!channel) {
     res.status(404).json({ error: 'Không tìm thấy kênh' });
     return;
@@ -73,6 +87,13 @@ router.post('/:id/test', requireWrite, async (req: AuthRequest, res: Response): 
 
 router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
+  const existing = await prisma.channel.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy kênh' });
+    return;
+  }
   await prisma.channel.delete({ where: { id } });
   res.status(204).send();
 });

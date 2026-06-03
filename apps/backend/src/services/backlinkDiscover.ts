@@ -10,7 +10,8 @@ function normalizeHost(hostname: string): string {
  */
 export async function discoverBacklinksFromUrl(
   targetUrl: string,
-  scanUrl?: string
+  scanUrl?: string,
+  workspaceId?: number
 ): Promise<{
   discovered: number;
   created: number;
@@ -40,7 +41,7 @@ export async function discoverBacklinksFromUrl(
       continue;
     try {
       const abs = new URL(href, pageToScan);
-      if (!['http:', 'https:'].includes(abs.protocol)) continue;
+      if (!abs.protocol.startsWith('http')) continue;
       if (normalizeHost(abs.hostname) !== targetHost) continue;
       const key = `${pageToScan}|${abs.href}`;
       found.set(key, { sourceUrl: pageToScan, targetUrl: abs.href });
@@ -54,7 +55,7 @@ export async function discoverBacklinksFromUrl(
 
   for (const link of links) {
     const existing = await prisma.backlink.findFirst({
-      where: { sourceUrl: link.sourceUrl, targetUrl: link.targetUrl },
+      where: { sourceUrl: link.sourceUrl, targetUrl: link.targetUrl, workspaceId },
     });
     if (!existing) {
       await prisma.backlink.create({
@@ -63,6 +64,7 @@ export async function discoverBacklinksFromUrl(
           targetUrl: link.targetUrl,
           linkType: 'inbound',
           status: 'active',
+          workspaceId,
         },
       });
       created++;

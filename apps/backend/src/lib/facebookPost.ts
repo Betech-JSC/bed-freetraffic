@@ -37,8 +37,10 @@ export function buildFacebookMessage(message: string, link?: string | null): str
   return text ? `${text}\n\n${withScheme}` : withScheme;
 }
 
-async function refreshFacebookPageTokenIfNeeded(): Promise<void> {
-  const fb = await prisma.socialConnection.findUnique({ where: { platform: 'facebook' } });
+async function refreshFacebookPageTokenIfNeeded(workspaceId?: number): Promise<void> {
+  const fb = await prisma.socialConnection.findFirst({
+    where: { platform: 'facebook', workspaceId }
+  });
   if (!fb?.pageId || !fb.accessToken) return;
 
   const res = await fetch(
@@ -48,14 +50,16 @@ async function refreshFacebookPageTokenIfNeeded(): Promise<void> {
   const match = data.data?.find((p) => p.id === String(fb.pageId).trim());
   if (match?.access_token && match.access_token !== fb.accessToken) {
     await prisma.socialConnection.update({
-      where: { platform: 'facebook' },
+      where: { id: fb.id },
       data: { accessToken: match.access_token, pageName: match.name },
     });
   }
 }
 
-export async function getFacebookPageConnection(): Promise<FacebookConnectionCheck> {
-  const fb = await prisma.socialConnection.findUnique({ where: { platform: 'facebook' } });
+export async function getFacebookPageConnection(workspaceId?: number): Promise<FacebookConnectionCheck> {
+  const fb = await prisma.socialConnection.findFirst({
+    where: { platform: 'facebook', workspaceId }
+  });
   if (!fb || fb.status !== 'CONNECTED' || !fb.accessToken) {
     return {
       ok: false,
@@ -83,10 +87,11 @@ export async function publishToFacebookPage(opts: {
   imagePath?: string | null;
   /** false = bài nháp / không publish feed công khai (dùng cho test kết nối) */
   published?: boolean;
+  workspaceId?: number;
 }): Promise<{ success: boolean; message: string; postId?: string }> {
-  await refreshFacebookPageTokenIfNeeded();
+  await refreshFacebookPageTokenIfNeeded(opts.workspaceId);
 
-  const conn = await getFacebookPageConnection();
+  const conn = await getFacebookPageConnection(opts.workspaceId);
   if (!conn.ok) return { success: false, message: conn.message };
 
   const { pageId, accessToken } = conn;

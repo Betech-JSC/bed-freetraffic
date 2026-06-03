@@ -9,15 +9,16 @@ import {
 } from '../lib/google';
 import { getDashboardFromSnapshots } from '../services/analyticsSync';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { cache } from '../lib/cache';
 
 const router = Router();
 router.use(authenticate);
 
-async function getLiveDashboard(days: number) {
-  const totalKeywords = await prisma.seoKeyword.count();
-  const activeChannels = await prisma.channel.count({ where: { status: 'ACTIVE' } });
+async function getLiveDashboard(days: number, workspaceId?: number) {
+  const totalKeywords = await prisma.seoKeyword.count({ where: { workspaceId } });
+  const activeChannels = await prisma.channel.count({ where: { status: 'ACTIVE', workspaceId } });
   const facebookConnected = !!(await prisma.socialConnection.findFirst({
-    where: { platform: 'facebook', status: 'CONNECTED' },
+    where: { platform: 'facebook', status: 'CONNECTED', workspaceId },
   }));
 
   let totalTraffic = 0;
@@ -37,7 +38,7 @@ async function getLiveDashboard(days: number) {
     for (const row of gsc.daily) gscByDate.set(row.date, row.clicks);
   }
 
-  const integration = await prisma.googleIntegration.findFirst();
+  const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
   const ga4PropertyId = integration?.ga4PropertyId || getGa4PropertyId();
   const analyticsDataClient = await getGa4Client();
 
@@ -117,19 +118,27 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const days = parseInt((req.query.days as string) || '7');
     const channelType = (req.query.channel as string) || undefined;
+    const cacheKey = `ws:${req.workspaceId}:dashboard:days:${days}:channel:${channelType || 'all'}`;
 
-    const snapshotCount = await prisma.analyticsSnapshot.count({
-      where: { channelType: channelType || 'all' },
-    });
-
-    if (snapshotCount > 0) {
-      const data = await getDashboardFromSnapshots(days, channelType);
-      res.json(data);
+    const cached = await cache.get<any>(cacheKey);
+    if (cached) {
+      res.json(cached);
       return;
     }
 
-    const live = await getLiveDashboard(days);
-    res.json(live);
+    const snapshotCount = await prisma.analyticsSnapshot.count({
+      where: { channelType: channelType || 'all', workspaceId: req.workspaceId },
+    });
+
+    let data;
+    if (snapshotCount > 0) {
+      data = await getDashboardFromSnapshots(days, channelType, req.workspaceId);
+    } else {
+      data = await getLiveDashboard(days, req.workspaceId);
+    }
+
+    await cache.set(cacheKey, data, 60); // Cache for 60 seconds
+    res.json(data);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Lỗi máy chủ nội bộ' });

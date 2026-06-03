@@ -69,8 +69,8 @@ async function postToFacebook(task: any): Promise<{ success: boolean; message: s
 
 async function postToEmail(task: any): Promise<{ success: boolean; message: string }> {
   try {
-    const emailConn = await prisma.socialConnection.findUnique({
-      where: { platform: 'email' }
+    const emailConn = await prisma.socialConnection.findFirst({
+      where: { platform: 'email', workspaceId: task.workspaceId }
     });
 
     if (!emailConn || emailConn.status !== 'CONNECTED' || !emailConn.accessToken) {
@@ -130,8 +130,8 @@ async function postToEmail(task: any): Promise<{ success: boolean; message: stri
 
 async function postToZalo(task: any): Promise<{ success: boolean; message: string }> {
   try {
-    const zaloConn = await prisma.socialConnection.findUnique({
-      where: { platform: 'zalo' }
+    const zaloConn = await prisma.socialConnection.findFirst({
+      where: { platform: 'zalo', workspaceId: task.workspaceId }
     });
 
     if (!zaloConn || zaloConn.status !== 'CONNECTED' || !zaloConn.accessToken) {
@@ -226,10 +226,12 @@ async function publishFacebookWithTemplate(
 }
 
 async function publishEmailWithTemplate(
-  task: { urlTarget: string; emailRecipients?: string },
+  task: { urlTarget: string; emailRecipients?: string; workspaceId?: number | null },
   template: { title: string; content: string; imageUrl?: string | null }
 ): Promise<{ success: boolean; message: string }> {
-  const emailConn = await prisma.socialConnection.findUnique({ where: { platform: 'email' } });
+  const emailConn = await prisma.socialConnection.findFirst({
+    where: { platform: 'email', workspaceId: task.workspaceId || undefined }
+  });
   if (!emailConn?.accessToken) return { success: false, message: 'Chưa kết nối Email' };
   const recipients = (task.emailRecipients || '')
     .split(',')
@@ -266,10 +268,12 @@ async function publishEmailWithTemplate(
 }
 
 async function publishZaloWithTemplate(
-  task: { urlTarget: string },
+  task: { urlTarget: string; workspaceId?: number | null },
   template: { title: string; content: string; imageUrl?: string | null }
 ): Promise<{ success: boolean; message: string }> {
-  const zaloConn = await prisma.socialConnection.findUnique({ where: { platform: 'zalo' } });
+  const zaloConn = await prisma.socialConnection.findFirst({
+    where: { platform: 'zalo', workspaceId: task.workspaceId || undefined }
+  });
   if (!zaloConn?.accessToken) return { success: false, message: 'Chưa kết nối Zalo' };
   const postContent = renderContent(template, { urlTarget: task.urlTarget, name: template.title });
   const response = await fetch('https://openapi.zalo.me/v2.0/article/create', {

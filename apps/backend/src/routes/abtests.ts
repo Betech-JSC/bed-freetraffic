@@ -24,19 +24,22 @@ router.get('/track/click/:id', async (req: Request, res: Response): Promise<void
   res.redirect(target);
 });
 
-router.use(authenticate);
+import { workspaceMiddleware } from '../middleware/workspace';
 
-router.get('/running', async (_req: AuthRequest, res: Response): Promise<void> => {
+router.use(authenticate, workspaceMiddleware);
+
+router.get('/running', async (req: AuthRequest, res: Response): Promise<void> => {
   const tests = await prisma.abTest.findMany({
-    where: { status: 'RUNNING' },
+    where: { status: 'RUNNING', workspaceId: req.workspaceId },
     select: { id: true, name: true, templateAId: true, templateBId: true },
     orderBy: { createdAt: 'desc' },
   });
   res.json(tests);
 });
 
-router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
+router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   const tests = await prisma.abTest.findMany({
+    where: { workspaceId: req.workspaceId },
     include: { templateA: true, templateB: true },
     orderBy: { createdAt: 'desc' },
   });
@@ -55,6 +58,7 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
       templateAId: templateAId ? parseInt(templateAId) : null,
       templateBId: templateBId ? parseInt(templateBId) : null,
       status: 'RUNNING',
+      workspaceId: req.workspaceId,
     },
     include: { templateA: true, templateB: true },
   });
@@ -64,7 +68,9 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
 router.post('/:id/impression', async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
   const variant = (req.body.variant as string) || 'A';
-  const test = await prisma.abTest.findUnique({ where: { id } });
+  const test = await prisma.abTest.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!test || test.status !== 'RUNNING') {
     res.status(400).json({ error: 'Test không hợp lệ' });
     return;
@@ -79,7 +85,9 @@ router.post('/:id/impression', async (req: AuthRequest, res: Response): Promise<
 router.post('/:id/click', async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
   const variant = (req.body.variant as string) || 'A';
-  const test = await prisma.abTest.findUnique({ where: { id } });
+  const test = await prisma.abTest.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!test || test.status !== 'RUNNING') {
     res.status(400).json({ error: 'Test không hợp lệ' });
     return;
@@ -93,7 +101,9 @@ router.post('/:id/click', async (req: AuthRequest, res: Response): Promise<void>
 
 router.post('/:id/complete', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
-  const test = await prisma.abTest.findUnique({ where: { id } });
+  const test = await prisma.abTest.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!test) {
     res.status(404).json({ error: 'Không tìm thấy' });
     return;
@@ -122,6 +132,13 @@ router.post('/:id/complete', requireWrite, async (req: AuthRequest, res: Respons
 
 router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
+  const existing = await prisma.abTest.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy test A/B' });
+    return;
+  }
   await prisma.abTest.delete({ where: { id } });
   res.status(204).send();
 });

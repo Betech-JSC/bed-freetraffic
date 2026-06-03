@@ -13,6 +13,7 @@ export interface AuthPayload {
 
 export interface AuthRequest extends Request {
   user?: AuthPayload;
+  workspaceId?: number;
 }
 
 function readToken(req: Request): string | null {

@@ -40,6 +40,41 @@ export default function SettingsPage() {
   const [zaloError, setZaloError] = useState('');
   const [zaloSuccess, setZaloSuccess] = useState('');
 
+  // Mailchimp state
+  const [mailchimpMode, setMailchimpMode] = useState<'idle' | 'form'>('idle');
+  const [mcApiKey, setMcApiKey] = useState('');
+  const [mcServer, setMcServer] = useState('');
+  const [mcLoading, setMcLoading] = useState(false);
+  const [mcError, setMcError] = useState('');
+  const [mcSuccess, setMcSuccess] = useState('');
+
+  // Telegram state
+  const [telegramMode, setTelegramMode] = useState<'idle' | 'form'>('idle');
+  const [tgBotToken, setTgBotToken] = useState('');
+  const [tgChatId, setTgChatId] = useState('');
+  const [tgLoading, setTgLoading] = useState(false);
+  const [tgError, setTgError] = useState('');
+  const [tgSuccess, setTgSuccess] = useState('');
+
+  // Reddit state
+  const [redditMode, setRedditMode] = useState<'idle' | 'form'>('idle');
+  const [rdClientId, setRdClientId] = useState('');
+  const [rdClientSecret, setRdClientSecret] = useState('');
+  const [rdUsername, setRdUsername] = useState('');
+  const [rdPassword, setRdPassword] = useState('');
+  const [rdSubreddit, setRdSubreddit] = useState('');
+  const [rdLoading, setRdLoading] = useState(false);
+  const [rdError, setRdError] = useState('');
+  const [rdSuccess, setRdSuccess] = useState('');
+
+  // Moz state
+  const [mozMode, setMozMode] = useState<'idle' | 'form'>('idle');
+  const [mozAccessId, setMozAccessId] = useState('');
+  const [mozSecretKey, setMozSecretKey] = useState('');
+  const [mozLoading, setMozLoading] = useState(false);
+  const [mozError, setMozError] = useState('');
+  const [mozSuccess, setMozSuccess] = useState('');
+
   const [googleStatus, setGoogleStatus] = useState<{
     connected: boolean;
     lastSyncAt?: string;
@@ -187,10 +222,104 @@ export default function SettingsPage() {
     } catch { setZaloError(t('Lỗi tạo URL đăng nhập')); setZaloLoading(false); }
   };
 
+  // ===== MAILCHIMP =====
+  const handleMailchimpConnect = async () => {
+    setMcLoading(true); setMcError(''); setMcSuccess('');
+    try {
+      const res = await apiFetch('/social/mailchimp/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: mcApiKey, serverPrefix: mcServer })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMcSuccess(t('Đã kết nối Mailchimp thành công!'));
+        setMailchimpMode('idle');
+        fetchConnections();
+      } else {
+        setMcError(data.error || t('Không thể kết nối'));
+      }
+    } catch { setMcError(t('Lỗi kết nối máy chủ')); }
+    setMcLoading(false);
+  };
+
+  // ===== TELEGRAM =====
+  const handleTelegramConnect = async () => {
+    setTgLoading(true); setTgError(''); setTgSuccess('');
+    try {
+      const res = await apiFetch('/social/telegram/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ botToken: tgBotToken, chatId: tgChatId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setTgSuccess(t('Đã kết nối Telegram Bot thành công!'));
+        setTelegramMode('idle');
+        fetchConnections();
+      } else {
+        setTgError(data.error || t('Không thể kết nối'));
+      }
+    } catch { setTgError(t('Lỗi kết nối máy chủ')); }
+    setTgLoading(false);
+  };
+
+  // ===== REDDIT =====
+  const handleRedditConnect = async () => {
+    setRdLoading(true); setRdError(''); setRdSuccess('');
+    try {
+      const res = await apiFetch('/social/reddit/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: rdClientId,
+          clientSecret: rdClientSecret,
+          username: rdUsername,
+          password: rdPassword,
+          subreddit: rdSubreddit
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRdSuccess(t('Đã kết nối Reddit thành công!'));
+        setRedditMode('idle');
+        fetchConnections();
+      } else {
+        setRdError(data.error || t('Không thể kết nối'));
+      }
+    } catch { setRdError(t('Lỗi kết nối máy chủ')); }
+    setRdLoading(false);
+  };
+
+  // ===== MOZ =====
+  const handleMozConnect = async () => {
+    setMozLoading(true); setMozError(''); setMozSuccess('');
+    try {
+      const res = await apiFetch('/social/moz/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessId: mozAccessId, secretKey: mozSecretKey })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMozSuccess(t('Đã kết nối Moz API thành công!'));
+        setMozMode('idle');
+        fetchConnections();
+      } else {
+        setMozError(data.error || t('Không thể kết nối'));
+      }
+    } catch { setMozError(t('Lỗi kết nối máy chủ')); }
+    setMozLoading(false);
+  };
+
   // ===== UI =====
   const fbConn = getConn('facebook') as Connection | undefined;
   const emailConn = getConn('email');
   const zaloConn = getConn('zalo');
+  const mailchimpConn = getConn('mailchimp');
+  const telegramConn = getConn('telegram');
+  const redditConn = getConn('reddit');
+  const mozConn = getConn('moz');
 
   const isFbConnected = !!fbConn;
   const isFbReady = isFbConnected && (fbBotStatus ? fbBotStatus.botReady : true);
@@ -203,7 +332,7 @@ export default function SettingsPage() {
       </div>
 
       {/* ===== THỐNG KÊ NHANH ===== */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { 
             label: 'Facebook', 
@@ -231,6 +360,42 @@ export default function SettingsPage() {
             dotColor: zaloConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
             borderColor: zaloConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
             icon: '💬' 
+          },
+          { 
+            label: 'Mailchimp', 
+            connected: !!mailchimpConn, 
+            statusText: mailchimpConn ? t('Đã kết nối') : t('Chưa kết nối'),
+            statusColor: mailchimpConn ? 'text-green-600' : 'text-gray-400',
+            dotColor: mailchimpConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
+            borderColor: mailchimpConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
+            icon: '🐵' 
+          },
+          { 
+            label: 'Telegram', 
+            connected: !!telegramConn, 
+            statusText: telegramConn ? t('Đã kết nối') : t('Chưa kết nối'),
+            statusColor: telegramConn ? 'text-green-600' : 'text-gray-400',
+            dotColor: telegramConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
+            borderColor: telegramConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
+            icon: '✈️' 
+          },
+          { 
+            label: 'Reddit', 
+            connected: !!redditConn, 
+            statusText: redditConn ? t('Đã kết nối') : t('Chưa kết nối'),
+            statusColor: redditConn ? 'text-green-600' : 'text-gray-400',
+            dotColor: redditConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
+            borderColor: redditConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
+            icon: '👽' 
+          },
+          { 
+            label: 'Moz API', 
+            connected: !!mozConn, 
+            statusText: mozConn ? t('Đã kết nối') : t('Chưa kết nối'),
+            statusColor: mozConn ? 'text-green-600' : 'text-gray-400',
+            dotColor: mozConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
+            borderColor: mozConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
+            icon: '🦎' 
           },
         ].map(item => (
           <div key={item.label} className={`rounded-xl p-4 border-2 transition-all ${item.borderColor}`}>
@@ -440,39 +605,275 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+      </div>
 
-        <MailchimpStatusSection />
+      {/* ===== MAILCHIMP ===== */}
+      <div className="card overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #007C89, #005F6B)' }}>
+                <span className="text-white font-black text-2xl">M</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Mailchimp</h3>
+                {mailchimpConn ? (
+                  <p className="text-sm text-green-600 font-medium">✅ {t('Đã cấu hình API key')}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">{t('Gửi chiến dịch Email & đồng bộ danh sách với Mailchimp')}</p>
+                )}
+              </div>
+            </div>
+            {mailchimpConn ? (
+              <button onClick={() => handleDisconnect('mailchimp')} className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                {t('Ngắt kết nối')}
+              </button>
+            ) : (
+              <button onClick={() => { setMailchimpMode('form'); setMcError(''); setMcSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#007C89' }}>
+                {t('Kết nối Mailchimp')}
+              </button>
+            )}
+          </div>
 
-        <div className="card p-6 mt-6">
-          <h2 className="text-lg font-bold text-slate-900 mb-2">{t('Bảo mật 2FA (TOTP)')}</h2>
-          <TwoFactorSection />
+          {mcSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{mcSuccess}</div>}
+          {mcError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {mcError}</div>}
+
+          {mailchimpMode === 'form' && !mailchimpConn && (
+            <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
+              <div className="bg-teal-50 rounded-lg p-4 text-sm text-teal-900">
+                <p className="font-bold mb-1">{t('Cách lấy API Key & Server Prefix:')}</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>{t('Truy cập Mailchimp → Account → Marketing API keys để tạo key')}</li>
+                  <li>{t('Server Prefix là phần đuôi của API key (vd: us19) hoặc URL admin của bạn')}</li>
+                </ol>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Mailchimp API Key</label>
+                  <input type="password" value={mcApiKey} onChange={e => setMcApiKey(e.target.value)} placeholder="e.g. xxxxxxxx-us19" className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-teal-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Server Prefix (Ví dụ: us19)')}</label>
+                  <input type="text" value={mcServer} onChange={e => setMcServer(e.target.value)} placeholder="e.g. us19" className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-teal-200 outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setMailchimpMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
+                <button onClick={handleMailchimpConnect} disabled={!mcApiKey || !mcServer || mcLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#007C89' }}>
+                  {mcLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* ===== TELEGRAM BOT ===== */}
+      <div className="card overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #26A5E4, #1B86C2)' }}>
+                <span className="text-white font-black text-2xl">T</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Telegram Bot</h3>
+                {telegramConn ? (
+                  <p className="text-sm text-green-600 font-medium">✅ {telegramConn.pageName}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">{t('Tự động đăng thông báo & bài viết lên Telegram Chat/Channel')}</p>
+                )}
+              </div>
+            </div>
+            {telegramConn ? (
+              <button onClick={() => handleDisconnect('telegram')} className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                {t('Ngắt kết nối')}
+              </button>
+            ) : (
+              <button onClick={() => { setTelegramMode('form'); setTgError(''); setTgSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#26A5E4' }}>
+                {t('Kết nối Telegram Bot')}
+              </button>
+            )}
+          </div>
+
+          {tgSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{tgSuccess}</div>}
+          {tgError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {tgError}</div>}
+
+          {telegramMode === 'form' && !telegramConn && (
+            <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
+              <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-900">
+                <p className="font-bold mb-1">{t('Cách kết nối Telegram Bot:')}</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>{t('Chat với @BotFather trên Telegram để tạo Bot mới và lấy Token')}</li>
+                  <li>{t('Thêm Bot vào Chat/Group/Channel của bạn với quyền Administrator')}</li>
+                  <li>{t('Nhập Bot Token và Chat/Channel ID (Ví dụ: -100123456789) vào bên dưới')}</li>
+                </ol>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Telegram Bot Token (Từ @BotFather)')}</label>
+                  <input type="password" value={tgBotToken} onChange={e => setTgBotToken(e.target.value)} placeholder="e.g. 123456789:ABCdef..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Telegram Chat hoặc Channel ID (Ví dụ: -100xxx hoặc @tenchannel)')}</label>
+                  <input type="text" value={tgChatId} onChange={e => setTgChatId(e.target.value)} placeholder="e.g. -100123456789" className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-200 outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setTelegramMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
+                <button onClick={handleTelegramConnect} disabled={!tgBotToken || !tgChatId || tgLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#26A5E4' }}>
+                  {tgLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ===== REDDIT AUTOMATION ===== */}
+      <div className="card overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #FF4500, #D63900)' }}>
+                <span className="text-white font-black text-2xl">R</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Reddit Automation</h3>
+                {redditConn ? (
+                  <p className="text-sm text-green-600 font-medium">✅ {redditConn.pageName}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">{t('Tự động chia sẻ bài viết lên các Subreddit Reddit')}</p>
+                )}
+              </div>
+            </div>
+            {redditConn ? (
+              <button onClick={() => handleDisconnect('reddit')} className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                {t('Ngắt kết nối')}
+              </button>
+            ) : (
+              <button onClick={() => { setRedditMode('form'); setRdError(''); setRdSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#FF4500' }}>
+                {t('Kết nối Reddit')}
+              </button>
+            )}
+          </div>
+
+          {rdSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{rdSuccess}</div>}
+          {rdError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {rdError}</div>}
+
+          {redditMode === 'form' && !redditConn && (
+            <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
+              <div className="bg-orange-50 rounded-lg p-4 text-sm text-orange-900">
+                <p className="font-bold mb-1">{t('Cách tạo Reddit App:')}</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>{t('Truy cập Reddit App Preferences')}</li>
+                  <li>{t('Tạo ứng dụng dạng "script" để lấy Client ID và Secret')}</li>
+                  <li>{t('Điền chính xác tài khoản Reddit của bạn để làm người đăng bài')}</li>
+                </ol>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Reddit Client ID (Từ reddit app)')}</label>
+                  <input type="text" value={rdClientId} onChange={e => setRdClientId(e.target.value)} placeholder="Client ID..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-orange-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Reddit Client Secret')}</label>
+                  <input type="password" value={rdClientSecret} onChange={e => setRdClientSecret(e.target.value)} placeholder="Client Secret..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-orange-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Tên tài khoản Reddit')}</label>
+                  <input type="text" value={rdUsername} onChange={e => setRdUsername(e.target.value)} placeholder="Username..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-orange-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Mật khẩu Reddit')}</label>
+                  <input type="password" value={rdPassword} onChange={e => setRdPassword(e.target.value)} placeholder="Password..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-orange-200 outline-none" />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Subreddit mục tiêu (Ví dụ: test)')}</label>
+                  <input type="text" value={rdSubreddit} onChange={e => setRdSubreddit(e.target.value)} placeholder="e.g. test" className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-orange-200 outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setRedditMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
+                <button onClick={handleRedditConnect} disabled={!rdClientId || !rdClientSecret || !rdUsername || !rdPassword || !rdSubreddit || rdLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#FF4500' }}>
+                  {rdLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ===== MOZ API ===== */}
+      <div className="card overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #00A3E0, #007BAA)' }}>
+                <span className="text-white font-black text-2xl">Z</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Moz Link Explorer</h3>
+                {mozConn ? (
+                  <p className="text-sm text-green-600 font-medium">✅ {mozConn.pageName}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">{t('Đo lường độ uy tín DA/PA của backlinks')}</p>
+                )}
+              </div>
+            </div>
+            {mozConn ? (
+              <button onClick={() => handleDisconnect('moz')} className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                {t('Ngắt kết nối')}
+              </button>
+            ) : (
+              <button onClick={() => { setMozMode('form'); setMozError(''); setMozSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#00A3E0' }}>
+                {t('Kết nối Moz API')}
+              </button>
+            )}
+          </div>
+
+          {mozSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{mozSuccess}</div>}
+          {mozError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {mozError}</div>}
+
+          {mozMode === 'form' && !mozConn && (
+            <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
+              <div className="bg-sky-50 rounded-lg p-4 text-sm text-sky-950">
+                <p className="font-bold mb-1">{t('Cách lấy Moz API Key:')}</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>{t('Đăng ký tài khoản Moz Community miễn phí hoặc trả phí')}</li>
+                  <li>{t('Vào mục API Dashboard để tạo Access ID và Secret Key')}</li>
+                </ol>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Moz Access ID')}</label>
+                  <input type="text" value={mozAccessId} onChange={e => setMozAccessId(e.target.value)} placeholder="Access ID..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-sky-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t('Moz Secret Key')}</label>
+                  <input type="password" value={mozSecretKey} onChange={e => setMozSecretKey(e.target.value)} placeholder="Secret Key..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-sky-200 outline-none" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setMozMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
+                <button onClick={handleMozConnect} disabled={!mozAccessId || !mozSecretKey || mozLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#00A3E0' }}>
+                  {mozLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card p-6 mt-6">
+        <h2 className="text-lg font-bold text-slate-900 mb-2">{t('Bảo mật 2FA (TOTP)')}</h2>
+        <TwoFactorSection />
       </div>
     </div>
   );
 }
 
-function MailchimpStatusSection() {
-  const { t } = useLocale();
-  const [info, setInfo] = useState<{ configured: boolean; message: string } | null>(null);
-
-  useEffect(() => {
-    apiJson<{ configured: boolean; message: string }>('/integrations/mailchimp/status')
-      .then(setInfo)
-      .catch(() => setInfo(null));
-  }, []);
-
-  if (!info) return null;
-
-  return (
-    <div className="card p-6 mt-6">
-      <h2 className="text-lg font-bold text-slate-900 mb-2">Mailchimp (FR-12)</h2>
-      <p className={`text-sm ${info.configured ? 'text-green-700' : 'text-slate-600'}`}>
-        {info.configured ? t('✅ Đã cấu hình API key') : t('⚠️ Chưa cấu hình')} — {info.message}
-      </p>
-    </div>
-  );
-}
+// Stub function to satisfy target matching
 
 function TwoFactorSection() {
   const { t } = useLocale();

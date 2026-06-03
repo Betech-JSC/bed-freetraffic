@@ -25,6 +25,7 @@
     "express": "^5.2.1",
     "form-data": "^4.0.5",
     "googleapis": "^173.0.0",
+    "ioredis": "^5.11.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",

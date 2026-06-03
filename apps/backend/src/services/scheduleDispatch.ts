@@ -48,6 +48,7 @@ export async function executeContentSchedule(
     imageUrl: resolved.imageUrl,
     urlTarget: resolved.urlTarget || undefined,
     emailRecipients: row.recipients?.trim() || undefined,
+    workspaceId: row.workspaceId || undefined,
   });
 
   const { status, errorMessage } = summarizeChannelResults(channelResults);
@@ -98,14 +99,16 @@ export async function dispatchDueSchedules(limit = 10): Promise<number> {
   return due.length;
 }
 
-export async function getChannelConnectionStatus(): Promise<
-  Record<string, { connected: boolean; label: string }>
-> {
+export async function getChannelConnectionStatus(
+  workspaceId?: number
+): Promise<Record<string, { connected: boolean; label: string }>> {
   const platforms = ['facebook', 'email', 'zalo', 'youtube', 'community'] as const;
   const out: Record<string, { connected: boolean; label: string }> = {};
 
   for (const platform of platforms) {
-    const conn = await prisma.socialConnection.findUnique({ where: { platform } });
+    const conn = await prisma.socialConnection.findFirst({
+      where: { platform, workspaceId }
+    });
     const connected = !!(conn?.status === 'CONNECTED' && conn.accessToken);
     const labels: Record<string, string> = {
       facebook: conn?.pageName || 'Facebook Page',

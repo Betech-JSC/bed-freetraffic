@@ -59,10 +59,15 @@ router.post('/dispatch-due', async (req: Request, res: Response): Promise<void> 
   res.json({ processed, message: `Đã gửi ${processed} chiến dịch email đến hạn` });
 });
 
-router.use(authenticate);
+import { workspaceMiddleware } from '../middleware/workspace';
 
-router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
-  const campaigns = await prisma.emailCampaign.findMany({ orderBy: { createdAt: 'desc' } });
+router.use(authenticate, workspaceMiddleware);
+
+router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
+  const campaigns = await prisma.emailCampaign.findMany({
+    where: { workspaceId: req.workspaceId },
+    orderBy: { createdAt: 'desc' }
+  });
   res.json(campaigns);
 });
 
@@ -80,6 +85,7 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
       recipients: typeof recipients === 'string' ? recipients : recipients.join(','),
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       status: scheduledAt ? 'SCHEDULED' : 'DRAFT',
+      workspaceId: req.workspaceId,
     },
   });
   res.status(201).json(campaign);
@@ -87,7 +93,9 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
 
 router.post('/:id/send', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
-  const campaign = await prisma.emailCampaign.findUnique({ where: { id } });
+  const campaign = await prisma.emailCampaign.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!campaign) {
     res.status(404).json({ error: 'Không tìm thấy chiến dịch' });
     return;
@@ -118,7 +126,9 @@ router.post('/:id/send', requireWrite, async (req: AuthRequest, res: Response): 
 
 router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
-  const existing = await prisma.emailCampaign.findUnique({ where: { id } });
+  const existing = await prisma.emailCampaign.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!existing) {
     res.status(404).json({ error: 'Không tìm thấy' });
     return;
@@ -153,6 +163,13 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
 
 router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string);
+  const existing = await prisma.emailCampaign.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy' });
+    return;
+  }
   await prisma.emailCampaign.delete({ where: { id } });
   res.status(204).send();
 });

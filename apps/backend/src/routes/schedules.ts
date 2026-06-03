@@ -28,12 +28,62 @@ router.post('/dispatch-due', async (req: Request, res: Response): Promise<void> 
 
 router.use(authenticate);
 
-router.get('/channels-status', async (_req: AuthRequest, res: Response): Promise<void> => {
-  res.json(await getChannelConnectionStatus());
+router.get('/channels-status', async (req: AuthRequest, res: Response): Promise<void> => {
+  res.json(await getChannelConnectionStatus(req.workspaceId));
 });
 
-router.get('/', async (_req: AuthRequest, res: Response): Promise<void> => {
-  const items = await prisma.contentSchedule.findMany({ orderBy: { scheduledAt: 'desc' } });
+router.get('/golden-hour', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const campaigns = await prisma.emailCampaign.findMany({
+      where: { workspaceId: req.workspaceId },
+      select: { id: true }
+    });
+    const campaignIds = campaigns.map(c => c.id);
+
+    const events = campaignIds.length > 0
+      ? await prisma.emailEvent.findMany({
+          where: { campaignId: { in: campaignIds } },
+          select: { createdAt: true, eventType: true }
+        })
+      : [];
+
+    if (events.length < 5) {
+      res.json({
+        recommendedHours: [9, 12, 20],
+        isFallback: true,
+        message: 'Dữ liệu tương tác thưa thớt. Sử dụng khung giờ vàng mặc định (9:00, 12:00, 20:00).'
+      });
+      return;
+    }
+
+    const hourWeights = Array(24).fill(0);
+    events.forEach(e => {
+      const hr = new Date(e.createdAt).getHours();
+      const weight = e.eventType === 'click' ? 3 : 1;
+      hourWeights[hr] += weight;
+    });
+
+    const sorted = hourWeights
+      .map((weight, hour) => ({ hour, weight }))
+      .sort((a, b) => b.weight - a.weight);
+
+    const recommendedHours = sorted.slice(0, 3).map(h => h.hour);
+
+    res.json({
+      recommendedHours,
+      isFallback: false,
+      message: `Khung giờ vàng được đề xuất dựa trên phân tích ${events.length} lượt tương tác.`
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Lỗi phân tích giờ vàng' });
+  }
+});
+
+router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
+  const items = await prisma.contentSchedule.findMany({
+    where: { workspaceId: req.workspaceId },
+    orderBy: { scheduledAt: 'desc' }
+  });
   res.json(items);
 });
 
@@ -99,6 +149,7 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
         repeatUntil: repeatUntilDate,
         abTestId: abTestId ? parseInt(String(abTestId), 10) : null,
         status: body.status === 'DRAFT' ? 'DRAFT' : 'PENDING',
+        workspaceId: req.workspaceId,
       },
     });
     res.status(201).json(item);
@@ -133,7 +184,9 @@ router.post('/', (req: AuthRequest, res: Response, next) => {
 
 router.post('/:id/send-now', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const item = await prisma.contentSchedule.findUnique({ where: { id } });
+  const item = await prisma.contentSchedule.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!item) {
     res.status(404).json({ error: 'Không tìm thấy lịch' });
     return;
@@ -155,7 +208,9 @@ router.post('/:id/send-now', requireWrite, async (req: AuthRequest, res: Respons
 
 router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
-  const existing = await prisma.contentSchedule.findUnique({ where: { id } });
+  const existing = await prisma.contentSchedule.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
   if (!existing) {
     res.status(404).json({ error: 'Không tìm thấy lịch' });
     return;
@@ -230,6 +285,13 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
 
 router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const id = parseInt(req.params.id as string, 10);
+  const existing = await prisma.contentSchedule.findFirst({
+    where: { id, workspaceId: req.workspaceId }
+  });
+  if (!existing) {
+    res.status(404).json({ error: 'Không tìm thấy lịch' });
+    return;
+  }
   await prisma.contentSchedule.delete({ where: { id } });
   res.status(204).send();
 });

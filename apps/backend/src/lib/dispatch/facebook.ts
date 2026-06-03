@@ -11,6 +11,7 @@ export async function dispatchFacebook(payload: DispatchPayload): Promise<Dispat
     message: postContent,
     link: payload.urlTarget,
     imagePath: resolveUploadPath(payload.imageUrl),
+    workspaceId: payload.workspaceId,
   });
   if (!result.success) return { success: false, message: result.message };
   return { success: true, message: 'Đăng Fanpage thành công' };

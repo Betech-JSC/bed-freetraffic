@@ -9,10 +9,10 @@ import {
   getGoogleTokensFromDb,
 } from '../lib/google';
 
-export async function syncAnalyticsData(): Promise<{ success: boolean; message: string }> {
+export async function syncAnalyticsData(workspaceId?: number): Promise<{ success: boolean; message: string }> {
   try {
-    const integration = await prisma.googleIntegration.findFirst();
-    const ga4 = await getGa4Client();
+    const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
+    const ga4 = await getGa4Client(workspaceId);
     const propertyId = integration?.ga4PropertyId || getGa4PropertyId();
     const gscSite = integration?.gscSiteUrl || getGscSiteUrl();
 
@@ -48,7 +48,7 @@ export async function syncAnalyticsData(): Promise<{ success: boolean; message: 
         ],
       });
 
-      const gsc = gscSite ? await fetchGscSummary(30) : { connected: false, daily: [], clicks: 0, impressions: 0 };
+      const gsc = gscSite ? await fetchGscSummary(30, workspaceId) : { connected: false, daily: [], clicks: 0, impressions: 0 };
       const gscByDate = new Map(gsc.daily.map((d) => [d.date, d]));
 
       if (chartRes.rows) {
@@ -63,7 +63,7 @@ export async function syncAnalyticsData(): Promise<{ success: boolean; message: 
 
           await prisma.analyticsSnapshot.upsert({
             where: {
-              date_channelType: { date, channelType: 'all' },
+              date_channelType_workspaceId: { date, channelType: 'all', workspaceId: (workspaceId || null) as any },
             },
             create: {
               date,
@@ -73,6 +73,7 @@ export async function syncAnalyticsData(): Promise<{ success: boolean; message: 
               pageviews: parseInt(r.metricValues?.[2]?.value || '0'),
               clicks: gscRow?.clicks || 0,
               impressions: gscRow?.impressions || 0,
+              workspaceId,
             },
             update: {
               sessions: parseInt(r.metricValues?.[0]?.value || '0'),
@@ -97,12 +98,12 @@ export async function syncAnalyticsData(): Promise<{ success: boolean; message: 
       });
     }
 
-    await syncKeywordRanksFromGsc();
+    await syncKeywordRanksFromGsc(workspaceId);
 
     return { success: true, message: `Đồng bộ thành công (${sessionsTotal} sessions / 30 ngày)` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Lỗi đồng bộ';
-    const integration = await prisma.googleIntegration.findFirst();
+    const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
     if (integration) {
       await prisma.googleIntegration.update({
         where: { id: integration.id },
@@ -113,11 +114,12 @@ export async function syncAnalyticsData(): Promise<{ success: boolean; message: 
   }
 }
 
-async function syncKeywordRanksFromGsc() {
-  const siteUrl = getGscSiteUrl();
+async function syncKeywordRanksFromGsc(workspaceId?: number) {
+  const integration = await getGoogleTokensFromDb(workspaceId);
+  const siteUrl = integration?.gscSiteUrl || getGscSiteUrl();
   if (!siteUrl) return;
 
-  const oauth = await getOAuth2Client();
+  const oauth = await getOAuth2Client(workspaceId);
   if (!oauth) return;
 
   const { google } = await import('googleapis');
@@ -137,7 +139,7 @@ async function syncKeywordRanksFromGsc() {
     },
   });
 
-  const keywords = await prisma.seoKeyword.findMany();
+  const keywords = await prisma.seoKeyword.findMany({ where: { workspaceId } });
   const keywordMap = new Map(keywords.map((k) => [k.keyword.toLowerCase(), k]));
 
   for (const row of data.rows || []) {
@@ -163,7 +165,7 @@ async function syncKeywordRanksFromGsc() {
   }
 }
 
-export async function getDashboardFromSnapshots(days = 7, channelType?: string) {
+export async function getDashboardFromSnapshots(days = 7, channelType?: string, workspaceId?: number) {
   const since = new Date();
   since.setDate(since.getDate() - days);
 
@@ -171,15 +173,16 @@ export async function getDashboardFromSnapshots(days = 7, channelType?: string) 
     where: {
       date: { gte: since },
       channelType: channelType || 'all',
+      workspaceId,
     },
     orderBy: { date: 'asc' },
   });
 
-  const totalKeywords = await prisma.seoKeyword.count();
-  const activeChannels = await prisma.channel.count({ where: { status: 'ACTIVE' } });
-  const integration = await prisma.googleIntegration.findFirst();
+  const totalKeywords = await prisma.seoKeyword.count({ where: { workspaceId } });
+  const activeChannels = await prisma.channel.count({ where: { status: 'ACTIVE', workspaceId } });
+  const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
   const fbConn = await prisma.socialConnection.findFirst({
-    where: { platform: 'facebook', status: 'CONNECTED' },
+    where: { platform: 'facebook', status: 'CONNECTED', workspaceId },
   });
 
   const latest = snapshots[snapshots.length - 1];
@@ -213,12 +216,12 @@ export async function getDashboardFromSnapshots(days = 7, channelType?: string) 
             { name: 'T1', traffic: 0, keywords: 0, pageviews: 0 },
             { name: 'T2', traffic: 0, keywords: 0, pageviews: 0 },
           ],
-    channelBreakdown: await getChannelBreakdown(),
+    channelBreakdown: await getChannelBreakdown(workspaceId),
   };
 }
 
-async function getChannelBreakdown() {
-  const channels = await prisma.channel.findMany();
+async function getChannelBreakdown(workspaceId?: number) {
+  const channels = await prisma.channel.findMany({ where: { workspaceId } });
   const types = ['SEO', 'Social', 'Email', 'Referral', 'Video', 'Content', 'Community', 'Push'];
   return types.map((type) => ({
     type,

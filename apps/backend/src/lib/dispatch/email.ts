@@ -4,8 +4,8 @@ import { renderContent, resolveUploadPath } from './render';
 import type { DispatchPayload, DispatchResult } from './types';
 
 export async function dispatchEmail(payload: DispatchPayload): Promise<DispatchResult> {
-  const smtp = await getSmtpConfig();
-  const transporter = await createSmtpTransporter();
+  const smtp = await getSmtpConfig(payload.workspaceId);
+  const transporter = await createSmtpTransporter(payload.workspaceId);
   if (!smtp || !transporter) {
     return { success: false, message: 'Chưa cấu hình SMTP (Cài đặt → Email)' };
   }

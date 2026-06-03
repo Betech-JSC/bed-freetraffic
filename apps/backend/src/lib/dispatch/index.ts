@@ -3,6 +3,8 @@ import { dispatchEmail } from './email';
 import { dispatchFacebook } from './facebook';
 import { dispatchYoutube } from './youtube';
 import { dispatchZalo } from './zalo';
+import { dispatchTelegram } from './telegram';
+import { dispatchReddit } from './reddit';
 import type { ChannelResult, DispatchPayload, DispatchPlatform, DispatchResult } from './types';
 
 export type { ChannelResult, DispatchPayload, DispatchPlatform, DispatchResult };
@@ -18,6 +20,8 @@ export async function dispatchToPlatform(
   if (p === 'zalo') return dispatchZalo(payload);
   if (p === 'youtube') return dispatchYoutube(payload);
   if (p === 'community') return dispatchCommunity(payload);
+  if (p === 'telegram') return dispatchTelegram(payload);
+  if (p === 'reddit') return dispatchReddit(payload);
   return { success: false, message: `Kênh "${platform}" chưa hỗ trợ` };
 }
 

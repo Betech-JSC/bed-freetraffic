@@ -33,12 +33,15 @@ const upload = multer({
   }
 });
 
+import { AuthRequest } from '../middleware/auth';
+import { generateAiContentPlan } from '../services/aiGenerate';
+
 // Lấy danh sách tất cả nội dung mẫu
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const taskId = req.query.taskId ? parseInt(req.query.taskId as string) : undefined;
     const templates = await prisma.postTemplate.findMany({
-      where: taskId ? { taskId } : {},
+      where: taskId ? { taskId, workspaceId: req.workspaceId } : { workspaceId: req.workspaceId },
       orderBy: { createdAt: 'desc' },
       include: { task: { select: { name: true } } }
     });
@@ -49,7 +52,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Tạo nội dung mẫu mới (có kèm ảnh)
-router.post('/', upload.single('image'), async (req: Request, res: Response): Promise<void> => {
+router.post('/', upload.single('image'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { title, content, taskId } = req.body;
 
@@ -65,7 +68,8 @@ router.post('/', upload.single('image'), async (req: Request, res: Response): Pr
         title,
         content,
         imageUrl,
-        taskId: taskId ? parseInt(taskId) : null
+        taskId: taskId ? parseInt(taskId) : null,
+        workspaceId: req.workspaceId
       }
     });
 
@@ -76,10 +80,18 @@ router.post('/', upload.single('image'), async (req: Request, res: Response): Pr
 });
 
 // Cập nhật nội dung mẫu
-router.put('/:id', upload.single('image'), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', upload.single('image'), async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string);
     const { title, content, taskId, isActive } = req.body;
+
+    const existing = await prisma.postTemplate.findFirst({
+      where: { id, workspaceId: req.workspaceId }
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy mẫu nội dung' });
+      return;
+    }
 
     const updateData: any = {};
     if (title) updateData.title = title;
@@ -100,14 +112,20 @@ router.put('/:id', upload.single('image'), async (req: Request, res: Response): 
 });
 
 // Xóa nội dung mẫu
-router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string);
     
-    // Xóa file ảnh nếu có
-    const template = await prisma.postTemplate.findUnique({ where: { id } });
-    if (template?.imageUrl) {
-      const filePath = path.join(__dirname, '../../', template.imageUrl);
+    const existing = await prisma.postTemplate.findFirst({
+      where: { id, workspaceId: req.workspaceId }
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy mẫu nội dung' });
+      return;
+    }
+
+    if (existing.imageUrl) {
+      const filePath = path.join(__dirname, '../../', existing.imageUrl);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
 
@@ -119,7 +137,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
 });
 
 // Tạo bài viết tự động bằng AI (GPT + DALL-E)
-router.post('/generate-ai', async (req: Request, res: Response): Promise<void> => {
+router.post('/generate-ai', async (req: AuthRequest, res: Response): Promise<void> => {
   const { urlTarget, aiPrompt, generateImage } = req.body;
   if (!urlTarget?.trim()) {
     res.status(400).json({ error: 'URL đích là bắt buộc để AI phân tích' });
@@ -130,7 +148,6 @@ router.post('/generate-ai', async (req: Request, res: Response): Promise<void> =
     let result;
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      // Fallback giả lập hữu ích để chạy demo mượt mà
       let domain = 'website';
       try {
         domain = new URL(urlTarget).hostname.replace('www.', '');
@@ -146,7 +163,6 @@ router.post('/generate-ai', async (req: Request, res: Response): Promise<void> =
     let imageUrl: string | null = null;
     if (generateImage) {
       if (!apiKey) {
-        // Fallback image (random placeholder image from curated static assets or picsum for demo)
         imageUrl = `https://picsum.photos/seed/${Math.round(Math.random() * 1000)}/800/600`;
       } else {
         imageUrl = await generateAiImage(aiPrompt || result.title || 'Marketing banner');
@@ -161,6 +177,54 @@ router.post('/generate-ai', async (req: Request, res: Response): Promise<void> =
     });
   } catch (err: unknown) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Lỗi gọi AI GPT' });
+  }
+});
+
+// Lên kế hoạch nội dung tự động bằng AI Copilot
+router.post('/copilot-plan', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { topic, industry, tone, postCount } = req.body;
+  if (!topic || !industry || !tone) {
+    res.status(400).json({ error: 'Chủ đề, ngành nghề và giọng điệu là bắt buộc' });
+    return;
+  }
+
+  try {
+    const plan = await generateAiContentPlan(topic, industry, tone, postCount ? parseInt(postCount) : 5);
+    res.json({
+      plan,
+      isDemo: !process.env.OPENAI_API_KEY
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi sinh kế hoạch nội dung' });
+  }
+});
+
+// Lưu kế hoạch Copilot thành các mẫu nội dung
+router.post('/copilot-save', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { plan } = req.body;
+  if (!Array.isArray(plan) || plan.length === 0) {
+    res.status(400).json({ error: 'Kế hoạch không hợp lệ' });
+    return;
+  }
+
+  try {
+    const createdTemplates = [];
+    for (const item of plan) {
+      const template = await prisma.postTemplate.create({
+        data: {
+          title: item.title,
+          content: item.content,
+          workspaceId: req.workspaceId
+        }
+      });
+      createdTemplates.push(template);
+    }
+    res.status(201).json({
+      message: `Đã lưu thành công ${createdTemplates.length} mẫu nội dung`,
+      templates: createdTemplates
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi lưu mẫu nội dung' });
   }
 });
 

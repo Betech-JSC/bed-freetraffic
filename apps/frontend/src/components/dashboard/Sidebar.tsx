@@ -12,6 +12,7 @@ import {
   IconSettings,
   IconTarget,
 } from '@/components/icons';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
 
 function isActive(pathname: string, href: string, exact?: boolean) {
   if (exact) return pathname === href;
@@ -33,6 +34,7 @@ export function Sidebar() {
     { href: '/dashboard/customers', label: t('customers'), icon: IconTarget },
     { href: '/dashboard/email', label: t('emailCampaigns'), icon: IconDocument },
     { href: '/dashboard/automation', label: t('automation'), icon: IconBot },
+    { href: '/dashboard/copilot', label: t('copilot'), icon: IconBot },
     { href: '/dashboard/content', label: t('Soạn thảo nội dung'), icon: IconDocument },
     { href: '/dashboard/analytics', label: t('Phân tích Bot'), icon: IconAnalytics },
     { href: '/dashboard/insights', label: t('insights'), icon: IconAnalytics },
@@ -54,6 +56,10 @@ export function Sidebar() {
             <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-semibold">Growth OS</p>
           </div>
         </Link>
+      </div>
+
+      <div className="px-4 py-3 border-b border-white/5 shrink-0">
+        <WorkspaceSwitcher />
       </div>
 
       <nav className="flex-1 overflow-y-auto custom-scrollbar py-5 px-3 space-y-0.5">

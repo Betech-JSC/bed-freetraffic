@@ -23,6 +23,9 @@ import abtestsRoutes from './routes/abtests';
 import customersRoutes from './routes/customers';
 import insightsRoutes from './routes/insights';
 import integrationsRoutes from './routes/integrations';
+import mailchimpRoutes from './routes/mailchimp';
+import workspacesRoutes from './routes/workspaces';
+import { workspaceMiddleware } from './middleware/workspace';
 import { authenticate } from './middleware/auth';
 import { API_FEATURES, API_VERSION } from './lib/apiMeta';
 import { startBots } from './workers/botEngine';
@@ -32,6 +35,8 @@ import { startSyncEngine } from './workers/syncEngine';
 import { startSchedulerEngine } from './workers/schedulerEngine';
 import { startAlertEngine } from './workers/alertEngine';
 import { startEmailCampaignEngine } from './workers/emailCampaignEngine';
+import { startPageSpeedAuditorEngine } from './workers/pagespeedAuditorEngine';
+
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -78,28 +83,30 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/workspaces', workspacesRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/email-campaigns', emailCampaignsRoutes);
 
-app.use('/api/channels', authenticate, channelRoutes);
-app.use('/api/keywords', authenticate, keywordRoutes);
-app.use('/api/dashboard', authenticate, dashboardRoutes);
-app.use('/api/automation', authenticate, automationRoutes);
-app.use('/api/social', authenticate, socialRoutes);
-app.use('/api/templates', authenticate, templateRoutes);
-app.use('/api/analytics', authenticate, analyticsRoutes);
+app.use('/api/channels', authenticate, workspaceMiddleware, channelRoutes);
+app.use('/api/keywords', authenticate, workspaceMiddleware, keywordRoutes);
+app.use('/api/dashboard', authenticate, workspaceMiddleware, dashboardRoutes);
+app.use('/api/automation', authenticate, workspaceMiddleware, automationRoutes);
+app.use('/api/social', authenticate, workspaceMiddleware, socialRoutes);
+app.use('/api/templates', authenticate, workspaceMiddleware, templateRoutes);
+app.use('/api/analytics', authenticate, workspaceMiddleware, analyticsRoutes);
 app.use('/api/users', usersRoutes);
-app.use('/api/reports', authenticate, reportsRoutes);
-app.use('/api/schedules', authenticate, schedulesRoutes);
-app.use('/api/seo', authenticate, seoRoutes);
-app.get('/api/backlinks/scan', authenticate, requireWrite, discoverBacklinksHandler);
-app.post('/api/backlinks/scan', authenticate, requireWrite, discoverBacklinksHandler);
-app.use('/api/backlinks', authenticate, backlinksRoutes);
-app.use('/api/alerts', authenticate, alertsRoutes);
+app.use('/api/reports', authenticate, workspaceMiddleware, reportsRoutes);
+app.use('/api/schedules', authenticate, workspaceMiddleware, schedulesRoutes);
+app.use('/api/seo', authenticate, workspaceMiddleware, seoRoutes);
+app.get('/api/backlinks/scan', authenticate, workspaceMiddleware, requireWrite, discoverBacklinksHandler);
+app.post('/api/backlinks/scan', authenticate, workspaceMiddleware, requireWrite, discoverBacklinksHandler);
+app.use('/api/backlinks', authenticate, workspaceMiddleware, backlinksRoutes);
+app.use('/api/alerts', authenticate, workspaceMiddleware, alertsRoutes);
 app.use('/api/abtests', abtestsRoutes);
-app.use('/api/customers', authenticate, customersRoutes);
+app.use('/api/customers', authenticate, workspaceMiddleware, customersRoutes);
 app.use('/api/insights', insightsRoutes);
-app.use('/api/integrations', integrationsRoutes);
+app.use('/api/integrations', authenticate, workspaceMiddleware, integrationsRoutes);
+app.use('/api/integrations/mailchimp', authenticate, workspaceMiddleware, mailchimpRoutes);
 
 // Fallback 404 for any unregistered /api routes
 app.use('/api', notFoundHandler);
@@ -117,4 +124,5 @@ app.listen(port, () => {
   startSchedulerEngine();
   startAlertEngine();
   startEmailCampaignEngine();
+  startPageSpeedAuditorEngine();
 });
