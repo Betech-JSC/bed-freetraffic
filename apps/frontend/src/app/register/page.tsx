@@ -241,9 +241,9 @@ export default function RegisterPage() {
               />
               <span className="text-[11px] leading-relaxed text-slate-650 font-medium">
                 Tôi đồng ý với{' '}
-                <a href="#" className="text-orange-850 font-bold hover:underline">Điều khoản dịch vụ</a>
+                <a href="#" className="text-brand font-bold hover:underline">Điều khoản dịch vụ</a>
                 {' '}và{' '}
-                <a href="#" className="text-orange-850 font-bold hover:underline">Chính sách bảo mật</a>
+                <a href="#" className="text-brand font-bold hover:underline">Chính sách bảo mật</a>
                 {' '}của Be Traffic.
               </span>
             </label>
@@ -252,7 +252,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 rounded-xl bg-orange-850 hover:bg-orange-800 text-white font-extrabold text-sm shadow-md transition-all active:scale-[0.98] disabled:opacity-50 mt-4 cursor-pointer"
+              className="w-full py-3.5 rounded-xl bg-brand hover:bg-brand-hover text-white font-extrabold text-sm shadow-md transition-all active:scale-[0.98] disabled:opacity-50 mt-4 cursor-pointer"
             >
               {loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
             </button>
@@ -261,7 +261,7 @@ export default function RegisterPage() {
           {/* Footer Link */}
           <p className="text-xs text-slate-500 text-center pt-2">
             Đã có tài khoản?{' '}
-            <Link href="/login" className="text-orange-850 font-extrabold hover:underline">
+            <Link href="/login" className="text-brand font-extrabold hover:underline">
               Đăng nhập ngay
             </Link>
           </p>
