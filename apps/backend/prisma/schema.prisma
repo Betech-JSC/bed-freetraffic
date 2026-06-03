@@ -1,0 +1,321 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  email       String   @unique
+  name        String?
+  password    String
+  role        Role     @default(EDITOR)
+  isActive    Boolean  @default(true)
+  totpSecret  String?
+  totpEnabled Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+model Channel {
+  id                Int      @id @default(autoincrement())
+  name              String
+  type              String
+  url               String?
+  status            String   @default("ACTIVE")
+  apiConfig         String?
+  connectionStatus  String   @default("DISCONNECTED")
+  keywords          SeoKeyword[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model KeywordGroup {
+  id        Int          @id @default(autoincrement())
+  name      String
+  keywords  SeoKeyword[]
+  createdAt DateTime     @default(now())
+}
+
+model SeoKeyword {
+  id              Int                  @id @default(autoincrement())
+  keyword         String
+  url             String?
+  currentPosition Int?
+  searchVolume    Int?
+  channelId       Int?
+  groupId         Int?
+  channel         Channel?             @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  group           KeywordGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  rankHistory     KeywordRankHistory[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model KeywordRankHistory {
+  id          Int        @id @default(autoincrement())
+  keywordId   Int
+  keyword     SeoKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+  position    Int?
+  clicks      Int?
+  impressions Int?
+  source      String     @default("manual")
+  recordedAt  DateTime   @default(now())
+}
+
+model GoogleIntegration {
+  id            Int       @id @default(autoincrement())
+  accessToken   String
+  refreshToken  String?
+  expiresAt     DateTime?
+  ga4PropertyId String?
+  gscSiteUrl    String?
+  lastSyncAt    DateTime?
+  syncStatus    String    @default("DISCONNECTED")
+  syncError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model AnalyticsSnapshot {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @db.Date
+  channelType String?
+  sessions    Int      @default(0)
+  users       Int      @default(0)
+  pageviews   Int      @default(0)
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  bounceRate  Float?
+  createdAt   DateTime @default(now())
+
+  @@unique([date, channelType])
+}
+
+model AutomationTask {
+  id              Int            @id @default(autoincrement())
+  name            String
+  urlTarget       String
+  platforms       String
+  emailRecipients String?
+  abTestId        Int?
+  abTest          AbTest?        @relation(fields: [abTestId], references: [id], onDelete: SetNull)
+  status          String         @default("STOPPED")
+  interval        Int            @default(60)
+  lastRunAt       DateTime?
+  useAi           Boolean        @default(false)
+  aiPrompt        String?
+  aiGenerateImage Boolean        @default(false)
+  rssUrl          String?
+  rssLastPubDate  String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  logs            BotLog[]
+  templates       PostTemplate[]
+}
+
+model BotLog {
+  id        Int            @id @default(autoincrement())
+  taskId    Int
+  task      AutomationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  action    String
+  message   String
+  status    String         @default("SUCCESS")
+  createdAt DateTime       @default(now())
+}
+
+model SocialConnection {
+  id          Int      @id @default(autoincrement())
+  platform    String   @unique
+  accessToken String
+  pageName    String?
+  pageId      String?
+  status      String   @default("CONNECTED")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PostTemplate {
+  id           Int             @id @default(autoincrement())
+  title        String
+  content      String
+  imageUrl     String?
+  thumbnailUrl String?
+  taskId       Int?
+  task      AutomationTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  isActive  Boolean         @default(true)
+  abTestsA  AbTest[]        @relation("VariantA")
+  abTestsB  AbTest[]        @relation("VariantB")
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+// ——— Phase 2 ———
+
+model ContentSchedule {
+  id              Int       @id @default(autoincrement())
+  title           String
+  content         String
+  imageUrl        String?
+  platforms       String
+  urlTarget       String?
+  recipients      String?
+  scheduledAt     DateTime
+  repeatRule      String?
+  repeatUntil     DateTime?
+  cronExpression  String?
+  abTestId        Int?
+  abTest          AbTest?   @relation(fields: [abTestId], references: [id], onDelete: SetNull)
+  status          String    @default("PENDING")
+  publishedAt     DateTime?
+  errorMessage    String?
+  channelResults  String?
+  attemptCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model SeoAudit {
+  id              Int             @id @default(autoincrement())
+  url             String
+  score           Int
+  technicalScore  Int
+  contentScore    Int
+  uxScore         Int
+  auditedAt       DateTime        @default(now())
+  issues          SeoAuditIssue[]
+}
+
+model SeoAuditIssue {
+  id         Int      @id @default(autoincrement())
+  auditId    Int
+  audit      SeoAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  category   String
+  severity   String
+  message    String
+  suggestion String?
+}
+
+model Backlink {
+  id               Int      @id @default(autoincrement())
+  sourceUrl        String
+  targetUrl        String
+  domainAuthority  Int?
+  linkType         String   @default("inbound")
+  status           String   @default("active")
+  checkedAt        DateTime?
+  statusDetail     String?
+  discoveredAt     DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model EmailCampaign {
+  id          Int       @id @default(autoincrement())
+  name        String
+  subject     String
+  htmlContent String
+  recipients  String
+  status      String    @default("DRAFT")
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  sentCount   Int       @default(0)
+  openCount   Int       @default(0)
+  clickCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  events      EmailEvent[]
+}
+
+model EmailEvent {
+  id         Int           @id @default(autoincrement())
+  campaignId Int
+  campaign   EmailCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  eventType  String
+  recipient  String?
+  createdAt  DateTime      @default(now())
+}
+
+// ——— Khách hàng & chăm sóc ———
+
+model Customer {
+  id            Int               @id @default(autoincrement())
+  name          String
+  email         String            @unique
+  phone         String?
+  company       String?
+  status        String            @default("NEW")
+  lastContactAt DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  notes         CustomerNote[]
+  emailLogs     CustomerEmailLog[]
+}
+
+model CustomerNote {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model CustomerEmailLog {
+  id           Int      @id @default(autoincrement())
+  customerId   Int
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  subject      String
+  body         String
+  status       String   @default("SENT")
+  errorMessage String?
+  sentAt       DateTime @default(now())
+}
+
+// ——— Phase 3 ———
+
+model AlertRule {
+  id          Int        @id @default(autoincrement())
+  name        String
+  metric      String
+  threshold   Float
+  comparison  String     @default("lt")
+  enabled     Boolean    @default(true)
+  notifyEmail String?
+  createdAt   DateTime   @default(now())
+  logs        AlertLog[]
+}
+
+model AlertLog {
+  id        Int       @id @default(autoincrement())
+  ruleId    Int
+  rule      AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  message   String
+  severity  String    @default("WARNING")
+  createdAt DateTime  @default(now())
+}
+
+model AbTest {
+  id           Int               @id @default(autoincrement())
+  name         String
+  status       String            @default("RUNNING")
+  templateAId  Int?
+  templateBId  Int?
+  templateA    PostTemplate?     @relation("VariantA", fields: [templateAId], references: [id], onDelete: SetNull)
+  templateB    PostTemplate?     @relation("VariantB", fields: [templateBId], references: [id], onDelete: SetNull)
+  impressionsA Int               @default(0)
+  impressionsB Int               @default(0)
+  clicksA      Int               @default(0)
+  clicksB      Int               @default(0)
+  winner       String?
+  schedules    ContentSchedule[]
+  automations  AutomationTask[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}

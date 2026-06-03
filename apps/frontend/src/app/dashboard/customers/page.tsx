@@ -1,0 +1,570 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { apiJson } from '@/lib/api';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { useLocale } from '@/context/LocaleContext';
+
+const STATUS_LABELS: Record<string, string> = {
+  NEW: 'Mới',
+  ACTIVE: 'Đang chăm sóc',
+  NEED_FOLLOWUP: 'Cần follow-up',
+  VIP: 'VIP',
+  INACTIVE: 'Ngừng liên hệ',
+};
+
+const DEFAULT_CARE_HTML = `<p>Xin chào {ten},</p>
+<p>Chúng tôi liên hệ để chăm sóc và hỗ trợ bạn.</p>
+<p>Ghi chú: {ghi_chu}</p>
+<p>Trân trọng,<br/>Đội ngũ Be Traffic</p>`;
+
+type CustomerRow = {
+  id: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  company: string | null;
+  status: string;
+  lastContactAt: string | null;
+  notes: { content: string; createdAt: string }[];
+  _count: { emailLogs: number; notes: number };
+};
+
+type CustomerNote = { id: number; content: string; createdAt: string };
+
+type CustomerDetail = Omit<CustomerRow, 'notes'> & {
+  notes: CustomerNote[];
+  emailLogs: {
+    id: number;
+    subject: string;
+    status: string;
+    errorMessage: string | null;
+    sentAt: string;
+  }[];
+};
+
+export default function CustomersPage() {
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const { t, locale } = useLocale();
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<CustomerDetail | null>(null);
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', company: '', status: 'NEW', note: '' });
+
+  const [newNote, setNewNote] = useState('');
+  const [careSubject, setCareSubject] = useState('Chúng tôi luôn sẵn sàng hỗ trợ bạn');
+  const [careHtml, setCareHtml] = useState(DEFAULT_CARE_HTML);
+  const [sending, setSending] = useState(false);
+
+  const insertPlaceholder = (ph: string) => {
+    setCareHtml((prev) => prev + ph);
+  };
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const loadList = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (filterStatus) params.set('status', filterStatus);
+    if (searchDebounced) params.set('q', searchDebounced);
+    const q = params.toString() ? `?${params}` : '';
+    const data = await apiJson<CustomerRow[]>(`/customers${q}`);
+    setCustomers(Array.isArray(data) ? data : []);
+    setLoadError('');
+  }, [filterStatus, searchDebounced]);
+
+  const loadDetail = async (id: number) => {
+    setDetail(await apiJson<CustomerDetail>(`/customers/${id}`));
+  };
+
+  const refreshList = useCallback(() => {
+    setLoading(true);
+    loadList()
+      .catch((e: unknown) => {
+        setLoadError(e instanceof Error ? e.message : 'Lỗi tải danh sách');
+        setCustomers([]);
+      })
+      .finally(() => setLoading(false));
+  }, [loadList]);
+
+  useEffect(() => {
+    refreshList();
+  }, [refreshList]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDetail(null);
+      return;
+    }
+    loadDetail(selectedId).catch(() => setDetail(null));
+  }, [selectedId]);
+
+  const toggleCheck = (id: number) => {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (checked.size === customers.length) setChecked(new Set());
+    else setChecked(new Set(customers.map((c) => c.id)));
+  };
+
+  const addCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError('');
+    try {
+      await apiJson('/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addForm),
+      });
+      setShowAdd(false);
+      setAddForm({ name: '', email: '', phone: '', company: '', status: 'NEW', note: '' });
+      setSuccess('Đã thêm khách hàng');
+      await loadList();
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Không thêm được');
+    }
+  };
+
+  const addNote = async () => {
+    if (!selectedId || !newNote.trim()) return;
+    setActionError('');
+    try {
+      await apiJson(`/customers/${selectedId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newNote }),
+      });
+      setNewNote('');
+      setSuccess('Đã lưu ghi chú');
+      await loadDetail(selectedId);
+      await loadList();
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Không lưu ghi chú');
+    }
+  };
+
+  const sendCare = async () => {
+    const ids = checked.size > 0 ? [...checked] : selectedId ? [selectedId] : [];
+    if (ids.length === 0) {
+      setActionError('Chọn khách (ô tick) hoặc mở hồ sơ một khách để gửi');
+      return;
+    }
+    setSending(true);
+    setActionError('');
+    setSuccess('');
+    try {
+      const r = await apiJson<{ message: string; sent: number; total: number; errors?: string[] }>(
+        '/customers/send-care',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customerIds: ids,
+            subject: careSubject,
+            htmlContent: careHtml,
+          }),
+        }
+      );
+      setSuccess(r.message);
+      if (r.errors?.length) setActionError(r.errors.join('\n'));
+      setChecked(new Set());
+      await loadList();
+      if (selectedId) await loadDetail(selectedId);
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Gửi email thất bại');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status.toUpperCase()) {
+      case 'NEW':
+        return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'ACTIVE':
+        return 'bg-green-50 text-green-700 border-green-200';
+      case 'NEED_FOLLOWUP':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'VIP':
+        return 'bg-purple-50 text-purple-700 border-purple-200 font-extrabold shadow-sm';
+      default:
+        return 'bg-slate-50 text-slate-600 border-slate-200';
+    }
+  };
+
+  const needsBackendRestart = loadError.includes('404') || loadError.includes('Không kết nối');
+
+  // Compute metrics
+  const totalCustomers = customers.length;
+  const vipCustomers = customers.filter((c) => c.status === 'VIP').length;
+  const needFollowUpCustomers = customers.filter((c) => c.status === 'NEED_FOLLOWUP').length;
+
+  return (
+    <div className="page-container">
+      <PageHeader
+        title={t('customerTitle')}
+        description={t('customerDesc')}
+        actions={
+          <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
+            + {t('addCustomer')}
+          </button>
+        }
+      />
+
+      {loadError && (
+        <div className="alert-error flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <span>{loadError}</span>
+          {needsBackendRestart && (
+            <code className="text-xs bg-red-100/80 px-2 py-1 rounded-lg shrink-0">
+              npm run dev -w apps/backend
+            </code>
+          )}
+          <button type="button" className="btn-secondary text-xs shrink-0" onClick={refreshList}>
+            Thử lại
+          </button>
+        </div>
+      )}
+      {actionError && <p className="alert-error text-sm whitespace-pre-wrap">{actionError}</p>}
+      {success && <p className="alert-info text-sm">{success}</p>}
+
+      {/* Onboarding Guide Banner */}
+      <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
+        <span className="text-xl mt-0.5">💡</span>
+        <div>
+          <h4 className="font-bold text-slate-800 text-sm">Hướng dẫn chăm sóc khách hàng</h4>
+          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            Chọn một khách hàng ở danh sách bên trái để xem hồ sơ chi tiết. Khi soạn email gửi hàng loạt hoặc cá nhân, bạn có thể bấm vào để chèn nhanh: 
+            <button
+              type="button"
+              className="mx-1 bg-brand/10 border border-brand/20 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              title="Click để chèn {ten}"
+              onClick={() => insertPlaceholder('{ten}')}
+            >
+              {'{ten}'}
+            </button>
+            để gọi tên khách, hoặc 
+            <button
+              type="button"
+              className="mx-1 bg-brand/10 border border-brand/20 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              title="Click để chèn {ghi_chu}"
+              onClick={() => insertPlaceholder('{ghi_chu}')}
+            >
+              {'{ghi_chu}'}
+            </button>
+            để đính kèm ghi chú chăm sóc mới nhất của họ. (Yêu cầu cấu hình SMTP trong Cài đặt).
+          </p>
+        </div>
+      </div>
+
+      {/* Summary CRM Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xl font-bold">👥</div>
+          <div>
+            <div className="text-xs font-bold text-gray-500 uppercase">{t('totalCustomers')}</div>
+            <div className="text-2xl font-extrabold text-gray-900">{totalCustomers}</div>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold">👑</div>
+          <div>
+            <div className="text-xs font-bold text-gray-500 uppercase">{t('vipCustomers')}</div>
+            <div className="text-2xl font-extrabold text-gray-900">{vipCustomers}</div>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">⏱️</div>
+          <div>
+            <div className="text-xs font-bold text-gray-500 uppercase">{t('needFollowUp')}</div>
+            <div className="text-2xl font-extrabold text-gray-900">{needFollowUpCustomers}</div>
+          </div>
+        </div>
+      </div>
+
+      {loadError && !loading ? (
+        <div className="card p-12 text-center text-slate-500 max-w-lg mx-auto">
+          <p className="text-lg font-semibold text-slate-800">Chưa kết nối được API khách hàng</p>
+          <p className="text-sm mt-2 leading-relaxed">
+            Thường do backend chưa chạy đúng phiên bản. Bạn hãy tắt terminal cũ và chạy lại lệnh khởi động.
+          </p>
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-5 gap-6">
+          {/* Customer List Card */}
+          <div className="lg:col-span-2 card p-0 overflow-hidden flex flex-col min-h-[420px] shadow-sm">
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/80">
+              <h2 className="text-sm font-bold text-slate-800">{t('customerList')}</h2>
+              <div className="flex gap-2 mt-3">
+                <input
+                  className="input flex-1 text-sm !py-2"
+                  placeholder={t('searchPlaceholderCustomers')}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Tìm khách hàng"
+                />
+                <select
+                  className="input w-[7.5rem] text-sm !py-2 shrink-0 font-medium"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  aria-label="Lọc trạng thái"
+                >
+                  <option value="">Tất cả trạng thái</option>
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {customers.length > 0 && (
+                <button type="button" className="text-xs text-brand font-bold mt-2 hover:underline" onClick={selectAll}>
+                  {checked.size === customers.length 
+                    ? (locale === 'en' ? '✕ Deselect all' : '✕ Bỏ chọn tất cả')
+                    : `✓ ${t('selectCustomersToEmail')}`}
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="p-8 space-y-3 flex-1">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-14 rounded-xl bg-slate-100 animate-pulse" />
+                ))}
+              </div>
+            ) : customers.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-brand/10 text-brand flex items-center justify-center text-2xl mb-3">
+                  👤
+                </div>
+                <p className="font-bold text-slate-800">{t('noCustomers')}</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                  {locale === 'en' 
+                    ? 'Add your first customer to start tracking notes and email interactions.' 
+                    : 'Nhập khách hàng đầu tiên để bắt đầu lưu vết ghi chú và tương tác email.'}
+                </p>
+                <button type="button" className="btn-primary text-xs mt-4" onClick={() => setShowAdd(true)}>
+                  + {t('addCustomer')}
+                </button>
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100 max-h-[560px] overflow-y-auto custom-scrollbar flex-1">
+                {customers.map((c) => (
+                  <li key={c.id}>
+                    <div
+                      className={`flex gap-3 p-3.5 cursor-pointer border-l-4 transition-all ${
+                        selectedId === c.id ? 'bg-brand/5 border-brand' : 'hover:bg-slate-50 border-transparent'
+                      }`}
+                      onClick={() => setSelectedId(c.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked.has(c.id)}
+                        onChange={() => toggleCheck(c.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+                        aria-label={`Chọn ${c.name}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-1">
+                          <p className="font-bold text-slate-800 text-sm truncate">{c.name}</p>
+                          <span className={`px-2 py-0.5 border rounded text-[9px] font-extrabold uppercase tracking-wide shrink-0 ${getStatusBadgeClass(c.status)}`}>
+                            {STATUS_LABELS[c.status] || c.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">{c.email}</p>
+                        {c.notes[0] && (
+                          <p className="text-[10px] text-slate-400 truncate mt-2 bg-slate-50 p-1 border rounded" title={c.notes[0].content}>
+                            💬 {c.notes[0].content}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Customer Details & Care Cards */}
+          <div className="lg:col-span-3 space-y-5 min-h-[420px]">
+            {detail ? (
+              <>
+                {/* Info Card */}
+                <div className="card p-5 shadow-sm space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800">{detail.name}</h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">{detail.email}</p>
+                    </div>
+                    <span className={`px-2.5 py-0.5 border rounded-full text-xs font-bold ${getStatusBadgeClass(detail.status)}`}>
+                      {STATUS_LABELS[detail.status]}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-xs pt-2 border-t text-slate-600">
+                    <div>
+                      <span className="font-bold text-slate-400 uppercase tracking-wide">Số điện thoại:</span>
+                      <p className="text-slate-800 font-medium mt-0.5">{detail.phone || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 uppercase tracking-wide">Công ty:</span>
+                      <p className="text-slate-800 font-medium mt-0.5">{detail.company || '—'}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 pt-2 border-t">
+                    {detail.notes.length} ghi chú · {detail.emailLogs.length} email chăm sóc đã gửi
+                    {detail.lastContactAt && ` · Tương tác gần nhất: ${new Date(detail.lastContactAt).toLocaleString('vi-VN')}`}
+                  </p>
+                </div>
+
+                {/* Notes Card */}
+                <div className="card p-5 space-y-3 shadow-sm">
+                  <h4 className="font-bold text-slate-800 text-sm">Ghi chú chăm sóc tiến độ</h4>
+                  <div className="flex gap-2">
+                    <textarea
+                      className="input flex-1 min-h-[64px] text-xs py-2"
+                      placeholder="Nhập ghi chú mới (Ví dụ: Đã gọi điện tư vấn, khách thích gói Pro, hẹn gọi lại...)"
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                    />
+                    <button type="button" className="btn-secondary px-4 text-xs font-bold border-slate-200" onClick={addNote}>
+                      Lưu Note
+                    </button>
+                  </div>
+                  <ul className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+                    {detail.notes.length === 0 ? (
+                      <p className="text-xs text-slate-400">
+                        Chưa có ghi chú nào. Hãy tạo note mới để lưu lịch sử làm việc với khách.
+                      </p>
+                    ) : (
+                      detail.notes.map((n) => (
+                        <li key={n.id} className="text-xs bg-slate-50/50 hover:bg-slate-50 rounded-lg p-2.5 border border-slate-100 transition-colors">
+                          <p className="text-slate-700 leading-relaxed">{n.content}</p>
+                          <p className="text-[10px] text-slate-400 mt-1.5 font-medium">🕒 {new Date(n.createdAt).toLocaleString('vi-VN')}</p>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+
+                {/* Email composer card */}
+                <div className="card p-5 space-y-4 shadow-sm">
+                  <h4 className="font-bold text-slate-800 text-sm">Soạn Email Chăm Sóc Cá Nhân Hóa</h4>
+                  <div className="space-y-3">
+                    <input
+                      className="input text-xs font-medium w-full"
+                      value={careSubject}
+                      onChange={(e) => setCareSubject(e.target.value)}
+                      placeholder="Tiêu đề thư"
+                    />
+                    <textarea
+                      className="input min-h-[140px] text-xs font-mono w-full p-3 bg-slate-50 focus:bg-white"
+                      value={careHtml}
+                      onChange={(e) => setCareHtml(e.target.value)}
+                    />
+                  </div>
+                  <button type="button" className="btn-primary w-full py-2.5 text-xs" disabled={sending} onClick={sendCare}>
+                    {sending ? 'Đang thực hiện gửi email...' : checked.size > 0 ? `✉️ Gửi email cho ${checked.size} khách hàng đã chọn` : '✉️ Gửi email cho khách hàng này'}
+                  </button>
+                </div>
+
+                {/* Email log history card */}
+                <div className="card p-5 shadow-sm">
+                  <h4 className="font-bold text-slate-800 text-sm mb-3">Lịch sử tương tác Email</h4>
+                  {detail.emailLogs.length === 0 ? (
+                    <p className="text-xs text-slate-400">Chưa có lịch sử email nào được gửi cho khách hàng này.</p>
+                  ) : (
+                    <ul className="space-y-3 text-xs max-h-40 overflow-y-auto custom-scrollbar">
+                      {detail.emailLogs.map((log) => (
+                        <li key={log.id} className="border-b border-slate-100 pb-2.5 last:border-b-0 space-y-1">
+                          <div className="flex justify-between items-center">
+                            <span className="font-semibold text-slate-700">{log.subject}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                              log.status === 'SENT' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {log.status === 'SENT' ? 'Thành công' : 'Lỗi'}
+                            </span>
+                          </div>
+                          <span className="block text-[10px] text-slate-400">🕒 {new Date(log.sentAt).toLocaleString('vi-VN')}</span>
+                          {log.errorMessage && <span className="text-[10px] text-red-500 block font-medium">{log.errorMessage}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="card p-12 text-center text-slate-500 h-full flex flex-col items-center justify-center min-h-[420px] shadow-sm border border-dashed border-slate-200">
+                <p className="text-lg font-bold text-slate-700">Chưa mở hồ sơ chi tiết</p>
+                <p className="text-xs text-slate-400 mt-1.5">Chọn một khách hàng trong danh sách bên trái hoặc bấm <strong>+ Thêm khách hàng</strong> mới để bắt đầu chăm sóc.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAdd && (
+        <div className="modal-overlay" onClick={() => setShowAdd(false)}>
+          <form className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()} onSubmit={addCustomer}>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-brand">Thêm khách hàng mới</h3>
+              <button type="button" onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+            
+            <div className="space-y-3">
+              <input className="input text-xs py-2.5" placeholder="Họ tên khách hàng *" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} required />
+              <input className="input text-xs py-2.5" type="email" placeholder="Địa chỉ Email *" value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} required />
+              <input className="input text-xs py-2.5" placeholder="Số điện thoại" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} />
+              <input className="input text-xs py-2.5" placeholder="Tên công ty" value={addForm.company} onChange={(e) => setAddForm({ ...addForm, company: e.target.value })} />
+              
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Trạng thái chăm sóc</label>
+                <select className="input text-xs font-semibold py-2.5 w-full" value={addForm.status} onChange={(e) => setAddForm({ ...addForm, status: e.target.value })}>
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <textarea
+                className="input text-xs min-h-[80px] p-2"
+                placeholder="Ghi chú đầu tiên (Ví dụ: Khách quan tâm dịch vụ, nguồn giới thiệu từ facebook...)"
+                value={addForm.note}
+                onChange={(e) => setAddForm({ ...addForm, note: e.target.value })}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button type="button" className="btn-secondary flex-1" onClick={() => setShowAdd(false)}>
+                Hủy
+              </button>
+              <button type="submit" className="btn-primary flex-1">
+                Lưu khách hàng
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
