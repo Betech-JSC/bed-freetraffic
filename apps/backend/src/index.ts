@@ -25,6 +25,13 @@ import insightsRoutes from './routes/insights';
 import integrationsRoutes from './routes/integrations';
 import mailchimpRoutes from './routes/mailchimp';
 import workspacesRoutes from './routes/workspaces';
+import blogRoutes from './routes/blog';
+import landingPagesRoutes from './routes/landingPages';
+import publicRoutes from './routes/public';
+import formsRoutes from './routes/forms';
+import paymentsRoutes from './routes/payments';
+import ordersRoutes from './routes/orders';
+import cskhRoutes from './routes/cskh';
 import { workspaceMiddleware } from './middleware/workspace';
 import { authenticate } from './middleware/auth';
 import { API_FEATURES, API_VERSION } from './lib/apiMeta';
@@ -35,6 +42,7 @@ import { startSyncEngine } from './workers/syncEngine';
 import { startSchedulerEngine } from './workers/schedulerEngine';
 import { startAlertEngine } from './workers/alertEngine';
 import { startEmailCampaignEngine } from './workers/emailCampaignEngine';
+import { startEmailWorkflowEngine } from './workers/emailWorkflowEngine';
 import { startPageSpeedAuditorEngine } from './workers/pagespeedAuditorEngine';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -108,6 +116,14 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/integrations', authenticate, workspaceMiddleware, integrationsRoutes);
 app.use('/api/integrations/mailchimp', authenticate, workspaceMiddleware, mailchimpRoutes);
 
+app.use('/api/blog', authenticate, workspaceMiddleware, blogRoutes);
+app.use('/api/landing-pages', authenticate, workspaceMiddleware, landingPagesRoutes);
+app.use('/api/forms', authenticate, workspaceMiddleware, formsRoutes);
+app.use('/api/public', publicRoutes);
+app.use('/api/payments', paymentsRoutes);
+app.use('/api/orders', authenticate, workspaceMiddleware, ordersRoutes);
+app.use('/api/cskh', cskhRoutes);
+
 // Fallback 404 for any unregistered /api routes
 app.use('/api', notFoundHandler);
 
@@ -124,5 +140,6 @@ app.listen(port, () => {
   startSchedulerEngine();
   startAlertEngine();
   startEmailCampaignEngine();
+  startEmailWorkflowEngine();
   startPageSpeedAuditorEngine();
 });

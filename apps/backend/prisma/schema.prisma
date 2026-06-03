@@ -48,6 +48,16 @@ model Workspace {
   abTests           AbTest[]
   socialConnections SocialConnection[]
   analyticsSnapshots AnalyticsSnapshot[]
+  blogPosts         BlogPost[]
+  landingPages      LandingPage[]
+  customForms       CustomForm[]
+  formSubmissions   FormSubmission[]
+  emailWorkflows    EmailWorkflow[]
+  emailWorkflowQueues EmailWorkflowQueue[]
+  products          Product[]
+  orders            Order[]
+  paymentConfig     PaymentConfig?
+  cskhConfig        CskhConfig?
 }
 
 model UserWorkspace {
@@ -322,6 +332,8 @@ model Customer {
   updatedAt     DateTime           @updatedAt
   notes         CustomerNote[]
   emailLogs     CustomerEmailLog[]
+  orders        Order[]
+  emailWorkflowQueues EmailWorkflowQueue[]
 }
 
 model CustomerNote {
@@ -387,4 +399,191 @@ model AbTest {
   workspace    Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
+}
+
+model BlogPost {
+  id           Int        @id @default(autoincrement())
+  slug         String     @unique
+  title        String
+  summary      String?
+  content      String
+  htmlContent  String
+  published    Boolean    @default(false)
+  publishedAt  DateTime?
+  authorName   String     @default("Admin")
+  tags         String?
+  workspaceId  Int?
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([workspaceId])
+  @@index([slug])
+}
+
+model LandingPage {
+  id           Int              @id @default(autoincrement())
+  slug         String           @unique
+  title        String
+  layoutJson   String
+  htmlContent  String
+  cssContent   String?
+  status       String           @default("DRAFT")
+  fbPixelId    String?
+  googleTagId  String?
+  workspaceId  Int?
+  workspace    Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  forms        CustomForm[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([workspaceId])
+  @@index([slug])
+}
+
+model CustomForm {
+  id            Int              @id @default(autoincrement())
+  name          String
+  fieldsJson    String
+  landingPageId Int?
+  landingPage   LandingPage?     @relation(fields: [landingPageId], references: [id], onDelete: Cascade)
+  workspaceId   Int?
+  workspace     Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  submissions   FormSubmission[]
+  workflows     EmailWorkflow[]
+  createdAt     DateTime         @default(now())
+
+  @@index([workspaceId])
+}
+
+model FormSubmission {
+  id          Int        @id @default(autoincrement())
+  formId      Int
+  form        CustomForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+  dataJson    String
+  ipAddress   String?
+  userAgent   String?
+  workspaceId Int?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+
+  @@index([workspaceId])
+  @@index([formId])
+}
+
+model EmailWorkflow {
+  id            Int                  @id @default(autoincrement())
+  name          String
+  triggerType   String
+  triggerFormId Int?
+  form          CustomForm?          @relation(fields: [triggerFormId], references: [id], onDelete: SetNull)
+  isActive      Boolean              @default(false)
+  workspaceId   Int?
+  workspace     Workspace?           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  steps         EmailWorkflowStep[]
+  queueJobs     EmailWorkflowQueue[]
+  createdAt     DateTime             @default(now())
+
+  @@index([workspaceId])
+}
+
+model EmailWorkflowStep {
+  id            Int                  @id @default(autoincrement())
+  workflowId    Int
+  workflow      EmailWorkflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepOrder     Int
+  actionType    String
+  delaySeconds  Int                  @default(0)
+  emailSubject  String?
+  emailBody     String?
+  queueJobs     EmailWorkflowQueue[]
+  createdAt     DateTime             @default(now())
+
+  @@index([workflowId])
+}
+
+model EmailWorkflowQueue {
+  id            Int               @id @default(autoincrement())
+  workflowId    Int
+  workflow      EmailWorkflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepId        Int
+  step          EmailWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  customerId    Int
+  customer      Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  scheduledAt   DateTime
+  status        String            @default("PENDING")
+  errorMessage  String?
+  workspaceId   Int?
+  workspace     Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt     DateTime          @default(now())
+
+  @@index([scheduledAt, status])
+  @@index([customerId])
+  @@index([workspaceId])
+}
+
+model Product {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String?
+  price       Float
+  currency    String      @default("VND")
+  workspaceId Int?
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+
+  @@index([workspaceId])
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  orderNumber   String      @unique
+  customerId    Int
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  totalAmount   Float
+  status        String      @default("PENDING")
+  paymentMethod String?
+  gatewayTxnId  String?
+  workspaceId   Int?
+  workspace     Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items         OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([workspaceId])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int
+  price     Float
+
+  @@index([orderId])
+}
+
+model PaymentConfig {
+  id                  Int        @id @default(autoincrement())
+  workspaceId         Int?       @unique
+  workspace           Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  payosClientId       String?
+  payosApiKey         String?
+  payosChecksumKey    String?
+  stripeSecretKey     String?
+  stripeWebhookSecret String?
+}
+
+model CskhConfig {
+  id                   Int        @id @default(autoincrement())
+  workspaceId          Int?       @unique
+  workspace            Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  liveChatEnabled      Boolean    @default(false)
+  aiChatbotEnabled     Boolean    @default(false)
+  knowledgeBaseText    String?
+  notificationChannels String?
 }

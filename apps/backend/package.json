@@ -15,6 +15,7 @@
   "type": "commonjs",
   "dependencies": {
     "@google-analytics/data": "^6.1.0",
+    "@payos/node": "^2.0.5",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@types/pdfkit": "^0.17.6",
@@ -32,7 +33,8 @@
     "nodemailer": "^8.0.10",
     "otplib": "^13.4.1",
     "pdfkit": "^0.18.0",
-    "pg": "^8.21.0"
+    "pg": "^8.21.0",
+    "stripe": "^22.2.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
