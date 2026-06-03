@@ -4,41 +4,36 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function LoginPage() {
+export default function RegisterPage() {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [totpCode, setTotpCode] = useState('');
-  const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, totpCode: totpCode || undefined }),
+        body: JSON.stringify({ name, email, password }),
       });
       const data = await res.json();
-      if (res.status === 403 && data.requiresTotp) {
-        setNeedsTotp(true);
-        setError('Nhập mã 6 số từ ứng dụng Authenticator');
-        setLoading(false);
-        return;
-      }
-      if (!res.ok) throw new Error(data.error || 'Đăng nhập thất bại');
+      if (!res.ok) throw new Error(data.error || 'Đăng ký thất bại');
 
-      document.cookie = `token=${data.token}; path=/; max-age=604800`;
-      localStorage.setItem('user', JSON.stringify(data.user));
-      router.push('/dashboard');
-      router.refresh();
+      setSuccess('Đăng ký tài khoản thành công! Đang chuyển hướng sang trang đăng nhập...');
+      setTimeout(() => {
+        router.push('/login');
+      }, 2000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Đăng nhập thất bại');
+      setError(err instanceof Error ? err.message : 'Đăng ký thất bại');
     } finally {
       setLoading(false);
     }
@@ -57,10 +52,10 @@ export default function LoginPage() {
         </div>
         <div className="relative space-y-6 max-w-md">
           <h2 className="text-4xl font-bold text-white leading-tight tracking-tight">
-            Kéo traffic tự động, đo lường rõ ràng.
+            Khởi tạo tài khoản, trải nghiệm ngay.
           </h2>
           <p className="text-slate-400 text-lg leading-relaxed">
-            Quản lý SEO, Bot đăng bài đa kênh và phân tích hiệu suất — tất cả trong một nền tảng.
+            Tham gia cùng hàng ngàn doanh nghiệp sử dụng Be Traffic để tối ưu hóa tăng trưởng tự động.
           </p>
           <ul className="space-y-3 text-sm text-slate-400">
             {['Facebook · Email · Zalo OA', 'Google Analytics & Search Console', 'Automation Bot thông minh'].map((t) => (
@@ -84,12 +79,24 @@ export default function LoginPage() {
             <span className="font-bold text-slate-900 text-lg">Be Traffic</span>
           </div>
 
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Đăng nhập</h1>
-          <p className="text-slate-500 text-sm mt-1 mb-8">Truy cập bảng điều khiển của bạn</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Đăng ký</h1>
+          <p className="text-slate-500 text-sm mt-1 mb-8">Bắt đầu hành trình tăng trưởng của bạn</p>
 
           {error && <div className="alert-error mb-6">{error}</div>}
+          {success && <div className="alert-info mb-6">{success}</div>}
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleRegister} className="space-y-5">
+            <div>
+              <label className="label">Họ và tên</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="input"
+                placeholder="Nguyễn Văn A"
+                required
+              />
+            </div>
             <div>
               <label className="label">Email</label>
               <input
@@ -97,7 +104,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input"
-                placeholder="admin@freetraffic.com"
+                placeholder="partner@freetraffic.com"
                 required
               />
             </div>
@@ -112,30 +119,15 @@ export default function LoginPage() {
                 required
               />
             </div>
-            {needsTotp && (
-              <div>
-                <label className="label">Mã 2FA (6 số)</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                  className="input"
-                  placeholder="000000"
-                  required
-                />
-              </div>
-            )}
             <button type="submit" disabled={loading} className="btn-primary w-full py-3 mt-2">
-              {loading ? 'Đang xác thực...' : 'Đăng nhập'}
+              {loading ? 'Đang đăng ký...' : 'Đăng ký tài khoản'}
             </button>
           </form>
 
           <p className="text-xs text-slate-500 text-center mt-6">
-            Chưa có tài khoản?{' '}
-            <Link href="/register" className="text-brand font-bold hover:underline">
-              Đăng ký miễn phí
+            Đã có tài khoản?{' '}
+            <Link href="/login" className="text-brand font-bold hover:underline">
+              Đăng nhập ngay
             </Link>
           </p>
         </div>

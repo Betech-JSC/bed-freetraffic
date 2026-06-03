@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Nếu cố gắng vào Login mà ĐÃ có token -> Đá vào Dashboard
-  if (request.nextUrl.pathname.startsWith('/login')) {
+  if (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register')) {
     if (token) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
@@ -31,5 +31,5 @@ export function middleware(request: NextRequest) {
 
 // Cấu hình Middleware chỉ chạy trên các Route cụ thể
 export const config = {
-  matcher: ['/dashboard/:path*', '/login', '/logout', '/oauth/:path*'],
+  matcher: ['/dashboard/:path*', '/login', '/register', '/logout', '/oauth/:path*'],
 };

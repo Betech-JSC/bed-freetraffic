@@ -15,7 +15,7 @@ export default function LandingPage() {
         </nav>
         <div className="flex items-center gap-4">
           <Link href="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">Đăng nhập</Link>
-          <Link href="/dashboard" className="px-5 py-2.5 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-hover transition-colors shadow-sm">
+          <Link href="/register" className="px-5 py-2.5 bg-brand text-white text-sm font-semibold rounded-lg hover:bg-brand-hover transition-colors shadow-sm">
             Bắt đầu miễn phí
           </Link>
         </div>
@@ -36,7 +36,7 @@ export default function LandingPage() {
               Đột phá lưu lượng truy cập từ SEO, Social và Content mà không cần nhân sự vận hành phức tạp. Hãy để AI của Be Traffic thay bạn chiếm lĩnh thị trường.
             </p>
             <div className="flex items-center gap-4 pt-4">
-              <Link href="/dashboard" className="px-8 py-4 bg-brand text-white text-base font-semibold rounded-lg hover:bg-brand-hover transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
+              <Link href="/register" className="px-8 py-4 bg-brand text-white text-base font-semibold rounded-lg hover:bg-brand-hover transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5">
                 Bắt đầu miễn phí
               </Link>
               <Link href="#demo" className="px-8 py-4 bg-white text-gray-900 border border-gray-200 text-base font-semibold rounded-lg hover:bg-gray-50 transition-all duration-300">
@@ -161,9 +161,9 @@ export default function LandingPage() {
             <h2 className="text-4xl font-extrabold text-white mb-6">Sẵn sàng bùng nổ Traffic?</h2>
             <p className="text-brand-light text-lg mb-10 max-w-xl mx-auto">Gia nhập cùng hàng ngàn doanh nghiệp đang sử dụng Be Traffic để tăng trưởng không giới hạn.</p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button className="px-8 py-4 bg-white text-brand text-base font-bold rounded-lg hover:bg-gray-100 transition-all shadow-lg hover:-translate-y-0.5 w-full sm:w-auto">
+              <Link href="/register" className="px-8 py-4 bg-white text-brand text-base font-bold rounded-lg hover:bg-gray-100 transition-all shadow-lg hover:-translate-y-0.5 w-full sm:w-auto text-center block">
                 Đăng ký ngay
-              </button>
+              </Link>
               <button className="px-8 py-4 bg-transparent text-white border border-white/40 text-base font-bold rounded-lg hover:bg-white/10 transition-colors w-full sm:w-auto">
                 Tư vấn giải pháp
               </button>
