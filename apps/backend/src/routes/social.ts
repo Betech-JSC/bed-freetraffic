@@ -309,8 +309,8 @@ router.post('/facebook/select-page', async (req: WorkspaceRequest, res: Response
 function detectSmtp(email: string) {
   const domain = email.split('@')[1]?.toLowerCase();
   const configs: Record<string, { host: string; port: number; secure: boolean }> = {
-    'gmail.com': { host: 'smtp.gmail.com', port: 465, secure: true },
-    'googlemail.com': { host: 'smtp.gmail.com', port: 465, secure: true },
+    'gmail.com': { host: 'smtp.gmail.com', port: 587, secure: false },
+    'googlemail.com': { host: 'smtp.gmail.com', port: 587, secure: false },
     'outlook.com': { host: 'smtp-mail.outlook.com', port: 587, secure: false },
     'hotmail.com': { host: 'smtp-mail.outlook.com', port: 587, secure: false },
     'yahoo.com': { host: 'smtp.mail.yahoo.com', port: 465, secure: true },
