@@ -1,11 +1,12 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
-import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
+import { authenticate, requireWrite } from '../middleware/auth';
+import { WorkspaceRequest } from '../middleware/workspace';
 
 const router = Router();
 
 // Load CSKH Config
-router.get('/config', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/config', authenticate, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
     let config = await prisma.cskhConfig.findUnique({
       where: { workspaceId: req.workspaceId },
@@ -26,7 +27,7 @@ router.get('/config', authenticate, async (req: AuthRequest, res: Response): Pro
 });
 
 // Save CSKH Config
-router.post('/config', authenticate, requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/config', authenticate, requireWrite, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
     const { liveChatEnabled, aiChatbotEnabled, knowledgeBaseText, notificationChannels } = req.body;
 

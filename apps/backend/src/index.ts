@@ -122,7 +122,7 @@ app.use('/api/forms', authenticate, workspaceMiddleware, formsRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/orders', authenticate, workspaceMiddleware, ordersRoutes);
-app.use('/api/cskh', cskhRoutes);
+app.use('/api/cskh', authenticate, workspaceMiddleware, cskhRoutes);
 
 // Fallback 404 for any unregistered /api routes
 app.use('/api', notFoundHandler);
