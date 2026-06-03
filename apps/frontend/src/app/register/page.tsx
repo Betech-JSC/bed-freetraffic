@@ -55,10 +55,10 @@ export default function RegisterPage() {
         
         {/* Top Header Logo */}
         <div className="relative z-10">
-          <span className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          <Link href="/" className="inline-flex items-center gap-2 hover:opacity-90 transition-opacity cursor-pointer">
             <span className="w-6 h-6 rounded-lg bg-gradient-to-br from-brand to-orange-600 flex items-center justify-center text-[11px] font-black text-white shadow-md">Be</span>
-            Be Traffic
-          </span>
+            <span className="text-xl font-bold tracking-tight text-white">Be Traffic</span>
+          </Link>
         </div>
 
         {/* Middle Area: Headline, Mockup Image & Testimonial Overlays */}

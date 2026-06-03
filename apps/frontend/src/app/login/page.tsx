@@ -56,10 +56,12 @@ export default function LoginPage() {
             
             {/* Brand Logo & Tagline */}
             <div className="text-center space-y-2">
-              <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-1">
-                <span className="text-brand">Be</span>
-                <span className="text-[#c44a18]">Traffic</span>
-              </h1>
+              <Link href="/" className="inline-block hover:opacity-90 transition-opacity cursor-pointer">
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 flex items-center justify-center gap-1">
+                  <span className="text-brand">Be</span>
+                  <span className="text-[#c44a18]">Traffic</span>
+                </h1>
+              </Link>
               <p className="text-slate-500 text-xs sm:text-sm font-medium">
                 Chào mừng bạn quay trở lại
               </p>
