@@ -304,9 +304,17 @@ router.post('/email/connect', async (req, res) => {
             host: smtp.host,
             port: smtp.port,
             secure: smtp.secure,
-            auth: { user: email, pass: password }
+            auth: { user: email, pass: password },
+            connectionTimeout: 8000, // 8 giây tối đa để kết nối tránh treo Vercel 502
+            greetingTimeout: 8000,
+            socketTimeout: 10000,
+            tls: {
+                rejectUnauthorized: false // Bỏ qua lỗi SSL/TLS self-signed trên môi trường cloud
+            }
         });
+        console.log(`[SMTP] Đang kiểm tra kết nối tới ${smtp.host}:${smtp.port}...`);
         await transporter.verify();
+        console.log(`[SMTP] Kết nối thành công tới ${smtp.host}:${smtp.port}!`);
         // Lưu config vào DB (dưới dạng JSON trong accessToken)
         const config = JSON.stringify({ email, password, ...smtp });
         await prisma_1.default.socialConnection.upsert({
@@ -322,6 +330,7 @@ router.post('/email/connect', async (req, res) => {
         res.json({ success: true, email, smtpHost: smtp.host });
     }
     catch (error) {
+        console.error('❌ [SMTP Connection Error]:', error);
         let msg = 'Không thể kết nối SMTP. ';
         if (error.code === 'EAUTH')
             msg += 'Sai mật khẩu hoặc chưa bật "Mật khẩu ứng dụng" (App Password).';
