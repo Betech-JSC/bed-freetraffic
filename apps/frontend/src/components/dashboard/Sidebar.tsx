@@ -29,17 +29,36 @@ export function Sidebar() {
     { href: '/dashboard/sources', label: t('sources'), icon: IconChart },
     { href: '/dashboard/reports', label: t('Báo cáo'), icon: IconAnalytics },
     { href: '/dashboard/schedule', label: t('schedule'), icon: IconDocument },
+    
+    // SEO & Content CMS
     { href: '/dashboard/seo', label: t('seoAudit'), icon: IconChart },
     { href: '/dashboard/backlinks', label: t('backlinks'), icon: IconTarget },
+    { href: '/dashboard/blog', label: 'Blog CMS', icon: IconDocument },
+    { href: '/dashboard/landing', label: 'Landing Pages', icon: IconDashboard },
+    
+    // Leads & CRM
+    { href: '/dashboard/forms', label: 'Custom Forms', icon: IconDocument },
     { href: '/dashboard/customers', label: t('customers'), icon: IconTarget },
+    
+    // Email & Automation Campaigns
     { href: '/dashboard/email', label: t('emailCampaigns'), icon: IconDocument },
-    { href: '/dashboard/automation', label: t('automation'), icon: IconBot },
+    { href: '/dashboard/automation', label: t('automation') + ' Bot', icon: IconBot },
+    { href: '/dashboard/automation/workflows', label: 'Email Automation', icon: IconBot },
+    
+    // Store & Sales
+    { href: '/dashboard/store/products', label: 'Sản phẩm số', icon: IconTarget },
+    { href: '/dashboard/store/orders', label: 'Đơn hàng & Doanh thu', icon: IconAnalytics },
+    
+    // AI Copilot & Bot
     { href: '/dashboard/copilot', label: t('copilot'), icon: IconBot },
     { href: '/dashboard/content', label: t('Soạn thảo nội dung'), icon: IconDocument },
     { href: '/dashboard/analytics', label: t('Phân tích Bot'), icon: IconAnalytics },
+    
+    // Insights & CSKH Settings
     { href: '/dashboard/insights', label: t('insights'), icon: IconAnalytics },
     { href: '/dashboard/alerts', label: t('alerts'), icon: IconAnalytics },
     { href: '/dashboard/abtests', label: t('abtests'), icon: IconChart },
+    { href: '/dashboard/cskh/settings', label: 'CSKH & Chatbot AI', icon: IconSettings },
     { href: '/dashboard/users', label: t('Người dùng'), icon: IconSettings },
     { href: '/dashboard/settings', label: t('settings'), icon: IconSettings },
   ];
