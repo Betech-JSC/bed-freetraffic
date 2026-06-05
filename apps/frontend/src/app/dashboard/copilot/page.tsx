@@ -12,6 +12,8 @@ interface CopilotPlanItem {
   platform: string; // 'facebook', 'email', 'zalo'
   suggestedTime: string; // '09:00', '12:00', '20:00'
   scheduledAt?: string; // 'YYYY-MM-DDTHH:MM' format for datetime-local input
+  imageUrl?: string | null;
+  imagePrompt?: string;
 }
 
 const TONE_OPTIONS = [
@@ -61,6 +63,36 @@ export default function CopilotPage() {
   const [plan, setPlan] = useState<CopilotPlanItem[]>([]);
   const [isDemo, setIsDemo] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [aiGenImage, setAiGenImage] = useState(false);
+  const [imageLoadingIndex, setImageLoadingIndex] = useState<number | null>(null);
+
+  const handleGenerateCardImage = async (index: number) => {
+    const item = plan[index];
+    const promptText = (item.imagePrompt || '').trim() || item.title;
+    if (!promptText.trim()) return;
+
+    setImageLoadingIndex(index);
+    setMessage(null);
+
+    try {
+      const res = await apiJson<{ imageUrl: string | null }>('/templates/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText })
+      });
+
+      if (res.imageUrl) {
+        handleCardChange(index, 'imageUrl', res.imageUrl);
+      } else {
+        throw new Error('Không thể sinh ảnh minh họa.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: err?.message || 'Lỗi khi tạo ảnh với AI.' });
+    } finally {
+      setImageLoadingIndex(null);
+    }
+  };
 
   // Helper to calculate datetime string for a card
   const calculateCardDate = (baseDateStr: string, dayIndex: number, suggestedTime: string): string => {
@@ -108,7 +140,7 @@ export default function CopilotPage() {
       const res = await apiJson<{ plan: CopilotPlanItem[]; isDemo: boolean }>('/templates/copilot-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), industry: industry.trim(), tone, postCount })
+        body: JSON.stringify({ topic: topic.trim(), industry: industry.trim(), tone, postCount, generateImage: aiGenImage })
       });
 
       // Pre-fill initial schedule times
@@ -133,7 +165,7 @@ export default function CopilotPage() {
     }
   };
 
-  const handleCardChange = (index: number, field: keyof CopilotPlanItem, value: string) => {
+  const handleCardChange = (index: number, field: keyof CopilotPlanItem, value: any) => {
     setPlan(prev => {
       const next = [...prev];
       next[index] = { ...next[index], [field]: value };
@@ -167,6 +199,12 @@ export default function CopilotPage() {
     setMessage(null);
 
     try {
+      // Kiểm tra xem kế hoạch có bài viết qua email không, nếu có thì bắt buộc phải nhập danh sách người nhận
+      const hasEmailPost = plan.some(item => item.platform === 'email');
+      if (hasEmailPost && !recipients.trim()) {
+        throw new Error('Hệ thống phát hiện có bài viết lên lịch qua kênh Email. Vui lòng nhập Danh sách Email Người nhận ở ô "Người nhận Email" bên dưới khung thiết lập lên lịch bên trái (ví dụ: khachhang1@gmail.com, khachhang2@gmail.com).');
+      }
+
       for (let i = 0; i < plan.length; i++) {
         const item = plan[i];
         
@@ -185,6 +223,7 @@ export default function CopilotPage() {
           platforms: item.platform || 'facebook',
           scheduledAt: targetDate.toISOString(),
           urlTarget: urlTarget.trim() || null,
+          imageUrl: item.imageUrl || null,
           status: 'PENDING'
         };
 
@@ -399,6 +438,20 @@ export default function CopilotPage() {
                   className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-4 py-2 text-sm text-slate-800 focus:outline-none focus:bg-white focus:border-brand transition-all shadow-inner"
                 />
               </div>
+
+              <div className="flex items-center gap-3 py-2 bg-slate-50/60 px-3 rounded-xl border border-slate-200/50">
+                <input
+                  type="checkbox"
+                  id="aiGenImage"
+                  checked={aiGenImage}
+                  onChange={e => setAiGenImage(e.target.checked)}
+                  disabled={loading}
+                  className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand accent-brand cursor-pointer"
+                />
+                <label htmlFor="aiGenImage" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                  Tự động tạo ảnh minh họa
+                </label>
+              </div>
             </div>
 
             <button
@@ -530,6 +583,70 @@ export default function CopilotPage() {
                               />
                             </div>
 
+                            {/* Image Section */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">
+                                Ảnh minh họa
+                              </label>
+                              {item.imageUrl ? (
+                                <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group/img max-w-sm">
+                                  <img
+                                    src={item.imageUrl}
+                                    alt="Preview"
+                                    className="w-full h-40 object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleGenerateCardImage(index)}
+                                      disabled={imageLoadingIndex !== null}
+                                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-xs font-bold text-slate-800 shadow transition-all flex items-center gap-1"
+                                    >
+                                      {imageLoadingIndex === index ? 'Đang tạo...' : 'Sinh lại ảnh'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCardChange(index, 'imageUrl', null)}
+                                      className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-xs font-bold text-white shadow transition-all"
+                                    >
+                                      Xóa ảnh
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="rounded-xl border border-dashed border-slate-350 p-4 flex flex-col gap-3 bg-slate-50/50 max-w-md w-full">
+                                  {imageLoadingIndex === index ? (
+                                    <div className="flex flex-col items-center gap-2 py-2">
+                                      <div className="w-5 h-5 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                                      <span className="text-xs text-slate-500 font-medium">Đang tạo ảnh...</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col gap-2 w-full">
+                                      <div className="flex gap-2">
+                                        <input
+                                          type="text"
+                                          value={item.imagePrompt || ''}
+                                          onChange={e => handleCardChange(index, 'imagePrompt', e.target.value)}
+                                          placeholder="Mô tả hình ảnh muốn vẽ..."
+                                          className="input text-xs w-full py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-brand px-3"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleGenerateCardImage(index)}
+                                          className="px-4 py-1.5 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 text-xs font-bold text-brand transition-all shrink-0 cursor-pointer"
+                                        >
+                                          Tạo ảnh
+                                        </button>
+                                      </div>
+                                      <p className="text-[10px] text-slate-400">
+                                        * Để trống sẽ vẽ theo tiêu đề bài viết.
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">
                                 <label className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Nội dung</label>
@@ -578,6 +695,63 @@ export default function CopilotPage() {
                                 className="w-full bg-slate-50/20 border border-transparent hover:border-slate-200 focus:border-brand focus:bg-white focus:outline-none rounded-lg px-2 py-1 text-sm font-bold text-slate-800 transition-all"
                               />
                             </div>
+
+                            {/* Image Section in Grid */}
+                            <div className="space-y-1">
+                              {item.imageUrl ? (
+                                <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group/img">
+                                  <img
+                                    src={item.imageUrl}
+                                    alt="Preview"
+                                    className="w-full h-32 object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleGenerateCardImage(index)}
+                                      disabled={imageLoadingIndex !== null}
+                                      className="px-2.5 py-1 rounded bg-white hover:bg-slate-100 text-[10px] font-bold text-slate-850 shadow transition-all"
+                                    >
+                                      {imageLoadingIndex === index ? 'Đang tạo...' : 'Sinh lại'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCardChange(index, 'imageUrl', null)}
+                                      className="px-2.5 py-1 rounded bg-red-600 hover:bg-red-755 text-[10px] font-bold text-white shadow transition-all"
+                                    >
+                                      Xóa
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="rounded-xl border border-dashed border-slate-350 p-2.5 flex flex-col gap-2 bg-slate-50/50">
+                                  {imageLoadingIndex === index ? (
+                                    <div className="flex items-center justify-center gap-1.5 py-1">
+                                      <div className="w-3.5 h-3.5 border border-brand border-t-transparent rounded-full animate-spin" />
+                                      <span className="text-[10px] text-slate-500 font-medium">Đang tạo...</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col gap-1.5 w-full">
+                                      <input
+                                        type="text"
+                                        value={item.imagePrompt || ''}
+                                        onChange={e => handleCardChange(index, 'imagePrompt', e.target.value)}
+                                        placeholder="Mô tả ảnh muốn vẽ..."
+                                        className="input text-[11px] w-full py-1 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-brand px-2"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => handleGenerateCardImage(index)}
+                                        className="w-full py-1 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 text-[10px] font-bold text-brand transition-all cursor-pointer"
+                                      >
+                                        🎨 Tạo ảnh
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+
                             <div className="space-y-1">
                               <textarea
                                 value={item.content}

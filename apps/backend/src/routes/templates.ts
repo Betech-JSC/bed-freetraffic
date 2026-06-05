@@ -3,7 +3,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import prisma from '../lib/prisma';
-import { generateAiPostContent, generateAiImage } from '../services/aiGenerate';
+import { generateAiPostContent, generateAiImage, generateAiContentPlan } from '../services/aiGenerate';
+import { AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
@@ -32,9 +33,6 @@ const upload = multer({
     else cb(new Error('Chỉ chấp nhận file ảnh (jpg, png, gif, webp)'));
   }
 });
-
-import { AuthRequest } from '../middleware/auth';
-import { generateAiContentPlan } from '../services/aiGenerate';
 
 // Lấy danh sách tất cả nội dung mẫu
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -162,11 +160,7 @@ router.post('/generate-ai', async (req: AuthRequest, res: Response): Promise<voi
 
     let imageUrl: string | null = null;
     if (generateImage) {
-      if (!apiKey) {
-        imageUrl = `https://picsum.photos/seed/${Math.round(Math.random() * 1000)}/800/600`;
-      } else {
-        imageUrl = await generateAiImage(aiPrompt || result.title || 'Marketing banner');
-      }
+      imageUrl = await generateAiImage(aiPrompt || result.title || 'Marketing banner');
     }
 
     res.json({
@@ -180,9 +174,25 @@ router.post('/generate-ai', async (req: AuthRequest, res: Response): Promise<voi
   }
 });
 
+// Render ảnh AI từ tiêu đề/prompt (sử dụng Pollinations/DALL-E)
+router.post('/generate-image', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { prompt } = req.body;
+  if (!prompt?.trim()) {
+    res.status(400).json({ error: 'Tiêu đề hoặc prompt là bắt buộc để sinh ảnh' });
+    return;
+  }
+
+  try {
+    const imageUrl = await generateAiImage(prompt);
+    res.json({ imageUrl });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi sinh ảnh AI' });
+  }
+});
+
 // Lên kế hoạch nội dung tự động bằng AI Copilot
 router.post('/copilot-plan', async (req: AuthRequest, res: Response): Promise<void> => {
-  const { topic, industry, tone, postCount } = req.body;
+  const { topic, industry, tone, postCount, generateImage } = req.body;
   if (!topic || !industry || !tone) {
     res.status(400).json({ error: 'Chủ đề, ngành nghề và giọng điệu là bắt buộc' });
     return;
@@ -190,6 +200,18 @@ router.post('/copilot-plan', async (req: AuthRequest, res: Response): Promise<vo
 
   try {
     const plan = await generateAiContentPlan(topic, industry, tone, postCount ? parseInt(postCount) : 5);
+
+    if (generateImage) {
+      for (const item of plan) {
+        try {
+          item.imageUrl = await generateAiImage(item.title);
+        } catch (e) {
+          console.error('Error generating image for copilot item:', e);
+          item.imageUrl = null;
+        }
+      }
+    }
+
     res.json({
       plan,
       isDemo: !process.env.OPENAI_API_KEY
@@ -214,6 +236,7 @@ router.post('/copilot-save', async (req: AuthRequest, res: Response): Promise<vo
         data: {
           title: item.title,
           content: item.content,
+          imageUrl: item.imageUrl || null,
           workspaceId: req.workspaceId
         }
       });

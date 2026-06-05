@@ -1,5 +1,7 @@
 import prisma from '../lib/prisma';
 import { createSmtpTransporter, getSmtpConfig } from '../lib/smtp';
+import { getAiConfig } from '../lib/ai';
+
 
 const TICK_MS = 60_000; // Quét mỗi 60 giây
 
@@ -39,11 +41,11 @@ async function processSession(session: any): Promise<void> {
     .map((m: any) => `${m.sender === 'visitor' ? 'Khách hàng' : 'Trợ lý ảo AI'}: ${m.content}`)
     .join('\n');
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const ai = getAiConfig('/chat/completions');
   let emailBody = '';
 
   // 4. Gọi OpenAI soạn thảo thư cá nhân hóa (nếu có API Key)
-  if (apiKey) {
+  if (ai.apiKey) {
     const systemPrompt = `Bạn là chuyên viên chăm sóc khách hàng bằng tiếng Việt.
 Nhiệm vụ của bạn là viết một email hỏi han thân thiện, chu đáo gửi tới khách hàng dựa trên lịch sử cuộc trò chuyện trực tuyến của họ với chatbot hỗ trợ của chúng tôi.
 Dưới đây là định hướng phong cách và nội dung thư của quản trị viên:
@@ -60,14 +62,11 @@ Quy tắc:
 4. Chỉ trả về NỘI DUNG EMAIL DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(ai.url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: ai.headers,
         body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          model: ai.model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Hãy viết email chăm sóc gửi đến khách hàng ${session.customer.name || 'Quý khách'}.` }
@@ -256,10 +255,10 @@ export async function dispatchDueCskhAutoCare(): Promise<void> {
             const notesText = customer.notes.map((n: any) => `- Ghi chú lúc ${n.createdAt.toLocaleDateString('vi-VN')}: ${n.content}`).join('\n');
             const ordersText = customer.orders.map((o: any) => `- Đơn hàng ${o.orderNumber}: ${o.totalAmount} VND (Trạng thái: ${o.status})`).join('\n');
 
-            const apiKey = process.env.OPENAI_API_KEY;
+            const ai = getAiConfig('/chat/completions');
             let messageBody = '';
 
-            if (apiKey) {
+            if (ai.apiKey) {
               const systemPrompt = `Bạn là trợ lý ảo AI chăm sóc khách hàng tự động thông minh bằng tiếng Việt.
 Nhiệm vụ của bạn là viết một tin nhắn chăm sóc khách hàng cá nhân hóa dựa trên hồ sơ khách hàng dưới đây.
 
@@ -287,14 +286,11 @@ Quy tắc:
 3. Chỉ trả về NỘI DUNG DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br>, <ul>, <li> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
 
               try {
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                const response = await fetch(ai.url, {
                   method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                  },
+                  headers: ai.headers,
                   body: JSON.stringify({
-                    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+                    model: ai.model,
                     messages: [
                       { role: 'system', content: systemPrompt },
                       { role: 'user', content: `Hãy viết tin nhắn chăm sóc gửi qua kênh ${channel} cho khách hàng ${customer.name}.` }

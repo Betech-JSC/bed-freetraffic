@@ -1,7 +1,15 @@
-/** Gọi API qua Next.js rewrite → backend */
+/** Gọi API qua Next.js rewrite → backend (Tự động bypass proxy ở dev mode tránh timeout) */
 export function apiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
-  return p.startsWith('/api') ? p : `/api${p}`;
+  const baseApi = p.startsWith('/api') ? p : `/api${p}`;
+
+  if (typeof window !== 'undefined') {
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isDev) {
+      return `http://localhost:4000${baseApi}`;
+    }
+  }
+  return baseApi;
 }
 
 export function getAuthToken(): string | null {

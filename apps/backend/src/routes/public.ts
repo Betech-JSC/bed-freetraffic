@@ -2,6 +2,9 @@ import { Router, Response, Request } from 'express';
 import prisma from '../lib/prisma';
 import { handleVisitorMessage } from '../services/cskhService';
 import { getChatWidgetHtml } from '../services/chatWidgetTemplate';
+import PayOS from '@payos/node';
+import Stripe from 'stripe';
+
 
 const router = Router();
 
@@ -330,4 +333,168 @@ router.post('/cskh/chat', async (req: Request, res: Response): Promise<void> => 
   }
 });
 
+// Public Checkout Endpoint (VietQR / Stripe)
+router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { workspaceId, customerEmail, customerName, customerPhone, productId, paymentMethod, returnUrl, cancelUrl } = req.body;
+    if (!workspaceId || !customerEmail || !productId || !paymentMethod) {
+      res.status(400).json({ error: 'workspaceId, customerEmail, productId và paymentMethod là bắt buộc.' });
+      return;
+    }
+
+    // 1. Find product
+    const product = await prisma.product.findFirst({
+      where: { id: parseInt(String(productId), 10), workspaceId: parseInt(String(workspaceId), 10) },
+    });
+
+    if (!product) {
+      res.status(404).json({ error: 'Không tìm thấy sản phẩm này trong hệ thống.' });
+      return;
+    }
+
+    // 2. Find or create customer
+    let customer = await prisma.customer.findFirst({
+      where: { email: customerEmail.toLowerCase(), workspaceId: parseInt(String(workspaceId), 10) },
+    });
+
+    if (customer) {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          name: customerName || customer.name,
+          phone: customerPhone || customer.phone,
+        },
+      });
+    } else {
+      customer = await prisma.customer.create({
+        data: {
+          name: customerName || customerEmail.split('@')[0],
+          email: customerEmail.toLowerCase(),
+          phone: customerPhone || null,
+          status: 'NEW',
+          workspaceId: parseInt(String(workspaceId), 10),
+        },
+      });
+    }
+
+    // 3. Generate unique order number
+    let orderNumber = '';
+    let isUnique = false;
+    while (!isUnique) {
+      const rand = Math.floor(100000 + Math.random() * 900000);
+      orderNumber = `BT-${rand}`;
+      const existingOrder = await prisma.order.findUnique({
+        where: { orderNumber },
+      });
+      if (!existingOrder) {
+        isUnique = true;
+      }
+    }
+
+    // 4. Create Order & OrderItem
+    const order = await prisma.$transaction(async (tx) => {
+      const createdOrder = await tx.order.create({
+        data: {
+          orderNumber,
+          customerId: customer.id,
+          totalAmount: product.price,
+          status: 'PENDING',
+          workspaceId: parseInt(String(workspaceId), 10),
+        },
+      });
+
+      await tx.orderItem.create({
+        data: {
+          orderId: createdOrder.id,
+          productId: product.id,
+          quantity: 1,
+          price: product.price,
+        },
+      });
+
+      return createdOrder;
+    });
+
+    // 5. Load Payment Config
+    const config = await prisma.paymentConfig.findUnique({
+      where: { workspaceId: parseInt(String(workspaceId), 10) },
+    });
+
+    if (paymentMethod === 'PAYOS') {
+      if (!config || !config.payosClientId || !config.payosApiKey || !config.payosChecksumKey) {
+        res.status(400).json({ error: 'Cửa hàng chưa cấu hình cổng thanh toán VietQR (PayOS).' });
+        return;
+      }
+
+      const orderCode = parseInt(orderNumber.replace(/[^\d]/g, '')) || Math.floor(100000 + Math.random() * 900000);
+      const payos = new (PayOS as any)(config.payosClientId, config.payosApiKey, config.payosChecksumKey);
+
+      const paymentData = {
+        orderCode,
+        amount: Math.round(order.totalAmount),
+        description: `Mua ${product.name}`.substring(0, 25),
+        items: [
+          {
+            name: product.name.substring(0, 20),
+            quantity: 1,
+            price: Math.round(product.price),
+          },
+        ],
+        returnUrl: returnUrl || `http://localhost:3000/checkout/success?orderNumber=${orderNumber}`,
+        cancelUrl: cancelUrl || `http://localhost:3000/checkout/cancel?orderNumber=${orderNumber}`,
+      };
+
+      const paymentLinkRes = await payos.createPaymentLink(paymentData);
+
+      res.json({
+        success: true,
+        orderNumber,
+        checkoutUrl: paymentLinkRes.checkoutUrl,
+        qrCode: paymentLinkRes.qrCode,
+      });
+    } else if (paymentMethod === 'STRIPE') {
+      if (!config || !config.stripeSecretKey) {
+        res.status(400).json({ error: 'Cửa hàng chưa cấu hình cổng thanh toán Stripe.' });
+        return;
+      }
+
+      const stripe = new (Stripe as any)(config.stripeSecretKey);
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: product.currency.toLowerCase() || 'vnd',
+              product_data: {
+                name: product.name,
+                description: product.description || undefined,
+              },
+              unit_amount: Math.round(product.price * (product.currency === 'VND' ? 1 : 100)),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        metadata: {
+          orderNumber,
+        },
+        success_url: returnUrl || `http://localhost:3000/checkout/success?orderNumber=${orderNumber}`,
+        cancel_url: cancelUrl || `http://localhost:3000/checkout/cancel?orderNumber=${orderNumber}`,
+      });
+
+      res.json({
+        success: true,
+        orderNumber,
+        checkoutUrl: session.url,
+      });
+    } else {
+      res.status(400).json({ error: 'Phương thức thanh toán không hợp lệ.' });
+    }
+  } catch (error: any) {
+    console.error('[Public Checkout Error]:', error);
+    res.status(500).json({ error: error.message || 'Lỗi xử lý thanh toán.' });
+  }
+});
+
 export default router;
+

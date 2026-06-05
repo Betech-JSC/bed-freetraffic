@@ -536,7 +536,7 @@ export default function AutomationPage() {
                     onChange={(e) => setUseAi(e.target.checked)}
                     className="rounded border-slate-350 text-brand focus:ring-brand"
                   />
-                  <span className="font-bold text-slate-700">{t('Tự động viết nội dung bằng AI (GPT)')}</span>
+                  <span className="font-bold text-slate-700">{t('Tự động viết nội dung bằng AI (Gemini)')}</span>
                 </label>
                 
                 {useAi && (
@@ -559,7 +559,7 @@ export default function AutomationPage() {
                         onChange={(e) => setAiGenerateImage(e.target.checked)}
                         className="rounded border-slate-350 text-brand focus:ring-brand"
                       />
-                      <span className="text-[11px] font-bold text-slate-650">{t('Sinh hình ảnh minh họa bằng AI (DALL-E)')}</span>
+                      <span className="text-[11px] font-bold text-slate-650">{t('Sinh hình ảnh minh họa bằng AI (Pollinations)')}</span>
                     </label>
                   </div>
                 )}

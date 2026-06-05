@@ -1,4 +1,6 @@
 import prisma from '../lib/prisma';
+import { getAiConfig } from '../lib/ai';
+
 
 export type Recommendation = {
   id: string;
@@ -138,8 +140,8 @@ export async function buildRecommendations(workspaceId?: number): Promise<Recomm
 export async function enhanceWithOpenAi(
   items: Recommendation[]
 ): Promise<{ summary: string; items: Recommendation[] }> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) {
+  const ai = getAiConfig('/chat/completions');
+  if (!ai.apiKey) {
     return {
       summary: 'Bật OPENAI_API_KEY trong backend .env để nhận tóm tắt AI chi tiết hơn.',
       items,
@@ -148,14 +150,11 @@ export async function enhanceWithOpenAi(
 
   try {
     const prompt = `Bạn là chuyên gia marketing. Tóm tắt ngắn (3 câu, tiếng Việt) và 1 gợi ý ưu tiên nhất từ danh sách:\n${JSON.stringify(items.slice(0, 8))}`;
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await fetch(ai.url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
+      headers: ai.headers,
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        model: ai.model,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 300,
       }),

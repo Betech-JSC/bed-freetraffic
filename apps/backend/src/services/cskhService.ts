@@ -1,4 +1,6 @@
 import prisma from '../lib/prisma';
+import { getAiConfig } from '../lib/ai';
+
 
 export interface ChatMessageData {
   sender: 'visitor' | 'bot';
@@ -75,11 +77,11 @@ export async function handleVisitorMessage(
 
   const aiEnabled = config?.aiChatbotEnabled ?? false;
   const kbText = config?.knowledgeBaseText ?? '';
-  const apiKey = process.env.OPENAI_API_KEY;
+  const ai = getAiConfig('/chat/completions');
 
   let replyText = 'Cảm ơn bạn đã liên hệ. Hiện tại chatbot AI đang bận. Vui lòng để lại số điện thoại hoặc email để chúng tôi liên hệ hỗ trợ sớm nhất!';
 
-  if (aiEnabled && apiKey) {
+  if (aiEnabled && ai.apiKey) {
     try {
       // Load recent message history for context (last 8 messages)
       const history = await prisma.chatMessage.findMany({
@@ -104,14 +106,11 @@ Nhiệm vụ của bạn:
 3. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
 4. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(ai.url, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: ai.headers,
         body: JSON.stringify({
-          model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+          model: ai.model,
           messages: [
             { role: 'system', content: systemPrompt },
             ...messagesForAi

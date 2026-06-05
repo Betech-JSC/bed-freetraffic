@@ -33,6 +33,35 @@ export default function ContentEditorPage() {
   const [aiGenImage, setAiGenImage] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [aiInfoTip, setAiInfoTip] = useState('');
+  const [customImagePrompt, setCustomImagePrompt] = useState('');
+  const [imageGenerating, setImageGenerating] = useState(false);
+
+  const handleGenerateCustomImage = async () => {
+    if (!customImagePrompt.trim()) return;
+
+    setImageGenerating(true);
+    setError('');
+    try {
+      const res = await apiJson<{ imageUrl: string | null }>('/templates/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: customImagePrompt.trim() })
+      });
+
+      if (res.imageUrl) {
+        setImagePreview(res.imageUrl);
+        setImageFile(null);
+        setSuccess(t('Tạo ảnh minh họa bằng AI thành công!'));
+      } else {
+        throw new Error(t('Không thể sinh ảnh minh họa.'));
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || t('Lỗi khi tạo ảnh bằng AI.'));
+    } finally {
+      setImageGenerating(false);
+    }
+  };
 
   const fetchData = async () => {
     setError('');
@@ -77,6 +106,8 @@ export default function ContentEditorPage() {
     setAiPrompt('');
     setAiGenImage(false);
     setAiInfoTip('');
+    setCustomImagePrompt('');
+    setImageGenerating(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -194,7 +225,7 @@ export default function ContentEditorPage() {
         body: JSON.stringify({
           urlTarget: aiUrl.trim(),
           aiPrompt: aiPrompt.trim(),
-          generateImage: aiGenImage,
+          generateImage: false,
         }),
       });
 
@@ -398,7 +429,7 @@ export default function ContentEditorPage() {
               <div className="bg-gradient-to-r from-purple-500/10 to-brand/10 rounded-xl p-3 border border-brand/20">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-black text-brand flex items-center gap-1.5">
-                    {t('Trợ lý viết bài thông minh AI (GPT)')}
+                    {t('Trợ lý viết bài thông minh AI (Gemini)')}
                   </span>
                   <button
                     type="button"
@@ -432,15 +463,7 @@ export default function ContentEditorPage() {
                       />
                     </div>
 
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={aiGenImage}
-                        onChange={(e) => setAiGenImage(e.target.checked)}
-                        className="rounded border-slate-350 text-brand focus:ring-brand"
-                      />
-                      <span className="font-bold text-slate-650">{t('Tự động sinh ảnh minh họa bằng AI (DALL-E)')}</span>
-                    </label>
+
 
                     <button
                       type="button"
@@ -507,35 +530,68 @@ export default function ContentEditorPage() {
                 />
               </div>
 
-              {/* Image Upload Area */}
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Hình ảnh đi kèm')}</label>
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-3 text-center hover:border-brand/40 transition-colors">
-                  {imagePreview ? (
-                    <div className="relative">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="max-h-36 max-w-full w-auto h-auto mx-auto rounded-lg shadow-sm object-contain"
+              {/* Image Upload & AI Generation Area */}
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase">{t('Hình ảnh đi kèm')}</label>
+                <div className="border border-slate-250 rounded-xl p-3 bg-slate-50/50 space-y-3">
+                  {/* Drag-drop or Preview box */}
+                  <div className="border-2 border-dashed border-slate-200 bg-white rounded-xl p-3 text-center hover:border-brand/40 transition-colors">
+                    {imagePreview ? (
+                      <div className="relative">
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="max-h-36 max-w-full w-auto h-auto mx-auto rounded-lg shadow-sm object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageFile(null);
+                            setImagePreview(null);
+                          }}
+                          className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-650 shadow cursor-pointer animate-in fade-in"
+                        >
+                          X
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer block py-2">
+                        <p className="text-[11px] text-slate-500 font-bold">{t('Kéo thả hoặc Click chọn ảnh')}</p>
+                        <p className="text-[9px] text-slate-400 mt-0.5">{t('Hỗ trợ JPG, PNG, GIF, WebP (Tối đa 10MB)')}</p>
+                        <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* AI Image Generator Box */}
+                  <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Hoặc tạo ảnh minh họa bằng AI')}</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customImagePrompt}
+                        onChange={(e) => setCustomImagePrompt(e.target.value)}
+                        placeholder={t('Nhập mô tả hình ảnh muốn vẽ...')}
+                        className="input text-xs w-full py-1.5 flex-1 bg-white border-slate-200/85 focus:border-brand"
+                        disabled={imageGenerating}
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setImageFile(null);
-                          setImagePreview(null);
-                        }}
-                        className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-650 shadow cursor-pointer"
+                        onClick={handleGenerateCustomImage}
+                        disabled={imageGenerating || !customImagePrompt.trim()}
+                        className="px-3.5 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100/80 border border-orange-200 text-brand font-bold text-[11px] transition-all disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer shrink-0"
                       >
-                        X
+                        {imageGenerating ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border border-brand border-t-transparent rounded-full animate-spin"></span>
+                            {t('Đang tạo...')}
+                          </>
+                        ) : (
+                          t('Tạo ảnh')
+                        )}
                       </button>
                     </div>
-                  ) : (
-                    <label className="cursor-pointer block py-2">
-                      <p className="text-[11px] text-slate-500 font-bold">{t('Kéo thả hoặc Click chọn ảnh')}</p>
-                      <p className="text-[9px] text-slate-400 mt-0.5">{t('Hỗ trợ JPG, PNG, GIF, WebP (Tối đa 10MB)')}</p>
-                      <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-                    </label>
-                  )}
+                  </div>
                 </div>
               </div>
 
