@@ -213,7 +213,6 @@ export default function EmailCampaignsPage() {
 
       {/* Help Banner */}
       <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-        <span className="text-xl mt-0.5">💡</span>
         <div>
           <h4 className="font-bold text-slate-800 text-sm">{t('Hướng dẫn gửi chiến dịch Email')}</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -245,7 +244,7 @@ export default function EmailCampaignsPage() {
         {/* Metric Cards */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-lg font-bold">📧</div>
+            <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-xs font-bold uppercase">Mail</div>
             <div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('Tổng số thư đã gửi')}</div>
               <div className="text-2xl font-extrabold text-gray-900 mt-0.5">{totalSentCount}</div>
@@ -254,7 +253,7 @@ export default function EmailCampaignsPage() {
           </div>
 
           <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-lg font-bold">🔓</div>
+            <div className="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-xs font-bold uppercase">Open</div>
             <div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('Tỷ lệ Mở thư (Open Rate)')}</div>
               <div className="text-2xl font-extrabold text-gray-900 mt-0.5">{avgOpenRate}%</div>
@@ -263,7 +262,7 @@ export default function EmailCampaignsPage() {
           </div>
 
           <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg font-bold">🎯</div>
+            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold uppercase">CTR</div>
             <div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('Tỷ lệ Click link (CTR)')}</div>
               <div className="text-2xl font-extrabold text-gray-900 mt-0.5">{avgClickRate}%</div>
@@ -305,7 +304,7 @@ export default function EmailCampaignsPage() {
         <form onSubmit={save} className="lg:col-span-2 card p-6 space-y-4 shadow-sm flex flex-col justify-between">
           <div className="space-y-4">
             <h3 className="font-black text-slate-800 text-sm border-b pb-3 mb-4">
-              {editingId ? `${t('✏️ Sửa chiến dịch')} #${editingId}` : t('➕ Tạo chiến dịch mới')}
+              {editingId ? `${t('Sửa chiến dịch')} #${editingId}` : t('Tạo chiến dịch mới')}
             </h3>
             
             <div>
@@ -434,7 +433,7 @@ export default function EmailCampaignsPage() {
                           onClick={() => send(c.id)}
                           disabled={sendingId === c.id}
                         >
-                          {sendingId === c.id ? t('⏳ Đang gửi...') : t('Gửi ngay')}
+                          {sendingId === c.id ? t('Đang gửi...') : t('Gửi ngay')}
                         </button>
                         <button
                           type="button"

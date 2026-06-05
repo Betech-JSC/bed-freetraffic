@@ -103,7 +103,6 @@ export default function SeoPage() {
 
       {/* Quick Help Onboarding Banner */}
       <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-        <span className="text-xl mt-0.5">💡</span>
         <div>
           <h4 className="font-bold text-slate-800 text-sm">{t('Cách thức SEO Audit hoạt động')}</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -137,7 +136,7 @@ export default function SeoPage() {
             className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand/30 cursor-pointer"
           />
           <label htmlFor="usePageSpeed" className="cursor-pointer flex items-center gap-1">
-            ⚡ {t('Phân tích tốc độ load & trải nghiệm di động (Google PageSpeed Insights)')}
+            {t('Phân tích tốc độ load & trải nghiệm di động (Google PageSpeed Insights)')}
           </label>
         </div>
       </form>
@@ -189,7 +188,7 @@ export default function SeoPage() {
                 </div>
                 <div className="flex items-center gap-4">
                   <button type="button" className="text-xs font-bold text-brand hover:underline" onClick={() => loadHistory(a.url)}>
-                    📊 {t('Xem lịch sử URL')}
+                    {t('Xem lịch sử URL')}
                   </button>
                   <div className={`text-2xl font-black px-3 py-1 border rounded-lg shadow-sm ${getScoreColor(a.score)}`}>
                     {a.score} <span className="text-xs font-semibold text-slate-500">/ 100</span>
@@ -225,7 +224,7 @@ export default function SeoPage() {
                 
                 {a.issues.length === 0 ? (
                   <div className="p-4 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-lg text-xs font-semibold">
-                    {t('🎉 Tuyệt vời! Không phát hiện lỗi On-page nào trên trang web này.')}
+                    {t('Tuyệt vời! Không phát hiện lỗi On-page nào trên trang web này.')}
                   </div>
                 ) : (
                   <ul className="space-y-3">
@@ -238,7 +237,7 @@ export default function SeoPage() {
                           <p className="font-semibold text-slate-800">{issue.message}</p>
                           {issue.suggestion && (
                             <p className="text-slate-500 mt-1 flex items-center gap-1">
-                              <span className="text-[10px] font-bold text-emerald-600">👉 {t('Gợi ý khắc phục:')}</span> {issue.suggestion}
+                              <span className="text-[10px] font-bold text-emerald-600">{t('Gợi ý khắc phục:')}</span> {issue.suggestion}
                             </p>
                           )}
                         </div>

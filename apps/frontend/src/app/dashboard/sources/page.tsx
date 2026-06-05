@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { IconPlus } from '@/components/icons';
 import { apiJson } from '@/lib/api';
 import { useLocale } from '@/context/LocaleContext';
 
@@ -124,11 +123,11 @@ export default function SourcesPage() {
 
   const getSourceIcon = (type: string) => {
     switch (type) {
-      case 'SEO': return '🔍';
-      case 'Social': return '📱';
-      case 'Email': return '✉️';
-      case 'Referral': return '🔗';
-      default: return '🌐';
+      case 'SEO': return 'SEO';
+      case 'Social': return 'SOC';
+      case 'Email': return 'EML';
+      case 'Referral': return 'REF';
+      default: return 'WEB';
     }
   };
 
@@ -139,7 +138,6 @@ export default function SourcesPage() {
         description={t('Quản lý các kênh thu hút người dùng tự nhiên (Free Traffic).')}
         actions={
           <button type="button" onClick={openCreate} className="btn-primary">
-            <IconPlus className="w-4 h-4" />
             {t('Thêm kênh')}
           </button>
         }
@@ -147,7 +145,6 @@ export default function SourcesPage() {
   
       {/* Quick Help Banner */}
       <div className="bg-brand/5 border border-brand/10 rounded-xl p-4 mb-6 flex items-start gap-3">
-        <span className="text-xl mt-0.5">💡</span>
         <div>
           <h4 className="font-bold text-slate-800 text-sm">{t('Nguồn Traffic là gì?')}</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -163,21 +160,18 @@ export default function SourcesPage() {
       {/* Stats row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xl font-bold">🎯</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('Tổng số kênh')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{channels.length}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xl font-bold">⚡</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('Đang hoạt động')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{channels.filter(c => c.status === 'ACTIVE').length}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold">🌐</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('Mục tiêu')}</div>
             <div className="text-2xl font-extrabold text-gray-900">50,000 / th</div>
@@ -211,7 +205,7 @@ export default function SourcesPage() {
                 channels.map(channel => (
                   <tr key={channel.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="p-5 font-bold text-gray-900 flex items-center gap-3">
-                      <span className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-sm">{getSourceIcon(channel.type)}</span>
+                      <span className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-xs font-semibold">{getSourceIcon(channel.type)}</span>
                       {channel.name}
                     </td>
                     <td className="p-5">
@@ -235,7 +229,7 @@ export default function SourcesPage() {
                         }}
                         className="text-brand hover:underline font-bold text-sm transition-colors"
                       >
-                        🔗 {t('Tạo Link UTM')}
+                        {t('Tạo Link UTM')}
                       </button>
                       <button
                         type="button"
@@ -260,9 +254,9 @@ export default function SourcesPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
             <button 
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 font-bold"
+              className="absolute top-4 right-4 text-xs font-semibold hover:text-gray-700 text-gray-500"
             >
-              ✕
+              Đóng
             </button>
             <h2 className="text-xl font-bold text-brand mb-6">
               {editingId ? t('Sửa nguồn traffic') : t('Thêm nguồn traffic')}
@@ -343,9 +337,9 @@ export default function SourcesPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
             <button 
               onClick={() => setUtmTargetChannel(null)}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 font-bold"
+              className="absolute top-4 right-4 text-xs font-semibold hover:text-gray-700 text-gray-500"
             >
-              ✕
+              Đóng
             </button>
             <h2 className="text-xl font-bold text-brand mb-4">
               {t('Tạo Link Tiếp Thị (UTM)')}
@@ -382,7 +376,7 @@ export default function SourcesPage() {
                     }}
                     className="w-full py-2.5 bg-brand text-white text-xs font-bold rounded-lg hover:bg-brand-hover transition-colors"
                   >
-                    📋 {t('Sao chép đường dẫn')}
+                    {t('Sao chép đường dẫn')}
                   </button>
                 </div>
               )}

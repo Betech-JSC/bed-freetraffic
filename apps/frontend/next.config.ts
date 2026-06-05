@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
         source: "/uploads/:path*",
         destination: `${BACKEND_URL}/uploads/:path*`,
       },
+      {
+        source: "/p/:slug",
+        destination: `${BACKEND_URL}/api/public/pages/:slug/html`,
+      },
     ];
   },
 };

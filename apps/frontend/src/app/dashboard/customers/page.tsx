@@ -40,6 +40,7 @@ type CustomerDetail = Omit<CustomerRow, 'notes'> & {
     status: string;
     errorMessage: string | null;
     sentAt: string;
+    channel: string;
   }[];
 };
 
@@ -71,6 +72,7 @@ export default function CustomersPage() {
   const [careSubject, setCareSubject] = useState('Chúng tôi luôn sẵn sàng hỗ trợ bạn');
   const [careHtml, setCareHtml] = useState(DEFAULT_CARE_HTML);
   const [sending, setSending] = useState(false);
+  const [careChannel, setCareChannel] = useState<'email' | 'zalo' | 'messenger'>('email');
 
   const insertPlaceholder = (ph: string) => {
     setCareHtml((prev) => prev + ph);
@@ -173,6 +175,14 @@ export default function CustomersPage() {
       setActionError('Chọn khách (ô tick) hoặc mở hồ sơ một khách để gửi');
       return;
     }
+    
+    if (careChannel === 'zalo') {
+      if (checked.size === 0 && selectedId && detail && !detail.phone) {
+        setActionError('Khách hàng này chưa có số điện thoại để nhận tin nhắn Zalo.');
+        return;
+      }
+    }
+
     setSending(true);
     setActionError('');
     setSuccess('');
@@ -186,6 +196,7 @@ export default function CustomersPage() {
             customerIds: ids,
             subject: careSubject,
             htmlContent: careHtml,
+            channel: careChannel,
           }),
         }
       );
@@ -195,7 +206,7 @@ export default function CustomersPage() {
       await loadList();
       if (selectedId) await loadDetail(selectedId);
     } catch (e: unknown) {
-      setActionError(e instanceof Error ? e.message : 'Gửi email thất bại');
+      setActionError(e instanceof Error ? e.message : 'Gửi chăm sóc thất bại');
     } finally {
       setSending(false);
     }
@@ -269,7 +280,7 @@ export default function CustomersPage() {
         actions={
           <div className="flex gap-2">
             <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={openSyncModal} disabled={syncLoading}>
-              🐵 {syncLoading ? t('Đang tải...') : t('Đồng bộ Mailchimp')}
+              {syncLoading ? t('Đang tải...') : t('Đồng bộ Mailchimp')}
             </button>
             <button type="button" className="btn-primary" onClick={() => setShowAdd(true)}>
               + {t('addCustomer')}
@@ -296,7 +307,6 @@ export default function CustomersPage() {
 
       {/* Onboarding Guide Banner */}
       <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-        <span className="text-xl mt-0.5">💡</span>
         <div>
           <h4 className="font-bold text-slate-800 text-sm">Hướng dẫn chăm sóc khách hàng</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -326,21 +336,21 @@ export default function CustomersPage() {
       {/* Summary CRM Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xl font-bold">👥</div>
+          <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-bold uppercase">CRM</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('totalCustomers')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{totalCustomers}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold">👑</div>
+          <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xs font-bold uppercase">VIP</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('vipCustomers')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{vipCustomers}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">⏱️</div>
+          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xs font-bold uppercase">ACT</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('needFollowUp')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{needFollowUpCustomers}</div>
@@ -386,8 +396,8 @@ export default function CustomersPage() {
               {customers.length > 0 && (
                 <button type="button" className="text-xs text-brand font-bold mt-2 hover:underline" onClick={selectAll}>
                   {checked.size === customers.length 
-                    ? (locale === 'en' ? '✕ Deselect all' : '✕ Bỏ chọn tất cả')
-                    : `✓ ${t('selectCustomersToEmail')}`}
+                    ? (locale === 'en' ? 'Deselect all' : 'Bỏ chọn tất cả')
+                    : t('selectCustomersToEmail')}
                 </button>
               )}
             </div>
@@ -400,9 +410,6 @@ export default function CustomersPage() {
               </div>
             ) : customers.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-brand/10 text-brand flex items-center justify-center text-2xl mb-3">
-                  👤
-                </div>
                 <p className="font-bold text-slate-800">{t('noCustomers')}</p>
                 <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
                   {locale === 'en' 
@@ -441,7 +448,7 @@ export default function CustomersPage() {
                         <p className="text-xs text-slate-500 truncate mt-0.5">{c.email}</p>
                         {c.notes[0] && (
                           <p className="text-[10px] text-slate-400 truncate mt-2 bg-slate-50 p-1 border rounded" title={c.notes[0].content}>
-                            💬 {c.notes[0].content}
+                            {c.notes[0].content}
                           </p>
                         )}
                       </div>
@@ -508,22 +515,63 @@ export default function CustomersPage() {
                       detail.notes.map((n) => (
                         <li key={n.id} className="text-xs bg-slate-50/50 hover:bg-slate-50 rounded-lg p-2.5 border border-slate-100 transition-colors">
                           <p className="text-slate-700 leading-relaxed">{n.content}</p>
-                          <p className="text-[10px] text-slate-400 mt-1.5 font-medium">🕒 {new Date(n.createdAt).toLocaleString('vi-VN')}</p>
+                          <p className="text-[10px] text-slate-400 mt-1.5 font-medium">{new Date(n.createdAt).toLocaleString('vi-VN')}</p>
                         </li>
                       ))
                     )}
                   </ul>
                 </div>
 
-                {/* Email composer card */}
+                {/* Composer card */}
                 <div className="card p-5 space-y-4 shadow-sm">
-                  <h4 className="font-bold text-slate-800 text-sm">Soạn Email Chăm Sóc Cá Nhân Hóa</h4>
+                  <h4 className="font-bold text-slate-800 text-sm">Soạn Tin Nhắn / Email Chăm Sóc Khách Hàng</h4>
+                  
+                  {/* Channel selection */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Chọn kênh gửi chăm sóc</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCareChannel('email')}
+                        className={`py-2 px-3 rounded-lg border text-center transition-all text-xs font-semibold ${
+                          careChannel === 'email'
+                            ? 'bg-orange-500/10 border-orange-500/30 text-[#f25c22]'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100/50'
+                        }`}
+                      >
+                        Email
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCareChannel('zalo')}
+                        className={`py-2 px-3 rounded-lg border text-center transition-all text-xs font-semibold ${
+                          careChannel === 'zalo'
+                            ? 'bg-orange-500/10 border-orange-500/30 text-[#f25c22]'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100/50'
+                        }`}
+                      >
+                        Zalo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCareChannel('messenger')}
+                        className={`py-2 px-3 rounded-lg border text-center transition-all text-xs font-semibold ${
+                          careChannel === 'messenger'
+                            ? 'bg-orange-500/10 border-orange-500/30 text-[#f25c22]'
+                            : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100/50'
+                        }`}
+                      >
+                        Messenger
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     <input
                       className="input text-xs font-medium w-full"
                       value={careSubject}
                       onChange={(e) => setCareSubject(e.target.value)}
-                      placeholder="Tiêu đề thư"
+                      placeholder={careChannel === 'email' ? 'Tiêu đề thư' : 'Tiêu đề tin nhắn chăm sóc'}
                     />
                     <textarea
                       className="input min-h-[140px] text-xs font-mono w-full p-3 bg-slate-50 focus:bg-white"
@@ -531,29 +579,44 @@ export default function CustomersPage() {
                       onChange={(e) => setCareHtml(e.target.value)}
                     />
                   </div>
-                  <button type="button" className="btn-primary w-full py-2.5 text-xs" disabled={sending} onClick={sendCare}>
-                    {sending ? 'Đang thực hiện gửi email...' : checked.size > 0 ? `✉️ Gửi email cho ${checked.size} khách hàng đã chọn` : '✉️ Gửi email cho khách hàng này'}
+                  <button type="button" className="btn-primary w-full py-2.5 text-xs font-bold" disabled={sending} onClick={sendCare}>
+                    {sending
+                      ? 'Đang thực hiện gửi...'
+                      : checked.size > 0
+                      ? `Gửi qua ${careChannel.toUpperCase()} cho ${checked.size} khách hàng đã chọn`
+                      : `Gửi tin nhắn ${careChannel.toUpperCase()} cho khách hàng này`}
                   </button>
                 </div>
 
-                {/* Email log history card */}
+                {/* Interaction log history card */}
                 <div className="card p-5 shadow-sm">
-                  <h4 className="font-bold text-slate-800 text-sm mb-3">Lịch sử tương tác Email</h4>
+                  <h4 className="font-bold text-slate-800 text-sm mb-3">Lịch sử tương tác chăm sóc</h4>
                   {detail.emailLogs.length === 0 ? (
-                    <p className="text-xs text-slate-400">Chưa có lịch sử email nào được gửi cho khách hàng này.</p>
+                    <p className="text-xs text-slate-400">Chưa có lịch sử chăm sóc nào được gửi cho khách hàng này.</p>
                   ) : (
                     <ul className="space-y-3 text-xs max-h-40 overflow-y-auto custom-scrollbar">
                       {detail.emailLogs.map((log) => (
-                        <li key={log.id} className="border-b border-slate-100 pb-2.5 last:border-b-0 space-y-1">
-                          <div className="flex justify-between items-center">
-                            <span className="font-semibold text-slate-700">{log.subject}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                        <li key={log.id} className="border-b border-slate-100 pb-2.5 last:border-b-0 space-y-1.5">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="flex gap-2 items-center flex-1 min-w-0">
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider shrink-0 ${
+                                log.channel === 'zalo'
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  : log.channel === 'messenger'
+                                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                  : 'bg-orange-50 text-[#f25c22] border border-orange-200/60'
+                              }`}>
+                                {log.channel === 'zalo' ? 'Zalo' : log.channel === 'messenger' ? 'Mess' : 'Mail'}
+                              </span>
+                              <span className="font-semibold text-slate-700 truncate">{log.subject}</span>
+                            </div>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0 ${
                               log.status === 'SENT' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                             }`}>
                               {log.status === 'SENT' ? 'Thành công' : 'Lỗi'}
                             </span>
                           </div>
-                          <span className="block text-[10px] text-slate-400">🕒 {new Date(log.sentAt).toLocaleString('vi-VN')}</span>
+                          <span className="block text-[10px] text-slate-400">{new Date(log.sentAt).toLocaleString('vi-VN')}</span>
                           {log.errorMessage && <span className="text-[10px] text-red-500 block font-medium">{log.errorMessage}</span>}
                         </li>
                       ))}
@@ -576,7 +639,7 @@ export default function CustomersPage() {
           <form className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()} onSubmit={addCustomer}>
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-lg font-bold text-brand">Thêm khách hàng mới</h3>
-              <button type="button" onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+              <button type="button" onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-650 font-bold">Đóng</button>
             </div>
             
             <div className="space-y-3">
@@ -620,9 +683,9 @@ export default function CustomersPage() {
           <div className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-2">
               <h3 className="text-lg font-bold text-teal-800 flex items-center gap-2">
-                🐵 {t('Đồng bộ Mailchimp')}
+                {t('Đồng bộ Mailchimp')}
               </h3>
-              <button type="button" onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+              <button type="button" onClick={() => setShowSyncModal(false)} className="text-gray-400 hover:text-gray-650 font-bold">Đóng</button>
             </div>
             
             <p className="text-xs text-slate-500">
@@ -633,7 +696,7 @@ export default function CustomersPage() {
 
             {mcLists.length === 0 ? (
               <p className="text-xs text-amber-600 font-medium">
-                ⚠️ {t('Không tìm thấy Audience List nào. Hãy tạo danh sách trên Mailchimp trước.')}
+                {t('Không tìm thấy Audience List nào. Hãy tạo danh sách trên Mailchimp trước.')}
               </p>
             ) : (
               <div className="space-y-3">

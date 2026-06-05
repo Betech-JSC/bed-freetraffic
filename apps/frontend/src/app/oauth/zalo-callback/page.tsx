@@ -67,9 +67,9 @@ export default function ZaloCallbackPage() {
   return (
     <div className="min-h-screen flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 max-w-md w-full text-center">
-        {status === 'loading' && <div className="text-4xl mb-4 animate-pulse">💬</div>}
-        {status === 'success' && <div className="text-4xl mb-4">✅</div>}
-        {status === 'error' && <div className="text-4xl mb-4">❌</div>}
+        {status === 'loading' && <div className="text-sm font-bold text-slate-500 mb-4 animate-pulse">ĐANG TẢI...</div>}
+        {status === 'success' && <div className="text-sm font-bold text-green-600 mb-4">THÀNH CÔNG</div>}
+        {status === 'error' && <div className="text-sm font-bold text-red-600 mb-4">LỖI</div>}
 
         <h1 className="text-lg font-bold text-gray-900 mb-2">Zalo OAuth</h1>
         <p className="text-sm text-gray-600">{message}</p>

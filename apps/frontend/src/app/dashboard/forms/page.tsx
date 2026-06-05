@@ -175,9 +175,6 @@ export default function FormsManagementPage() {
           onClick={handleOpenCreate}
           className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg transition duration-200 shadow-md font-semibold text-sm flex items-center gap-2"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
           Tạo form mới
         </button>
       </div>
@@ -185,14 +182,14 @@ export default function FormsManagementPage() {
       {success && (
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-sm flex justify-between">
           <span>{success}</span>
-          <button onClick={() => setSuccess('')} className="hover:text-white">✕</button>
+          <button onClick={() => setSuccess('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
       {error && (
         <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-sm flex justify-between">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="hover:text-white">✕</button>
+          <button onClick={() => setError('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
@@ -236,14 +233,14 @@ export default function FormsManagementPage() {
                         placeholder="Tên trường (ko dấu: email, phone)"
                         value={field.name}
                         onChange={(e) => handleFieldChange(index, 'name', e.target.value)}
-                        className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                        className="bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white"
                       />
                       <input
                         type="text"
                         placeholder="Nhãn hiển thị (Tên hiển thị)"
                         value={field.label}
                         onChange={(e) => handleFieldChange(index, 'label', e.target.value)}
-                        className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                        className="bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white"
                       />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -259,9 +256,9 @@ export default function FormsManagementPage() {
                     <button
                       type="button"
                       onClick={() => handleRemoveField(index)}
-                      className="text-slate-600 hover:text-rose-400 p-1"
+                      className="text-slate-400 hover:text-rose-400 text-xs font-semibold px-2 py-1 bg-slate-800 rounded hover:bg-slate-750 transition"
                     >
-                      ✕
+                      Xóa
                     </button>
                   </div>
                 ))}
@@ -344,9 +341,6 @@ export default function FormsManagementPage() {
 
           {!selectedFormId ? (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500 py-12">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-slate-700 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-              </svg>
               <p className="text-xs">Vui lòng chọn một biểu mẫu ở danh sách bên trái để xem dữ liệu lead.</p>
             </div>
           ) : subLoading ? (

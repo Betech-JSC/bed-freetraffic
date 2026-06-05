@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { apiFetch, apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
-import { IconPlus } from '@/components/icons';
 import { useLocale } from '@/context/LocaleContext';
 
 export default function CampaignsPage() {
@@ -82,7 +81,6 @@ export default function CampaignsPage() {
         description={t('Theo dõi thứ hạng SEO và gắn từ khóa với nguồn traffic.')}
         actions={
           <button type="button" onClick={() => setIsModalOpen(true)} className="btn-primary">
-            <IconPlus className="w-4 h-4" />
             {t('Thêm từ khóa')}
           </button>
         }
@@ -91,10 +89,10 @@ export default function CampaignsPage() {
       {fetchError && <div className="alert-error">{fetchError}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-        <StatCard label={t('Tổng từ khóa')} value={keywords.length} accent="brand" icon={<span>🔑</span>} />
-        <StatCard label="Top 1–3" value={top3} accent="emerald" icon={<span>🏆</span>} />
-        <StatCard label="Top 4–10" value={top10} accent="blue" icon={<span>📈</span>} />
-        <StatCard label={t('Ngoài top 10')} value={outside} accent="slate" icon={<span>👀</span>} />
+        <StatCard label={t('Tổng từ khóa')} value={keywords.length} accent="brand" />
+        <StatCard label="Top 1–3" value={top3} accent="emerald" />
+        <StatCard label="Top 4–10" value={top10} accent="blue" />
+        <StatCard label={t('Ngoài top 10')} value={outside} accent="slate" />
       </div>
 
       <div className="table-wrap">

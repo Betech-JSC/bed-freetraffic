@@ -192,9 +192,6 @@ export default function EmailWorkflowsPage() {
           onClick={handleOpenCreate}
           className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg transition duration-200 shadow-md font-semibold text-sm flex items-center gap-2"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
           Tạo kịch bản mới
         </button>
       </div>
@@ -202,14 +199,14 @@ export default function EmailWorkflowsPage() {
       {success && (
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-sm flex justify-between">
           <span>{success}</span>
-          <button onClick={() => setSuccess('')} className="hover:text-white">✕</button>
+          <button onClick={() => setSuccess('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
       {error && (
         <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-sm flex justify-between">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="hover:text-white">✕</button>
+          <button onClick={() => setError('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
@@ -272,8 +269,8 @@ export default function EmailWorkflowsPage() {
           <h3 className="font-bold text-white text-sm uppercase tracking-wider border-b border-slate-800 pb-2">Danh sách kịch bản</h3>
           
           {loading ? (
-            <div className="flex justify-center py-6">
-              <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-[#f25c22]"></div>
+            <div className="flex justify-center py-6 text-slate-400 text-xs">
+              Đang tải kịch bản...
             </div>
           ) : workflows.length === 0 ? (
             <p className="text-slate-500 text-xs text-center py-6">Chưa có kịch bản Drip Email nào.</p>
@@ -343,9 +340,6 @@ export default function EmailWorkflowsPage() {
 
           {!selectedId ? (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-500 py-12">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-slate-700 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
               <p className="text-xs">Chọn một kịch bản chăm sóc bên trái để cấu hình chuỗi email tự động.</p>
             </div>
           ) : steps.length === 0 ? (
@@ -368,9 +362,9 @@ export default function EmailWorkflowsPage() {
                     </span>
                     <button
                       onClick={() => removeStep(index)}
-                      className="text-slate-600 hover:text-rose-400 text-xs"
+                      className="text-slate-650 hover:text-rose-400 text-xs font-semibold"
                     >
-                      ✕ Xóa email này
+                      Xóa email này
                     </button>
                   </div>
 
@@ -421,9 +415,7 @@ export default function EmailWorkflowsPage() {
                   disabled={savingSteps}
                   className="px-6 py-2 bg-[#f25c22] hover:bg-[#d94d1a] disabled:bg-slate-800 text-white rounded-lg text-sm font-semibold shadow-md transition flex items-center gap-2"
                 >
-                  {savingSteps ? (
-                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
-                  ) : 'Lưu chuỗi Drip Email'}
+                  {savingSteps ? 'Đang lưu...' : 'Lưu chuỗi Drip Email'}
                 </button>
               </div>
             </div>

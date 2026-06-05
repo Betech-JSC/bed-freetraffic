@@ -355,7 +355,7 @@ export default function BacklinksPage() {
             }}
             className="btn-secondary text-sm flex items-center gap-1.5"
           >
-            🔍 {t('auditNow')}
+            {t('auditNow')}
           </button>
         }
       />
@@ -365,7 +365,6 @@ export default function BacklinksPage() {
 
       {/* Onboarding Guide Banner */}
       <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm transition-all duration-300 hover:shadow-md">
-        <span className="text-xl mt-0.5">💡</span>
         <div>
           <h4 className="font-bold text-slate-800 text-sm">Hướng dẫn Quản lý Liên kết (Backlink Profile)</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -380,7 +379,7 @@ export default function BacklinksPage() {
         {/* Metric Cards Column */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-lg font-bold">🔗</div>
+            <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-xs font-bold uppercase">LNK</div>
             <div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tổng số Backlinks</div>
               <div className="text-2xl font-extrabold text-gray-900 mt-0.5">{totalBacklinks}</div>
@@ -391,7 +390,7 @@ export default function BacklinksPage() {
           </div>
           
           <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg font-bold">🛡️</div>
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold uppercase">DA</div>
             <div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DA Trung bình</div>
               <div className="text-2xl font-extrabold text-gray-900 mt-0.5">{avgDa} <span className="text-xs text-gray-400 font-normal">/ 100</span></div>
@@ -400,7 +399,7 @@ export default function BacklinksPage() {
           </div>
 
           <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg font-bold">📊</div>
+            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold uppercase">CTR</div>
             <div>
               <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Tỷ lệ Link hoạt động</div>
               <div className="text-2xl font-extrabold text-gray-900 mt-0.5">
@@ -446,7 +445,7 @@ export default function BacklinksPage() {
           <div>
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <h3 className="font-black text-slate-800 text-sm flex items-center gap-1.5">
-                <span>🤖</span> {isBulkMode ? 'Quét liên kết hàng loạt (Bulk Scan)' : 'Cào quét tự động đơn lẻ (Auto Scanner)'}
+                <span>{isBulkMode ? 'Quét liên kết hàng loạt (Bulk Scan)' : 'Cào quét tự động đơn lẻ (Auto Scanner)'}</span>
               </h3>
               <button
                 type="button"
@@ -551,7 +550,7 @@ export default function BacklinksPage() {
         <form onSubmit={submit} className="lg:col-span-2 card p-6 shadow-sm flex flex-col justify-between">
           <div className="space-y-4">
             <h3 className="font-black text-slate-800 text-sm border-b pb-3 mb-4">
-              {editingId ? '✏️ Sửa thông tin Backlink' : '➕ Khai báo thủ công'}
+              {editingId ? 'Sửa thông tin Backlink' : 'Khai báo thủ công'}
             </h3>
             
             <div>
@@ -702,7 +701,7 @@ export default function BacklinksPage() {
             onClick={handleExportCsv}
             disabled={filteredLinks.length === 0}
           >
-            📥 Xuất CSV
+            Xuất CSV
           </button>
         </div>
       </div>
@@ -773,7 +772,7 @@ export default function BacklinksPage() {
                     }}
                     title="Ước tính chỉ số DA tên miền"
                   >
-                    📊 Check DA
+                    Check DA
                   </button>
                   <button type="button" className="text-xs font-bold text-brand hover:underline" onClick={() => startEdit(l)}>
                     Sửa

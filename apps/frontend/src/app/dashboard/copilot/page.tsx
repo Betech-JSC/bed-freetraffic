@@ -15,31 +15,28 @@ interface CopilotPlanItem {
 }
 
 const TONE_OPTIONS = [
-  { value: 'Chuyên nghiệp', label: '👔 Chuyên nghiệp' },
-  { value: 'Hài hước', label: '😂 Hài hước' },
-  { value: 'Thuyết phục', label: '🔥 Thuyết phục' },
-  { value: 'Thân thiện', label: '🤝 Thân thiện' },
-  { value: 'Trang trọng', label: '✨ Trang trọng' },
+  { value: 'Chuyên nghiệp', label: 'Chuyên nghiệp' },
+  { value: 'Hài hước', label: 'Hài hước' },
+  { value: 'Thuyết phục', label: 'Thuyết phục' },
+  { value: 'Thân thiện', label: 'Thân thiện' },
+  { value: 'Trang trọng', label: 'Trang trọng' },
 ];
 
 const SUGGESTIONS = [
   {
     topic: 'Giảm giá 50% Bộ Sưu Tập Thời Trang Hè',
     industry: 'Thời trang & Bán lẻ',
-    tone: 'Thuyết phục',
-    icon: '🛍️'
+    tone: 'Thuyết phục'
   },
   {
     topic: 'Khai trương Chi Nhánh Cafe Đặc Sản Mới',
     industry: 'F&B (Ẩm thực)',
-    tone: 'Thân thiện',
-    icon: '☕'
+    tone: 'Thân thiện'
   },
   {
     topic: 'Giải pháp Hosting Cloud Tốc Độ Cao cho Doanh Nghiệp',
     industry: 'Công nghệ thông tin',
-    tone: 'Chuyên nghiệp',
-    icon: '💻'
+    tone: 'Chuyên nghiệp'
   }
 ];
 
@@ -215,27 +212,19 @@ export default function CopilotPage() {
     switch (platform.toLowerCase()) {
       case 'facebook':
         return (
-          <svg className="w-5 h-5 text-blue-600 fill-current" viewBox="0 0 24 24">
-            <path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/>
-          </svg>
+          <span className="text-xs font-bold text-blue-600 uppercase">[FB]</span>
         );
       case 'email':
         return (
-          <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
+          <span className="text-xs font-bold text-purple-600 uppercase">[Email]</span>
         );
       case 'zalo':
         return (
-          <div className="w-5 h-5 bg-cyan-600 rounded flex items-center justify-center text-[10px] font-black text-white shadow-sm">
-            Z
-          </div>
+          <span className="text-xs font-bold text-cyan-600 uppercase">[Zalo]</span>
         );
       default:
         return (
-          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 10.742l-1.996-2.004M15.316 10.742l1.996-2.004M12 17.25h.01M19 12a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <span className="text-xs font-bold text-slate-400 uppercase">[Platform]</span>
         );
     }
   };
@@ -256,7 +245,7 @@ export default function CopilotPage() {
 
       {/* Suggestion Chips */}
       <div className="space-y-2">
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">💡 Gợi ý nhanh chủ đề mẫu:</p>
+        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Gợi ý nhanh chủ đề mẫu:</p>
         <div className="flex flex-wrap gap-3">
           {SUGGESTIONS.map((sug, idx) => (
             <button
@@ -265,7 +254,6 @@ export default function CopilotPage() {
               onClick={() => applySuggestion(sug)}
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/60 hover:border-brand/40 text-xs text-slate-700 hover:text-brand transition-all hover:scale-[1.02] shadow-sm"
             >
-              <span>{sug.icon}</span>
               <span className="font-semibold truncate max-w-[240px] md:max-w-xs">{sug.topic}</span>
             </button>
           ))}
@@ -281,9 +269,6 @@ export default function CopilotPage() {
               : 'bg-red-50 border-red-200 text-red-800'
           }`}
         >
-          <span className="text-lg mt-0.5">
-            {message.type === 'success' ? '✨' : '⚠️'}
-          </span>
           <div className="font-semibold leading-relaxed">{message.text}</div>
         </div>
       )}
@@ -360,16 +345,16 @@ export default function CopilotPage() {
                   disabled={loading}
                   className="w-full bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:bg-white focus:border-brand transition-all cursor-pointer"
                 >
-                  <option value={3} className="text-slate-800 bg-white">📅 3 ngày / 3 bài</option>
-                  <option value={5} className="text-slate-800 bg-white">📅 5 ngày / 5 bài</option>
-                  <option value={7} className="text-slate-800 bg-white">📅 7 ngày / 7 bài</option>
+                  <option value={3} className="text-slate-800 bg-white">3 ngày / 3 bài</option>
+                  <option value={5} className="text-slate-800 bg-white">5 ngày / 5 bài</option>
+                  <option value={7} className="text-slate-800 bg-white">7 ngày / 7 bài</option>
                 </select>
               </div>
             </div>
 
             <div className="border-t border-slate-100 my-4 pt-4 space-y-4">
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                ⚙️ Thiết lập Lên lịch
+                Thiết lập Lên lịch
               </h3>
 
               <div className="space-y-1.5">
@@ -423,15 +408,11 @@ export default function CopilotPage() {
             >
               {loading ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
                   {t('generating')}
                 </>
               ) : (
                 <>
-                  <span className="text-base">✨</span> {t('generatePlan')}
+                  {t('generatePlan')}
                 </>
               )}
             </button>
@@ -446,7 +427,7 @@ export default function CopilotPage() {
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
                 <div>
                   <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                    📋 Kế hoạch đăng bài đa kênh
+                    Kế hoạch đăng bài đa kênh
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">Bạn có thể điều chỉnh nội dung và ngày giờ đăng bài từng ngày trước khi kích hoạt.</p>
                 </div>
@@ -484,9 +465,7 @@ export default function CopilotPage() {
                       disabled={saveLoading || scheduleLoading}
                       className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
-                      {saveLoading ? (
-                        <span className="w-3.5 h-3.5 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
-                      ) : '💾'}
+                      {saveLoading ? 'Đang lưu... ' : ''}
                       {t('saveAsTemplate')}
                     </button>
                     <button
@@ -494,9 +473,7 @@ export default function CopilotPage() {
                       disabled={saveLoading || scheduleLoading}
                       className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-gradient-to-r from-brand to-orange-500 hover:brightness-105 text-white font-bold text-xs shadow-sm transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
-                      {scheduleLoading ? (
-                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : '📅'}
+                      {scheduleLoading ? 'Đang lên lịch... ' : ''}
                       {t('autoSchedule')}
                     </button>
                   </div>
@@ -636,9 +613,8 @@ export default function CopilotPage() {
               <div className="absolute -top-12 -left-12 w-48 h-48 bg-brand/5 rounded-full blur-2xl pointer-events-none" />
               <div className="absolute -bottom-12 -right-12 w-48 h-48 bg-brand/5 rounded-full blur-2xl pointer-events-none" />
               
-              {/* Glowing Sparkle Core */}
-              <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-3xl mb-5 shadow-sm text-brand animate-pulse">
-                ✦
+              <div className="w-16 h-16 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-lg font-bold mb-5 shadow-sm text-brand animate-pulse">
+                AI
               </div>
 
               <h3 className="text-lg font-bold text-slate-800 mb-2">Trợ lý lập kế hoạch nội dung AI</h3>
@@ -650,7 +626,7 @@ export default function CopilotPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg text-left mt-2">
                 <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-1 shadow-sm">
                   <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="text-brand">✨</span> Lên kế hoạch đa kênh
+                    Lên kế hoạch đa kênh
                   </h4>
                   <p className="text-[11px] text-slate-500 leading-normal">
                     Tự động phân bổ và chuẩn bị bài đăng cho Facebook Page, Zalo OA hoặc Email.
@@ -658,7 +634,7 @@ export default function CopilotPage() {
                 </div>
                 <div className="p-4 rounded-xl bg-white border border-slate-200 space-y-1 shadow-sm">
                   <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="text-brand">📊</span> Đề xuất giờ xuất bản
+                    Đề xuất giờ vàng
                   </h4>
                   <p className="text-[11px] text-slate-500 leading-normal">
                     Đề xuất giờ vàng tối ưu dựa trên dữ liệu click, tương tác thực tế từ hệ thống.

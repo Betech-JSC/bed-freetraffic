@@ -248,14 +248,6 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
       <div className="p-6 sm:p-8 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/10 shrink-0 text-white"
-              style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
-            >
-              <svg className="w-8 h-8 fill-current" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-            </div>
             <div>
               <h3 className="text-xl font-bold text-slate-800 tracking-tight">Facebook Fanpage Post Bot</h3>
               <p className="text-sm text-slate-500 mt-1">
@@ -286,17 +278,12 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2.5">
-                <span className="relative flex h-2 w-2">
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${botReady ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${botReady ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                </span>
-                
                 <span className={`text-sm font-bold tracking-wide uppercase ${botReady ? 'text-emerald-700' : 'text-amber-700'}`}>
                   {botReady
-                    ? 'Bot đã sẵn sàng hoạt động'
+                    ? 'Trạng thái: Sẵn sàng hoạt động'
                     : connected
-                      ? 'Lỗi cấp quyền gửi bài'
-                      : 'Chưa kết nối'}
+                      ? 'Trạng thái: Lỗi cấp quyền gửi bài'
+                      : 'Trạng thái: Chưa kết nối'}
                 </span>
               </div>
               
@@ -330,7 +317,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
                   className="px-4 py-2 text-xs font-bold text-white rounded-xl shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
                   style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
                 >
-                  Cấu hình Bot Automation →
+                  Cấu hình Bot Automation
                 </a>
               </div>
             )}
@@ -339,36 +326,25 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
           {/* HIỂN THỊ CÁC LỖI/CẢNH BÁO */}
           {status?.issues?.length ? (
             <div className="mt-4 border-t border-dashed border-amber-200/60 pt-4">
-              <div className="flex items-start gap-2.5 text-amber-800">
-                <svg className="w-5 h-5 shrink-0 mt-0.5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div className="space-y-1">
-                  <p className="text-xs font-bold uppercase tracking-wider">Chi tiết vấn đề kết nối:</p>
-                  <ul className="text-xs list-disc list-inside space-y-1 font-medium leading-relaxed">
-                    {status.issues.map((issue, idx) => (
-                      <li key={idx} className="marker:text-amber-500">{issue}</li>
-                    ))}
-                  </ul>
-                </div>
+              <div className="space-y-1">
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Chi tiết vấn đề kết nối:</p>
+                <ul className="text-xs list-disc list-inside space-y-1 font-medium leading-relaxed text-amber-800">
+                  {status.issues.map((issue, idx) => (
+                    <li key={idx} className="marker:text-amber-500">{issue}</li>
+                  ))}
+                </ul>
               </div>
             </div>
           ) : null}
         </div>
 
         {success && (
-          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800 flex items-center gap-2">
-            <svg className="w-5 h-5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800">
             <span className="font-medium">{success}</span>
           </div>
         )}
         {error && (
-          <div className="mt-4 p-4 bg-rose-50 border border-rose-100 rounded-xl text-sm text-rose-800 flex items-start gap-2">
-            <svg className="w-5 h-5 shrink-0 mt-0.5 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+          <div className="mt-4 p-4 bg-rose-50 border border-rose-100 rounded-xl text-sm text-rose-800">
             <span className="font-medium whitespace-pre-line">{error}</span>
           </div>
         )}
@@ -387,14 +363,14 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
                 className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-white rounded-xl shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
                 style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
               >
-                🔌 Kết nối bằng Token
+                Kết nối bằng Token
               </button>
               <button
                 type="button"
                 onClick={() => setAdvancedOpen(true)}
                 className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-xl hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
               >
-                ⚙️ Cấu hình OAuth App
+                Cấu hình OAuth App
               </button>
             </div>
           </div>
@@ -430,9 +406,6 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
                   style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
                 >
                   <span>Mở Graph API Explorer</span>
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
                 </a>
               </div>
             </div>
@@ -488,7 +461,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
                     disabled={!pageToken.trim() || loading}
                     className="px-4 py-2 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100 disabled:opacity-50 active:scale-95"
                   >
-                    {loading ? 'Đang tải...' : '🔍 Lấy danh sách Fanpage'}
+                    {loading ? 'Đang tải...' : 'Lấy danh sách Fanpage'}
                   </button>
                   <button
                     type="button"
@@ -496,7 +469,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
                     disabled={!pageId.trim() || !pageToken.trim() || loading}
                     className="px-4 py-2 text-xs font-semibold text-blue-700 bg-blue-50 rounded-xl hover:bg-blue-100 transition-all border border-blue-100 disabled:opacity-50 active:scale-95"
                   >
-                    {loading ? 'Đang xác minh...' : '🛡️ Kiểm tra token'}
+                    {loading ? 'Đang xác minh...' : 'Kiểm tra token'}
                   </button>
                 </div>
 
@@ -535,10 +508,6 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
                 </p>
                 {verifyPreview && (
                   <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl inline-flex items-center gap-2 text-xs font-semibold text-blue-800">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                    </span>
                     <span>Xác nhận liên kết: <strong>{verifyPreview.pageName}</strong></span>
                   </div>
                 )}
@@ -563,7 +532,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
               onClick={() => setWizardOpen(false)} 
               className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1"
             >
-              <span>↑ Thu gọn hướng dẫn thiết lập</span>
+              <span>[Thu gọn hướng dẫn thiết lập]</span>
             </button>
           </div>
         </div>
@@ -577,7 +546,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
             onClick={() => setWizardOpen(true)} 
             className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
           >
-            <span>Đổi cấu hình kết nối Fanpage →</span>
+            <span>[Thay đổi kết nối Fanpage]</span>
           </button>
         </div>
       )}
@@ -590,15 +559,12 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
             onClick={() => setAdvancedOpen((o) => !o)}
             className="text-xs font-bold text-slate-600 hover:text-slate-800 transition-colors flex items-center gap-1.5"
           >
-            <span>{advancedOpen ? '▼' : '▶'} Tùy chọn nâng cao — Đăng nhập OAuth ứng dụng (Nhận Token Vô Hạn)</span>
+            <span>{advancedOpen ? '[Ẩn]' : '[Hiện]'} Tùy chọn nâng cao — Đăng nhập OAuth ứng dụng (Nhận Token Vô Hạn)</span>
           </button>
           
           {advancedOpen && (
             <div className="mt-4 space-y-4 p-5 rounded-2xl bg-white border border-slate-200/60 shadow-inner max-w-3xl">
-              <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3.5 flex items-start gap-2.5 text-xs text-blue-800">
-                <svg className="w-5 h-5 shrink-0 text-blue-500 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3.5 text-xs text-blue-800">
                 <div className="space-y-1">
                   <p className="font-bold">Luồng OAuth nâng cao:</p>
                   <p className="leading-relaxed">
@@ -636,7 +602,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
                 disabled={loading || !appId.trim() || !appSecret.trim()}
                 className="px-5 py-2.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-100 rounded-xl hover:bg-blue-100 transition-all disabled:opacity-40 disabled:pointer-events-none active:scale-95"
               >
-                🔗 Bắt đầu đăng nhập OAuth
+                Bắt đầu đăng nhập OAuth
               </button>
             </div>
           )}

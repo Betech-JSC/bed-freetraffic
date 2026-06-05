@@ -143,9 +143,6 @@ export default function LandingPagesDashboard() {
           onClick={() => setShowCreate(true)}
           className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg transition duration-200 shadow-md font-semibold text-sm flex items-center gap-2"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
           Tạo trang đích
         </button>
       </div>
@@ -153,14 +150,14 @@ export default function LandingPagesDashboard() {
       {success && (
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-sm flex justify-between">
           <span>{success}</span>
-          <button onClick={() => setSuccess('')} className="hover:text-white">✕</button>
+          <button onClick={() => setSuccess('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
       {error && (
         <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-sm flex justify-between">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="hover:text-white">✕</button>
+          <button onClick={() => setError('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
@@ -298,9 +295,6 @@ export default function LandingPagesDashboard() {
           </div>
         ) : pages.length === 0 ? (
           <div className="col-span-full text-center py-16 bg-slate-900 border border-slate-800 rounded-xl">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
             <h4 className="text-white font-medium mb-1">Chưa có Landing Page nào</h4>
             <p className="text-slate-400 text-sm mb-4">Hãy bắt đầu tạo Landing Page đầu tiên của bạn để chuyển đổi traffic thành lead.</p>
             <button
@@ -329,11 +323,11 @@ export default function LandingPagesDashboard() {
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-500">FB Pixel:</span>
-                    <span className="text-slate-300">{page.fbPixelId ? '🟢 ' + page.fbPixelId : '🔴 Chưa cấu hình'}</span>
+                    <span className="text-slate-300">{page.fbPixelId ? page.fbPixelId : 'Chưa cấu hình'}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-slate-500">Google Tag:</span>
-                    <span className="text-slate-300">{page.googleTagId ? '🟢 ' + page.googleTagId : '🔴 Chưa cấu hình'}</span>
+                    <span className="text-slate-300">{page.googleTagId ? page.googleTagId : 'Chưa cấu hình'}</span>
                   </div>
                 </div>
               </div>
@@ -359,21 +353,17 @@ export default function LandingPagesDashboard() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => openConfig(page)}
-                    className="text-slate-400 hover:text-white p-1"
+                    className="text-xs bg-slate-800 hover:bg-slate-750 text-slate-300 px-2.5 py-1.5 rounded font-semibold transition"
                     title="Cài đặt SEO & Pixel"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                    </svg>
+                    Cấu hình
                   </button>
                   <button
                     onClick={() => handleDelete(page.id)}
-                    className="text-slate-500 hover:text-rose-400 p-1"
+                    className="text-xs bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 px-2.5 py-1.5 rounded font-semibold transition"
                     title="Xóa"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4.5 w-4.5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
+                    Xóa
                   </button>
                 </div>
               </div>

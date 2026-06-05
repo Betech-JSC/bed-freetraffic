@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { apiJson } from '@/lib/api';
 
 type CustomFormOption = {
@@ -27,6 +28,9 @@ type PageBlock = {
   title: string;
   subtitle?: string;
   buttonText?: string;
+  buttonLink?: string;
+  imageUrl?: string;
+  imageAlignment?: 'left' | 'right' | 'center';
   backgroundColor?: string;
   textColor?: string;
   items?: string[]; // For features list
@@ -41,6 +45,9 @@ const DEFAULT_BLOCKS: PageBlock[] = [
     title: 'Tăng Trưởng Doanh Thu Bứt Phá Với Growth OS',
     subtitle: 'Hệ thống tự động hóa Marketing kéo traffic tự nhiên và chuyển đổi khách hàng khép kín.',
     buttonText: 'Trải nghiệm miễn phí',
+    buttonLink: '#register-form',
+    imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60',
+    imageAlignment: 'right',
     backgroundColor: '#0f172a',
     textColor: '#ffffff',
   },
@@ -117,36 +124,64 @@ export default function LandingPageBuilder() {
   <title>${page?.title || 'Landing Page'}</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    body { font-family: system-ui, -apple-system, sans-serif; background-color: #030712; color: #f3f4f6; }
+    body { font-family: system-ui, -apple-system, sans-serif; background-color: #030712; color: #f3f4f6; scroll-behavior: smooth; }
   </style>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen">`;
 
     for (const block of blocksList) {
       if (block.type === 'hero') {
-        html += `
-  <section class="py-24 px-6 text-center" style="background-color: ${block.backgroundColor || '#0f172a'}; color: ${block.textColor || '#ffffff'};">
+        const hasImage = !!block.imageUrl;
+        const align = block.imageAlignment || 'right';
+        const bgCol = block.backgroundColor || '#0f172a';
+        const txtCol = block.textColor || '#ffffff';
+
+        if (hasImage && align !== 'center') {
+          const isLeft = align === 'left';
+          html += `
+  <section class="py-24 px-6 relative overflow-hidden" style="background-color: ${bgCol}; color: ${txtCol};">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+      <div class="space-y-6 ${isLeft ? 'md:order-2' : ''}">
+        <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">${block.title}</h1>
+        <p class="text-lg text-gray-300 max-w-xl leading-relaxed">${block.subtitle || ''}</p>
+        <div class="pt-4">
+          <a href="${block.buttonLink || '#register-form'}" class="inline-block px-8 py-4 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition duration-200 shadow-lg transform hover:-translate-y-1">
+            ${block.buttonText || 'Bắt đầu ngay'}
+          </a>
+        </div>
+      </div>
+      <div class="${isLeft ? 'md:order-1' : ''} flex justify-center">
+        <img src="${block.imageUrl}" alt="${block.title}" class="rounded-2xl shadow-2xl border border-gray-800 max-h-[450px] object-cover" />
+      </div>
+    </div>
+  </section>`;
+        } else {
+          html += `
+  <section class="py-24 px-6 text-center relative overflow-hidden" style="background-color: ${bgCol}; color: ${txtCol};">
     <div class="max-w-4xl mx-auto space-y-6">
-      <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight">${block.title}</h1>
-      <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto">${block.subtitle || ''}</p>
+      <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight">${block.title}</h1>
+      <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">${block.subtitle || ''}</p>
+      ${hasImage ? `
+      <div class="my-8 flex justify-center">
+        <img src="${block.imageUrl}" alt="${block.title}" class="rounded-2xl shadow-2xl border border-gray-800 max-h-[450px] object-cover" />
+      </div>` : ''}
       <div class="pt-4">
-        <a href="#register-form" class="inline-block px-8 py-4 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition duration-200 shadow-lg transform hover:-translate-y-1">
+        <a href="${block.buttonLink || '#register-form'}" class="inline-block px-8 py-4 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition duration-200 shadow-lg transform hover:-translate-y-1">
           ${block.buttonText || 'Bắt đầu ngay'}
         </a>
       </div>
     </div>
   </section>`;
+        }
       } else if (block.type === 'features') {
         html += `
-  <section class="py-20 px-6 bg-gray-900" style="background-color: ${block.backgroundColor || '#111827'}; color: ${block.textColor || '#94a3b8'};">
+  <section class="py-20 px-6" style="background-color: ${block.backgroundColor || '#111827'}; color: ${block.textColor || '#94a3b8'};">
     <div class="max-w-5xl mx-auto">
       <h2 class="text-3xl font-bold text-center text-white mb-12">${block.title}</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         ${(block.items || []).map(item => `
-        <div class="flex items-start gap-3 bg-gray-800/40 p-5 rounded-lg border border-gray-850">
-          <svg class="h-6 w-6 text-[#f25c22] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
+        <div class="flex items-start gap-3 bg-gray-800/40 p-5 rounded-lg border border-gray-805">
+          <span class="text-indigo-400 text-lg">✓</span>
           <p class="text-gray-200 font-medium">${item}</p>
         </div>`).join('')}
       </div>
@@ -154,7 +189,7 @@ export default function LandingPageBuilder() {
   </section>`;
       } else if (block.type === 'form') {
         html += `
-  <section id="register-form" class="py-20 px-6 bg-gray-950">
+  <section id="register-form" class="py-20 px-6" style="background-color: ${block.backgroundColor || '#030712'};">
     <div class="max-w-md mx-auto bg-gray-900 border border-gray-800 rounded-xl p-8 shadow-xl">
       <h3 class="text-2xl font-bold text-white text-center mb-6">${block.title}</h3>
       <p class="text-gray-400 text-sm text-center mb-6">${block.subtitle || 'Vui lòng điền thông tin để tiếp tục'}</p>
@@ -230,13 +265,49 @@ export default function LandingPageBuilder() {
       });
     </script>
   </section>`;
+      } else if (block.type === 'pricing') {
+        html += `
+  <section class="py-20 px-6 text-center" style="background-color: ${block.backgroundColor || '#0b0f19'}; color: ${block.textColor || '#ffffff'};">
+    <div class="max-w-4xl mx-auto space-y-6">
+      <h2 class="text-3xl md:text-4xl font-bold">${block.title}</h2>
+      <p class="text-gray-400 text-sm max-w-2xl mx-auto">${block.subtitle || ''}</p>
+      
+      <div class="max-w-sm mx-auto bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-xl mt-8 relative overflow-hidden">
+        <div class="absolute top-0 right-0 px-3 py-1 bg-[#f25c22] text-xs font-bold text-white uppercase rounded-bl-lg">Phổ biến</div>
+        <h3 class="text-xl font-bold text-white">Gói Ưu Đãi</h3>
+        <p class="text-4xl font-extrabold text-white mt-4 my-2">${block.priceVal || '499.000đ'}<span class="text-sm font-normal text-gray-500">/tháng</span></p>
+        <p class="text-gray-400 text-xs mt-2">Truy cập toàn bộ tính năng tăng trưởng.</p>
+        
+        <ul class="text-left space-y-3 mt-6 text-sm text-gray-300">
+          <li class="flex items-center gap-2">✓ Viết bài chuẩn SEO bằng AI</li>
+          <li class="flex items-center gap-2">✓ Quản lý bài đăng đa kênh</li>
+          <li class="flex items-center gap-2">✓ Hệ thống Drip Email tự động</li>
+          <li class="flex items-center gap-2">✓ Báo cáo Analytics nâng cao</li>
+        </ul>
+        
+        <div class="pt-6">
+          <a href="${block.buttonLink || '#register-form'}" class="block w-full py-3 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition duration-200">
+            ${block.buttonText || 'Mua ngay'}
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>`;
+      } else if (block.type === 'footer') {
+        html += `
+  <footer class="py-12 px-6 border-t border-gray-900" style="background-color: ${block.backgroundColor || '#030712'}; color: ${block.textColor || '#6b7280'};">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+      <div class="text-center md:text-left">
+        <h4 class="text-white font-bold text-lg">${block.title}</h4>
+        <p class="text-sm mt-1">${block.subtitle || ''}</p>
+      </div>
+      <p class="text-xs">© ${new Date().getFullYear()} ${block.title}. Bảo lưu mọi quyền.</p>
+    </div>
+  </footer>`;
       }
     }
 
     html += `
-  <footer class="py-10 text-center text-sm text-gray-500 border-t border-gray-900 bg-gray-950">
-    <p>© ${new Date().getFullYear()} ${page?.title || 'Growth OS'}. Bản quyền thuộc về hệ thống Be Traffic.</p>
-  </footer>
 </body>
 </html>`;
     return html;
@@ -265,7 +336,7 @@ export default function LandingPageBuilder() {
     }
   };
 
-  const addBlock = (type: 'hero' | 'features' | 'form') => {
+  const addBlock = (type: 'hero' | 'features' | 'form' | 'pricing' | 'footer') => {
     let newBlock: PageBlock;
     if (type === 'hero') {
       newBlock = {
@@ -274,6 +345,9 @@ export default function LandingPageBuilder() {
         title: 'Khám Phá Giải Pháp Của Chúng Tôi',
         subtitle: 'Mô tả ngắn gọn giá trị cốt lõi giải pháp của bạn.',
         buttonText: 'Tìm hiểu ngay',
+        buttonLink: '#register-form',
+        imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60',
+        imageAlignment: 'right',
         backgroundColor: '#0f172a',
         textColor: '#ffffff',
       };
@@ -286,7 +360,7 @@ export default function LandingPageBuilder() {
         backgroundColor: '#111827',
         textColor: '#94a3b8',
       };
-    } else {
+    } else if (type === 'form') {
       newBlock = {
         id: `block-${Date.now()}`,
         type: 'form',
@@ -295,6 +369,27 @@ export default function LandingPageBuilder() {
         backgroundColor: '#030712',
         textColor: '#ffffff',
         formId: forms[0]?.id ? String(forms[0].id) : '',
+      };
+    } else if (type === 'pricing') {
+      newBlock = {
+        id: `block-${Date.now()}`,
+        type: 'pricing',
+        title: 'Gói Dịch Vụ Phù Hợp Với Bạn',
+        subtitle: 'Lựa chọn gói tối ưu nhất cho hoạt động kinh doanh của bạn.',
+        priceVal: '499.000đ',
+        buttonText: 'Mua ngay',
+        buttonLink: '#register-form',
+        backgroundColor: '#0b0f19',
+        textColor: '#ffffff',
+      };
+    } else {
+      newBlock = {
+        id: `block-${Date.now()}`,
+        type: 'footer',
+        title: page?.title || 'Growth OS',
+        subtitle: 'Bảo lưu mọi quyền.',
+        backgroundColor: '#030712',
+        textColor: '#6b7280',
       };
     }
     setBlocks([...blocks, newBlock]);
@@ -312,32 +407,38 @@ export default function LandingPageBuilder() {
   const selectedBlock = blocks.find(b => b.id === selectedBlockId);
 
   return (
-    <div className="flex h-screen bg-slate-950 text-white overflow-hidden">
+    <div className="flex h-[calc(100vh-140px)] min-h-[550px] bg-slate-950 text-white overflow-hidden rounded-xl border border-slate-800 shadow-2xl">
       {/* Sidebar - Controls */}
       <div className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0">
         <div className="p-5 space-y-6 overflow-y-auto">
           <div className="flex justify-between items-center border-b border-slate-800 pb-3">
             <div>
               <h3 className="font-bold text-white text-base">Trình Thiết Kế</h3>
-              <p className="text-slate-400 text-xs truncate max-w-[150px]">{page?.title || 'Loading...'}</p>
+              <p className="text-slate-400 text-xs truncate max-w-[120px]">{page?.title || 'Loading...'}</p>
             </div>
-            <button onClick={() => router.push('/dashboard/landing')} className="text-slate-400 hover:text-white text-xs font-semibold">
-              Quay lại
-            </button>
+            <Link href="/dashboard/landing" className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-355 hover:text-white text-xs font-bold rounded-lg transition duration-200 shadow border border-slate-750 flex items-center gap-1">
+              ← Quay lại
+            </Link>
           </div>
 
           {/* Add Blocks */}
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Thêm khối mới</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button onClick={() => addBlock('hero')} className="bg-slate-950 border border-slate-800 hover:border-[#f25c22] rounded p-2 text-center text-xs transition">
-                Banner
+                Banner (Hero)
               </button>
               <button onClick={() => addBlock('features')} className="bg-slate-950 border border-slate-800 hover:border-[#f25c22] rounded p-2 text-center text-xs transition">
-                Lợi ích
+                Lợi ích (Features)
               </button>
               <button onClick={() => addBlock('form')} className="bg-slate-950 border border-slate-800 hover:border-[#f25c22] rounded p-2 text-center text-xs transition">
-                Biểu mẫu
+                Biểu mẫu (Form)
+              </button>
+              <button onClick={() => addBlock('pricing')} className="bg-slate-950 border border-slate-800 hover:border-[#f25c22] rounded p-2 text-center text-xs transition">
+                Bảng giá (Pricing)
+              </button>
+              <button onClick={() => addBlock('footer')} className="bg-slate-950 border border-slate-800 hover:border-[#f25c22] rounded p-2 text-center text-xs transition col-span-2">
+                Chân trang (Footer)
               </button>
             </div>
           </div>
@@ -360,9 +461,9 @@ export default function LandingPageBuilder() {
                     </span>
                     <button
                       onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
-                      className="text-slate-600 hover:text-rose-400 text-xs"
+                      className="text-slate-605 hover:text-rose-400 text-xs font-semibold"
                     >
-                      ✕
+                      Xóa
                     </button>
                   </div>
                 ))}
@@ -376,7 +477,7 @@ export default function LandingPageBuilder() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#f25c22]">Cấu hình Khối</h4>
               
               <div className="space-y-1">
-                <label className="text-[11px] text-slate-400">Tiêu đề chính</label>
+                <label className="text-[11px] text-slate-400">Tiêu đề</label>
                 <input
                   type="text"
                   value={selectedBlock.title}
@@ -385,54 +486,139 @@ export default function LandingPageBuilder() {
                 />
               </div>
 
-              {selectedBlock.type === 'hero' && (
+              {/* Subtitle / Description */}
+              {(selectedBlock.type === 'hero' || selectedBlock.type === 'form' || selectedBlock.type === 'pricing' || selectedBlock.type === 'footer') && (
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-400">Mô tả phụ</label>
+                  <textarea
+                    value={selectedBlock.subtitle || ''}
+                    onChange={(e) => updateBlock({ ...selectedBlock, subtitle: e.target.value })}
+                    rows={2}
+                    className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#f25c22]"
+                  />
+                </div>
+              )}
+
+              {/* Button Text & Button Link */}
+              {(selectedBlock.type === 'hero' || selectedBlock.type === 'pricing') && (
                 <>
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-slate-400">Mô tả phụ</label>
-                    <textarea
-                      value={selectedBlock.subtitle || ''}
-                      onChange={(e) => updateBlock({ ...selectedBlock, subtitle: e.target.value })}
-                      rows={2}
-                      className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#f25c22]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[11px] text-slate-400">Nút bấm hành động</label>
-                    <input
-                      type="text"
-                      value={selectedBlock.buttonText || ''}
-                      onChange={(e) => updateBlock({ ...selectedBlock, buttonText: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white"
-                    />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-slate-400">Chữ trên nút</label>
+                      <input
+                        type="text"
+                        value={selectedBlock.buttonText || ''}
+                        onChange={(e) => updateBlock({ ...selectedBlock, buttonText: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-850 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-[#f25c22]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-slate-400">Đường dẫn nút</label>
+                      <input
+                        type="text"
+                        value={selectedBlock.buttonLink || ''}
+                        onChange={(e) => updateBlock({ ...selectedBlock, buttonLink: e.target.value })}
+                        placeholder="#register-form"
+                        className="w-full bg-slate-950 border border-slate-850 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-[#f25c22]"
+                      />
+                    </div>
                   </div>
                 </>
               )}
 
-              {selectedBlock.type === 'form' && (
+              {/* Image URL & Alignment for Hero block */}
+              {selectedBlock.type === 'hero' && (
                 <>
                   <div className="space-y-1">
-                    <label className="text-[11px] text-slate-400">Mô tả phụ</label>
+                    <label className="text-[11px] text-slate-400">Đường dẫn hình ảnh (URL)</label>
                     <input
                       type="text"
-                      value={selectedBlock.subtitle || ''}
-                      onChange={(e) => updateBlock({ ...selectedBlock, subtitle: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white"
+                      value={selectedBlock.imageUrl || ''}
+                      onChange={(e) => updateBlock({ ...selectedBlock, imageUrl: e.target.value })}
+                      placeholder="https://example.com/image.png"
+                      className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-[#f25c22]"
                     />
+                    {/* Suggested Images */}
+                    <div className="pt-1.5 space-y-1">
+                      <label className="text-[9px] text-slate-500 uppercase font-semibold">Ảnh gợi ý mẫu:</label>
+                      <div className="grid grid-cols-4 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60' })}
+                          className="h-8 bg-slate-950 border border-slate-850 hover:border-[#f25c22] rounded overflow-hidden"
+                          title="SaaS Chart"
+                        >
+                          <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 1" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60' })}
+                          className="h-8 bg-slate-950 border border-slate-850 hover:border-[#f25c22] rounded overflow-hidden"
+                          title="Dashboard Layout"
+                        >
+                          <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 2" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=60' })}
+                          className="h-8 bg-slate-950 border border-slate-850 hover:border-[#f25c22] rounded overflow-hidden"
+                          title="Team Collab"
+                        >
+                          <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateBlock({ ...selectedBlock, imageUrl: '' })}
+                          className="h-8 bg-slate-950 border border-slate-850 hover:border-rose-500 rounded text-[9px] text-slate-500 font-semibold"
+                        >
+                          Xóa ảnh
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] text-slate-400">Liên kết Custom Form</label>
+                    <label className="text-[11px] text-slate-400">Vị trí ảnh</label>
                     <select
-                      value={selectedBlock.formId || ''}
-                      onChange={(e) => updateBlock({ ...selectedBlock, formId: e.target.value })}
+                      value={selectedBlock.imageAlignment || 'right'}
+                      onChange={(e) => updateBlock({ ...selectedBlock, imageAlignment: e.target.value as any })}
                       className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none"
                     >
-                      <option value="">-- Chọn form thu lead --</option>
-                      {forms.map(f => (
-                        <option key={f.id} value={String(f.id)}>{f.name}</option>
-                      ))}
+                      <option value="left">Bên trái văn bản</option>
+                      <option value="right">Bên phải văn bản</option>
+                      <option value="center">Ở giữa (phía dưới văn bản)</option>
                     </select>
                   </div>
                 </>
+              )}
+
+              {/* Pricing value */}
+              {selectedBlock.type === 'pricing' && (
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-400">Giá trị hiển thị</label>
+                  <input
+                    type="text"
+                    value={selectedBlock.priceVal || ''}
+                    onChange={(e) => updateBlock({ ...selectedBlock, priceVal: e.target.value })}
+                    placeholder="499.000đ"
+                    className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+              )}
+
+              {selectedBlock.type === 'form' && (
+                <div className="space-y-1">
+                  <label className="text-[11px] text-slate-400">Liên kết Custom Form</label>
+                  <select
+                    value={selectedBlock.formId || ''}
+                    onChange={(e) => updateBlock({ ...selectedBlock, formId: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-850 rounded px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                  >
+                    <option value="">-- Chọn form thu lead --</option>
+                    {forms.map(f => (
+                      <option key={f.id} value={String(f.id)}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               {selectedBlock.type === 'features' && (
@@ -448,9 +634,19 @@ export default function LandingPageBuilder() {
                         newItems[idx] = e.target.value;
                         updateBlock({ ...selectedBlock, items: newItems });
                       }}
-                      className="w-full bg-slate-950 border border-slate-855 rounded px-2.5 py-1 text-xs text-white"
+                      className="w-full bg-slate-950 border border-slate-855 rounded px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[#f25c22]"
                     />
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newItems = [...(selectedBlock.items || []), 'Lợi ích mới'];
+                      updateBlock({ ...selectedBlock, items: newItems });
+                    }}
+                    className="w-full py-1 bg-slate-850 hover:bg-slate-800 border border-slate-800 text-[10px] text-slate-350 rounded font-semibold transition"
+                  >
+                    + Thêm mục lợi ích
+                  </button>
                 </div>
               )}
 
@@ -508,13 +704,13 @@ export default function LandingPageBuilder() {
           {success && (
             <div className="p-3.5 bg-emerald-500/90 text-white font-medium rounded-lg text-xs flex justify-between shadow-lg">
               <span>{success}</span>
-              <button onClick={() => setSuccess('')}>✕</button>
+              <button onClick={() => setSuccess('')} className="font-bold">Đóng</button>
             </div>
           )}
           {error && (
             <div className="p-3.5 bg-rose-500/90 text-white font-medium rounded-lg text-xs flex justify-between shadow-lg">
               <span>{error}</span>
-              <button onClick={() => setError('')}>✕</button>
+              <button onClick={() => setError('')} className="font-bold">Đóng</button>
             </div>
           )}
         </div>
@@ -522,8 +718,8 @@ export default function LandingPageBuilder() {
         {/* Render Canvas */}
         <div className="flex-1 overflow-y-auto p-8 space-y-6">
           {loading ? (
-            <div className="flex h-full items-center justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#f25c22]"></div>
+            <div className="flex h-full items-center justify-center text-slate-400 text-sm font-semibold">
+              Đang tải thiết kế...
             </div>
           ) : blocks.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-xl py-16 text-slate-500 text-sm">
@@ -537,30 +733,52 @@ export default function LandingPageBuilder() {
                   key={block.id}
                   onClick={() => setSelectedBlockId(block.id)}
                   style={{ backgroundColor: block.backgroundColor, color: block.textColor }}
-                  className={`relative p-10 cursor-pointer group border-2 ${selectedBlockId === block.id ? 'border-[#f25c22]' : 'border-transparent hover:border-slate-800'}`}
+                  className={`relative p-10 cursor-pointer group border-2 ${selectedBlockId === block.id ? 'border-[#f25c22]' : 'border-transparent hover:border-slate-800'} transition duration-205`}
                 >
                   {/* Edit label overlay */}
-                  <span className="absolute top-2 right-2 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition">
+                  <span className="absolute top-2 right-2 text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition z-10">
                     Click to edit
                   </span>
 
                   {block.type === 'hero' && (
-                    <div className="text-center space-y-4">
-                      <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">{block.title}</h1>
-                      <p className="text-sm md:text-base text-slate-300 max-w-xl mx-auto">{block.subtitle}</p>
-                      <button className="px-6 py-2.5 bg-[#f25c22] text-white text-xs font-bold rounded-lg mt-2">
-                        {block.buttonText || 'Bấm đăng ký'}
-                      </button>
-                    </div>
+                    <>
+                      {block.imageUrl && block.imageAlignment !== 'center' ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                          <div className={`space-y-4 ${block.imageAlignment === 'left' ? 'md:order-2' : ''}`}>
+                            <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight leading-tight">{block.title}</h1>
+                            <p className="text-xs md:text-sm text-slate-300 leading-relaxed">{block.subtitle}</p>
+                            <button className="px-6 py-2.5 bg-[#f25c22] text-white text-xs font-bold rounded-lg mt-2">
+                              {block.buttonText || 'Bấm đăng ký'}
+                            </button>
+                          </div>
+                          <div className={`${block.imageAlignment === 'left' ? 'md:order-1' : ''} flex justify-center`}>
+                            <img src={block.imageUrl} alt="preview" className="rounded-lg shadow-lg border border-slate-800 max-h-[220px] object-cover" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-4">
+                          <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight leading-tight">{block.title}</h1>
+                          <p className="text-xs md:text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">{block.subtitle}</p>
+                          {block.imageUrl && (
+                            <div className="my-4 flex justify-center">
+                              <img src={block.imageUrl} alt="preview" className="rounded-lg shadow-lg border border-slate-800 max-h-[220px] object-cover" />
+                            </div>
+                          )}
+                          <button className="px-6 py-2.5 bg-[#f25c22] text-white text-xs font-bold rounded-lg mt-2">
+                            {block.buttonText || 'Bấm đăng ký'}
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {block.type === 'features' && (
                     <div className="space-y-6">
-                      <h2 className="text-xl font-bold text-white text-center">{block.title}</h2>
+                      <h2 className="text-lg md:text-xl font-bold text-white text-center">{block.title}</h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {(block.items || []).map((item, idx) => (
-                          <div key={idx} className="flex items-center gap-2 bg-slate-950/40 p-3.5 rounded border border-slate-850">
-                            <span className="text-[#f25c22] text-sm">✓</span>
+                          <div key={idx} className="flex items-start gap-2 bg-slate-950/40 p-3.5 rounded border border-slate-850">
+                            <span className="text-indigo-400 text-xs">✓</span>
                             <span className="text-xs font-medium text-slate-200">{item}</span>
                           </div>
                         ))}
@@ -588,6 +806,31 @@ export default function LandingPageBuilder() {
                       <p className="text-[10px] text-center text-[#f25c22] font-semibold">
                         Form ID: {block.formId || 'Chưa liên kết'}
                       </p>
+                    </div>
+                  )}
+
+                  {block.type === 'pricing' && (
+                    <div className="text-center space-y-4">
+                      <h2 className="text-lg md:text-xl font-bold text-white">{block.title}</h2>
+                      <p className="text-xs text-slate-400">{block.subtitle}</p>
+                      <div className="max-w-xs mx-auto bg-slate-950/80 border border-slate-850 rounded-lg p-6 space-y-3 mt-4 relative">
+                        <span className="absolute top-0 right-0 bg-[#f25c22] text-[9px] font-bold text-white px-2 py-0.5 rounded-bl">Phổ biến</span>
+                        <h4 className="text-xs font-bold text-white">Gói Ưu Đãi</h4>
+                        <p className="text-2xl font-extrabold text-white">{block.priceVal || '499.000đ'}<span className="text-[10px] font-normal text-slate-500">/tháng</span></p>
+                        <button disabled className="w-full py-2 bg-[#f25c22] text-white font-bold text-xs rounded">
+                          {block.buttonText || 'Mua ngay'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {block.type === 'footer' && (
+                    <div className="flex justify-between items-center text-xs text-slate-400">
+                      <div>
+                        <h4 className="text-white font-bold">{block.title}</h4>
+                        <p className="text-[10px]">{block.subtitle}</p>
+                      </div>
+                      <p className="text-[9px]">© {new Date().getFullYear()} {block.title}.</p>
                     </div>
                   )}
                 </div>

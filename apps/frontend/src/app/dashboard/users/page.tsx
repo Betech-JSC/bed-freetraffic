@@ -75,7 +75,7 @@ export default function UsersPage() {
                 <td>{u.email}</td>
                 <td>{u.name}</td>
                 <td>{u.role}</td>
-                <td>{u.isActive ? '✓' : '✗'}</td>
+                <td>{u.isActive ? 'Hoạt động' : 'Khóa'}</td>
               </tr>
             ))}
           </tbody>

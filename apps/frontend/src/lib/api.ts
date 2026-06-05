@@ -26,6 +26,10 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
     }
   }
 
+  if (init?.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   try {
     return await fetch(url, { ...init, headers });
   } catch {
@@ -44,6 +48,11 @@ export async function apiJson<T = unknown>(path: string, init?: RequestInit): Pr
       throw new Error(
         msg ||
           `API không tìm thấy (404) tại ${apiUrl(path)}. Dừng mọi terminal backend cũ, rồi chạy: npm run dev -w apps/backend`
+      );
+    }
+    if (res.status === 500 && !msg) {
+      throw new Error(
+        'Không kết nối được Backend API (500). Hãy đảm bảo Backend đang chạy cổng 4000 ổn định (chạy: npm run dev hoặc kiểm tra xem Backend có bị crash/dừng đột ngột không).'
       );
     }
     throw new Error(msg || `API lỗi (${res.status})`);

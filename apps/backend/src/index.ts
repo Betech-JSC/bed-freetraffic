@@ -43,6 +43,7 @@ import { startSchedulerEngine } from './workers/schedulerEngine';
 import { startAlertEngine } from './workers/alertEngine';
 import { startEmailCampaignEngine } from './workers/emailCampaignEngine';
 import { startEmailWorkflowEngine } from './workers/emailWorkflowEngine';
+import { startCskhFollowupWorker } from './workers/cskhFollowupWorker';
 import { startPageSpeedAuditorEngine } from './workers/pagespeedAuditorEngine';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -141,5 +142,6 @@ app.listen(port, () => {
   startAlertEngine();
   startEmailCampaignEngine();
   startEmailWorkflowEngine();
+  startCskhFollowupWorker();
   startPageSpeedAuditorEngine();
 });

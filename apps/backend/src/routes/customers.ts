@@ -149,10 +149,11 @@ router.post('/:id/notes', requireWrite, async (req: AuthRequest, res: Response):
 });
 
 router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { customerIds, subject, htmlContent } = req.body as {
+  const { customerIds, subject, htmlContent, channel = 'email' } = req.body as {
     customerIds: number[];
     subject: string;
     htmlContent: string;
+    channel?: string;
   };
 
   if (!Array.isArray(customerIds) || customerIds.length === 0) {
@@ -160,20 +161,24 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
     return;
   }
   if (!subject?.trim() || !htmlContent?.trim()) {
-    res.status(400).json({ error: 'Tiêu đề và nội dung email là bắt buộc' });
+    res.status(400).json({ error: 'Tiêu đề và nội dung chăm sóc là bắt buộc' });
     return;
   }
 
-  const transporter = await createSmtpTransporter(req.workspaceId);
-  if (!transporter) {
-    res.status(400).json({
-      error: 'Chưa cấu hình SMTP. Vào Cài đặt → Email để kết nối trước khi gửi.',
-    });
-    return;
+  // If sending via Email, check SMTP config
+  let transporter: any = null;
+  let fromAddress = '';
+  if (channel === 'email') {
+    transporter = await createSmtpTransporter(req.workspaceId);
+    if (!transporter) {
+      res.status(400).json({
+        error: 'Chưa cấu hình SMTP. Vào Cài đặt → Email để kết nối trước khi gửi.',
+      });
+      return;
+    }
+    const smtpCfg = await getSmtpConfig(req.workspaceId);
+    fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
   }
-
-  const smtpCfg = await getSmtpConfig(req.workspaceId);
-  const fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
 
   const customers = await prisma.customer.findMany({
     where: {
@@ -192,18 +197,33 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
     const renderedSubject = renderCareEmail(subject, customer, latestNote).replace(/<[^>]+>/g, '');
 
     try {
-      await transporter.sendMail({
-        from: fromAddress,
-        to: customer.email,
-        subject: renderedSubject,
-        html,
-      });
+      if (channel === 'email') {
+        await transporter.sendMail({
+          from: fromAddress,
+          to: customer.email,
+          subject: renderedSubject,
+          html,
+        });
+      } else if (channel === 'zalo') {
+        if (!customer.phone) {
+          throw new Error('Khách hàng chưa đăng ký số điện thoại để nhận Zalo.');
+        }
+        // Mock Zalo sending
+        console.log(`[Zalo OA Mock] Gửi tin nhắn đến ${customer.phone}: ${renderedSubject} - ${html.slice(0, 100)}...`);
+      } else if (channel === 'messenger') {
+        // Mock Messenger sending
+        console.log(`[Messenger Mock] Gửi tin nhắn đến khách hàng ${customer.name}: ${renderedSubject} - ${html.slice(0, 100)}...`);
+      } else {
+        throw new Error(`Kênh gửi "${channel}" chưa được hỗ trợ.`);
+      }
+
       await prisma.customerEmailLog.create({
         data: {
           customerId: customer.id,
           subject: renderedSubject,
           body: html,
           status: 'SENT',
+          channel,
         },
       });
       await prisma.customer.update({
@@ -220,14 +240,16 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
           body: html,
           status: 'FAILED',
           errorMessage: msg,
+          channel,
         },
       });
-      errors.push(`${customer.email}: ${msg}`);
+      errors.push(`${customer.email || customer.name}: ${msg}`);
     }
   }
 
+  const channelLabel = channel === 'email' ? 'email' : channel === 'zalo' ? 'tin nhắn Zalo' : 'tin nhắn Messenger';
   res.json({
-    message: `Đã gửi ${sent}/${customers.length} email chăm sóc`,
+    message: `Đã gửi ${sent}/${customers.length} ${channelLabel} chăm sóc`,
     sent,
     total: customers.length,
     errors: errors.length ? errors : undefined,

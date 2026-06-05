@@ -72,27 +72,18 @@ export default function LandingPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Card 1 */}
               <div className="premium-card p-8 group">
-                <div className="w-12 h-12 bg-brand-light rounded-xl flex items-center justify-center text-brand mb-6 transition-transform group-hover:scale-110">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Tự động hóa hoàn toàn</h3>
                 <p className="text-gray-600 leading-relaxed text-sm">Hệ thống tự vận hành 24/7, tối ưu hóa quy trình làm việc và giảm thiểu sai sót do con người.</p>
               </div>
 
               {/* Card 2 */}
               <div className="premium-card p-8 group">
-                <div className="w-12 h-12 bg-brand-light rounded-xl flex items-center justify-center text-brand mb-6 transition-transform group-hover:scale-110">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Đa kênh thông minh</h3>
                 <p className="text-gray-600 leading-relaxed text-sm">Kết nối SEO, Social và Email Marketing vào một luồng dữ liệu duy nhất, đồng bộ hóa trải nghiệm khách hàng.</p>
               </div>
 
               {/* Card 3 */}
               <div className="premium-card p-8 group">
-                <div className="w-12 h-12 bg-brand-light rounded-xl flex items-center justify-center text-brand mb-6 transition-transform group-hover:scale-110">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Phân tích AI chuyên sâu</h3>
                 <p className="text-gray-600 leading-relaxed text-sm">Dự báo xu hướng và phân tích hành vi người dùng bằng thuật toán AI tiên tiến nhất hiện nay.</p>
               </div>
@@ -114,9 +105,9 @@ export default function LandingPage() {
                 <h4 className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2">STARTER</h4>
                 <div className="text-5xl font-extrabold text-gray-900 mb-6">$49<span className="text-lg text-gray-400 font-normal">/mo</span></div>
                 <ul className="text-left space-y-4 mb-8 text-sm text-gray-600">
-                  <li className="flex items-center gap-2"><span>✓</span> 5,000 Traffic/tháng</li>
-                  <li className="flex items-center gap-2"><span>✓</span> Basic SEO Automation</li>
-                  <li className="flex items-center gap-2"><span>✓</span> Email Support</li>
+                  <li className="flex items-center gap-2">5,000 Traffic/tháng</li>
+                  <li className="flex items-center gap-2">Basic SEO Automation</li>
+                  <li className="flex items-center gap-2">Email Support</li>
                 </ul>
                 <button className="w-full py-3 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition-colors">Chọn Starter</button>
               </div>
@@ -129,10 +120,10 @@ export default function LandingPage() {
                 <h4 className="text-brand text-sm font-bold uppercase tracking-wider mb-2 mt-2">PRO</h4>
                 <div className="text-5xl font-extrabold text-gray-900 mb-6">$149<span className="text-lg text-gray-400 font-normal">/mo</span></div>
                 <ul className="text-left space-y-4 mb-8 text-sm text-gray-600">
-                  <li className="flex items-center gap-2 font-medium text-gray-900"><span className="text-brand">✓</span> 50,000 Traffic/tháng</li>
-                  <li className="flex items-center gap-2 font-medium text-gray-900"><span className="text-brand">✓</span> Advanced AI Content</li>
-                  <li className="flex items-center gap-2 font-medium text-gray-900"><span className="text-brand">✓</span> Multi-channel Sync</li>
-                  <li className="flex items-center gap-2 font-medium text-gray-900"><span className="text-brand">✓</span> Priority Support</li>
+                  <li className="flex items-center gap-2 font-medium text-gray-900">50,000 Traffic/tháng</li>
+                  <li className="flex items-center gap-2 font-medium text-gray-900">Advanced AI Content</li>
+                  <li className="flex items-center gap-2 font-medium text-gray-900">Multi-channel Sync</li>
+                  <li className="flex items-center gap-2 font-medium text-gray-900">Priority Support</li>
                 </ul>
                 <button className="w-full py-4 bg-brand text-white rounded-lg font-bold hover:bg-brand-hover transition-colors shadow-md">Chọn Pro</button>
               </div>
@@ -142,9 +133,9 @@ export default function LandingPage() {
                 <h4 className="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2">ENTERPRISE</h4>
                 <div className="text-4xl font-extrabold text-gray-900 mb-6 mt-1">Custom</div>
                 <ul className="text-left space-y-4 mb-8 text-sm text-gray-600">
-                  <li className="flex items-center gap-2"><span>✓</span> Không giới hạn Traffic</li>
-                  <li className="flex items-center gap-2"><span>✓</span> Dedicated Account Manager</li>
-                  <li className="flex items-center gap-2"><span>✓</span> Custom API Integration</li>
+                  <li className="flex items-center gap-2">Không giới hạn Traffic</li>
+                  <li className="flex items-center gap-2">Dedicated Account Manager</li>
+                  <li className="flex items-center gap-2">Custom API Integration</li>
                 </ul>
                 <button className="w-full py-3 border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 transition-colors">Liên hệ Sales</button>
               </div>

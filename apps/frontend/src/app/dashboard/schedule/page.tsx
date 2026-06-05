@@ -369,7 +369,7 @@ export default function ScheduleBotPage() {
                   c?.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
                 }`}
               >
-                {t(p.label)}: {c?.connected ? '✓' : t('chưa kết nối')}
+                {t(p.label)}: {c?.connected ? t('Đã kết nối') : t('Chưa kết nối')}
               </span>
             );
           })}
@@ -416,14 +416,14 @@ export default function ScheduleBotPage() {
                 <img src={imagePreview} alt="" className="max-h-40 rounded-lg mx-auto" />
                 <button
                   type="button"
-                  className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full text-sm"
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded px-2 py-1 text-xs font-semibold"
                   onClick={() => {
                     setImageFile(null);
                     if (imagePreview) URL.revokeObjectURL(imagePreview);
                     setImagePreview(null);
                   }}
                 >
-                  ✕
+                  Xóa
                 </button>
               </div>
             ) : (
@@ -614,7 +614,7 @@ export default function ScheduleBotPage() {
             viewMode === 'calendar' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          📅 {t('Lịch biểu tháng')}
+          {t('Lịch biểu tháng')}
         </button>
       </div>
 
@@ -709,7 +709,7 @@ export default function ScheduleBotPage() {
                           disabled={sendingId === i.id}
                           onClick={() => sendNow(i.id)}
                         >
-                          {sendingId === i.id ? t('⏳ Đang gửi...') : t('Gửi thử / gửi ngay')}
+                          {sendingId === i.id ? t('Đang gửi...') : t('Gửi thử / gửi ngay')}
                         </button>
                       )}
                       <button
@@ -866,7 +866,7 @@ function CalendarView({ items, startEdit, sendNow, remove }: { items: Schedule[]
                         className="opacity-0 group-hover:opacity-100 ml-1 text-red-500 hover:text-red-700 font-bold px-0.5 text-xs transition-opacity"
                         title={t('Xóa')}
                       >
-                        ×
+                        X
                       </button>
                     </div>
                   );

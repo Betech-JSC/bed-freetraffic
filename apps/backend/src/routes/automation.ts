@@ -129,4 +129,156 @@ router.get('/logs', async (req: AuthRequest, res: Response): Promise<void> => {
   }
 });
 
+// GET list of email workflows in workspace
+router.get('/workflows', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const workflows = await prisma.emailWorkflow.findMany({
+      where: { workspaceId: req.workspaceId },
+      include: {
+        form: { select: { id: true, name: true } },
+        steps: { orderBy: { stepOrder: 'asc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(workflows);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi lấy danh sách kịch bản email' });
+  }
+});
+
+// CREATE a new email workflow
+router.post('/workflows', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { name, triggerType, triggerFormId } = req.body;
+    if (!name) {
+      res.status(400).json({ error: 'Tên kịch bản là bắt buộc.' });
+      return;
+    }
+    const workflow = await prisma.emailWorkflow.create({
+      data: {
+        name,
+        triggerType: triggerType || 'FORM_SUBMISSION',
+        triggerFormId: triggerFormId ? parseInt(String(triggerFormId), 10) : null,
+        workspaceId: req.workspaceId,
+        isActive: false,
+      },
+    });
+    res.status(201).json(workflow);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi tạo kịch bản email mới' });
+  }
+});
+
+// UPDATE email workflow details
+router.put('/workflows/:id', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { name, triggerType, triggerFormId } = req.body;
+
+    const existing = await prisma.emailWorkflow.findFirst({
+      where: { id, workspaceId: req.workspaceId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy kịch bản' });
+      return;
+    }
+
+    const updated = await prisma.emailWorkflow.update({
+      where: { id },
+      data: {
+        name: name || existing.name,
+        triggerType: triggerType || existing.triggerType,
+        triggerFormId: triggerFormId !== undefined ? (triggerFormId ? parseInt(String(triggerFormId), 10) : null) : existing.triggerFormId,
+      },
+    });
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi cập nhật kịch bản' });
+  }
+});
+
+// DELETE email workflow
+router.delete('/workflows/:id', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const existing = await prisma.emailWorkflow.findFirst({
+      where: { id, workspaceId: req.workspaceId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy kịch bản' });
+      return;
+    }
+
+    await prisma.emailWorkflow.delete({ where: { id } });
+    res.json({ success: true, message: 'Đã xóa kịch bản thành công' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi xóa kịch bản' });
+  }
+});
+
+// TOGGLE email workflow active status
+router.post('/workflows/:id/toggle', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { isActive } = req.body;
+
+    const existing = await prisma.emailWorkflow.findFirst({
+      where: { id, workspaceId: req.workspaceId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy kịch bản' });
+      return;
+    }
+
+    const updated = await prisma.emailWorkflow.update({
+      where: { id },
+      data: { isActive: isActive !== undefined ? !!isActive : !existing.isActive },
+    });
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi đổi trạng thái hoạt động' });
+  }
+});
+
+// SAVE email workflow steps (recreate all steps under a transaction)
+router.put('/workflows/:id/steps', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { steps } = req.body;
+
+    if (!Array.isArray(steps)) {
+      res.status(400).json({ error: 'Danh sách các bước steps phải là mảng.' });
+      return;
+    }
+
+    const existing = await prisma.emailWorkflow.findFirst({
+      where: { id, workspaceId: req.workspaceId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy kịch bản' });
+      return;
+    }
+
+    await prisma.$transaction([
+      prisma.emailWorkflowStep.deleteMany({
+        where: { workflowId: id },
+      }),
+      prisma.emailWorkflowStep.createMany({
+        data: steps.map((step: any, index: number) => ({
+          workflowId: id,
+          stepOrder: index + 1,
+          actionType: step.actionType || 'SEND_EMAIL',
+          delaySeconds: parseInt(String(step.delaySeconds), 10) || 0,
+          emailSubject: step.emailSubject || 'Email tự động từ hệ thống',
+          emailBody: step.emailBody || '',
+        })),
+      }),
+    ]);
+
+    res.json({ success: true, message: 'Đã lưu các bước của kịch bản thành công.' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi lưu các bước của kịch bản' });
+  }
+});
+
 export default router;

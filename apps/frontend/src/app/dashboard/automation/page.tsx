@@ -19,32 +19,7 @@ function parsePlatforms(platforms: unknown): string[] {
   }
 }
 
-// SVG Icons inline
-const PlayIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" />
-  </svg>
-);
-const StopIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 7.5A2.25 2.25 0 0 1 7.5 5.25h9a2.25 2.25 0 0 1 2.25 2.25v9a2.25 2.25 0 0 1-2.25 2.25h-9a2.25 2.25 0 0 1-2.25-2.25v-9Z" />
-  </svg>
-);
-const PlusIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-  </svg>
-);
-const BoltIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
-  </svg>
-);
-const TrashIcon = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
-  </svg>
-);
+// No inline SVG icons
 
 export default function AutomationPage() {
   const { t } = useLocale();
@@ -213,7 +188,6 @@ export default function AutomationPage() {
         description={t('FR-08 — Cấu hình Bot tự động quét bài đăng kéo traffic định kỳ (Facebook, Zalo, Email, YouTube).')}
         actions={
           <button type="button" onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-1">
-            <PlusIcon className="w-4 h-4" />
             {t('Tạo chiến dịch')}
           </button>
         }
@@ -224,7 +198,6 @@ export default function AutomationPage() {
       {/* Warnings & Help Banner */}
       {platforms.includes('facebook') && fbBotStatus && !fbBotStatus.botReady && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950 flex items-start gap-3 shadow-sm">
-          <span className="text-base mt-0.5">⚠️</span>
           <div>
             <p className="font-bold">{t('Facebook chưa sẵn sàng — Bot không thể tự động đăng bài')}</p>
             <p className="text-slate-500 mt-0.5">{fbBotStatus.issues[0] || t('Vui lòng hoàn tất kết nối Fanpage trong phần Cài đặt.')}</p>
@@ -238,7 +211,7 @@ export default function AutomationPage() {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-          <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-lg font-bold">🤖</div>
+          <div className="w-11 h-11 rounded-xl bg-brand/10 text-brand flex items-center justify-center text-xs font-extrabold uppercase">BOT</div>
           <div>
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('Tổng số Bots')}</div>
             <div className="text-2xl font-extrabold text-gray-900 mt-0.5">{totalBots}</div>
@@ -247,8 +220,8 @@ export default function AutomationPage() {
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-          <div className="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-lg font-bold relative">
-            ⚡
+          <div className="w-11 h-11 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-xs font-extrabold uppercase relative">
+            CHẠY
             {activeBots > 0 && (
               <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -264,7 +237,7 @@ export default function AutomationPage() {
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-brand/15 shadow-sm flex items-center gap-4 hover:border-brand/35 transition-all">
-          <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-lg font-bold">🎯</div>
+          <div className="w-11 h-11 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xs font-extrabold uppercase">OK</div>
           <div>
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{t('Tỷ lệ chạy thành công')}</div>
             <div className="text-2xl font-extrabold text-gray-900 mt-0.5">{successRate}%</div>
@@ -277,7 +250,6 @@ export default function AutomationPage() {
         {/* Left Column: Bots List Table */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center gap-2 mb-2">
-            <BoltIcon className="w-5 h-5 text-brand" />
             <h2 className="text-base font-bold text-slate-800">{t('Danh sách chiến dịch Bot')}</h2>
           </div>
           
@@ -350,22 +322,22 @@ export default function AutomationPage() {
                         <button
                           type="button"
                           onClick={() => handleToggle(task.id)}
-                          className={`p-1.5 rounded-lg border transition-all active:scale-95 cursor-pointer ${
+                          className={`p-1.5 rounded-lg border text-xs font-semibold px-2.5 py-1 transition-all active:scale-95 cursor-pointer ${
                             task.status === 'RUNNING'
                               ? 'bg-red-50 text-red-600 border-red-150 hover:bg-red-100'
                               : 'bg-green-50 text-green-600 border-green-150 hover:bg-green-100'
                           }`}
                           title={task.status === 'RUNNING' ? t('Dừng Bot') : t('Kích hoạt Bot')}
                         >
-                          {task.status === 'RUNNING' ? <StopIcon className="w-4 h-4" /> : <PlayIcon className="w-4 h-4" />}
+                          {task.status === 'RUNNING' ? t('Dừng') : t('Chạy')}
                         </button>
                         <button
                           type="button"
                           onClick={() => setDeleteTarget({ id: task.id, name: task.name })}
-                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors cursor-pointer active:scale-95"
+                          className="p-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 text-xs font-semibold px-2.5 py-1 transition-colors cursor-pointer active:scale-95"
                           title={t('Xóa chiến dịch')}
                         >
-                          <TrashIcon className="w-4 h-4" />
+                          {t('Xóa')}
                         </button>
                       </div>
                     </td>
@@ -405,12 +377,9 @@ export default function AutomationPage() {
           <div className="rounded-2xl bg-slate-950 border border-orange-500/25 shadow-lg shadow-orange-500/5 p-4 h-[420px] flex flex-col">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
               <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
-                <div className="w-2.5 h-2.5 rounded-full bg-orange-500/85"></div>
                 <span className="text-[10px] text-slate-400 font-mono tracking-wider ml-1">betech_bot_stream.log</span>
               </div>
-              <span className="text-[9px] text-orange-500 font-mono tracking-widest animate-pulse font-bold">● LIVE</span>
+              <span className="text-[9px] text-orange-500 font-mono tracking-widest animate-pulse font-bold">LIVE</span>
             </div>
             
             <div className="flex-1 overflow-y-auto font-mono text-[10px] space-y-2 pr-1 custom-scrollbar text-white">
@@ -459,8 +428,8 @@ export default function AutomationPage() {
         <div className="modal-overlay animate-fade-in" onClick={() => setShowModal(false)}>
           <div className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center pb-2 border-b">
-              <h3 className="text-base font-black text-brand uppercase tracking-wider">🤖 {t('Cấu hình Bot mới')}</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-650 font-bold cursor-pointer">✕</button>
+              <h3 className="text-base font-black text-brand uppercase tracking-wider">{t('Cấu hình Bot mới')}</h3>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-650 font-bold cursor-pointer">Đóng</button>
             </div>
             
             <form onSubmit={handleCreate} className="space-y-4 text-xs font-semibold text-slate-700">

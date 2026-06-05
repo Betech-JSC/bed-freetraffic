@@ -59,8 +59,8 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand"></div>
+      <div className="flex items-center justify-center h-64 text-slate-400 text-sm font-semibold">
+        Đang tải phân tích...
       </div>
     );
   }
@@ -80,13 +80,13 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {[
-          { label: t('Tỷ lệ thành công Bot'), value: `${summary.successRate}%`, icon: '✅' },
-          { label: t('Bot đang chạy'), value: summary.runningBots, icon: '🤖' },
-          { label: t('Tổng chiến dịch'), value: summary.totalBots, icon: '📋' },
-          { label: t('Kênh đã kết nối'), value: summary.connectedPlatforms, icon: '🔗' },
+          { label: t('Tỷ lệ thành công Bot'), value: `${summary.successRate}%`, icon: 'OK' },
+          { label: t('Bot đang chạy'), value: summary.runningBots, icon: 'BOT' },
+          { label: t('Tổng chiến dịch'), value: summary.totalBots, icon: 'CAM' },
+          { label: t('Kênh đã kết nối'), value: summary.connectedPlatforms, icon: 'CON' },
         ].map(card => (
           <div key={card.label} className="stat-card">
-            <div className="text-2xl mb-3">{card.icon}</div>
+            <div className="text-xs font-black text-brand bg-brand/10 w-fit px-2 py-0.5 rounded mb-3">{card.icon}</div>
             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{card.label}</p>
             <p className="text-3xl font-extrabold text-gray-900 mt-1">{card.value}</p>
           </div>

@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
-import { IconPlus } from '@/components/icons';
 import { apiJson } from '@/lib/api';
 import { useLocale } from '@/context/LocaleContext';
 
@@ -46,7 +45,6 @@ export default function DashboardPage() {
               <option value={30}>{t('thirtyDays')}</option>
             </select>
             <Link href="/dashboard/sources" className="btn-secondary">
-              <IconPlus className="w-4 h-4" />
               {t('sources')}
             </Link>
             <Link href="/dashboard/campaigns" className="btn-primary">
@@ -62,25 +60,21 @@ export default function DashboardPage() {
           value={loading ? '—' : data.stats.totalTraffic.toLocaleString()}
           trend={data.stats.growth}
           accent="brand"
-          icon={<span className="text-lg">👥</span>}
         />
         <StatCard
           label={t('keywordsTracked')}
           value={loading ? '—' : data.stats.totalKeywords.toLocaleString()}
           accent="blue"
-          icon={<span className="text-lg">🔍</span>}
         />
         <StatCard
           label={t('activeChannels')}
           value={loading ? '—' : data.stats.activeChannels}
           accent="emerald"
-          icon={<span className="text-lg">🌐</span>}
         />
         <StatCard
           label={t('organicClicks')}
           value={loading ? '—' : data.stats.organicSearch.toLocaleString()}
           accent="violet"
-          icon={<span className="text-lg">📑</span>}
         />
       </div>
 

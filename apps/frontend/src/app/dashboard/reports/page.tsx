@@ -112,7 +112,6 @@ export default function ReportsPage() {
 
       {/* Quick Help Onboarding Banner */}
       <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-        <span className="text-xl mt-0.5">💡</span>
         <div>
           <h4 className="font-bold text-slate-800 text-sm">{t('Hướng dẫn đọc Báo cáo')}</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -126,21 +125,21 @@ export default function ReportsPage() {
       {/* Stats Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xl font-bold">📈</div>
+          <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-bold uppercase">REP</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('Tổng Sessions (Lượt truy cập)')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{totalSessions.toLocaleString()}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xl font-bold">📄</div>
+          <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xs font-bold uppercase">PVS</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('Lượt xem trang (Pageviews)')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{totalPageviews.toLocaleString()}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold">🔍</div>
+          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xs font-bold uppercase">SEO</div>
           <div>
             <div className="text-xs font-bold text-gray-500 uppercase">{t('Vị trí Từ khóa trung bình')}</div>
             <div className="text-2xl font-extrabold text-gray-900">{avgRank}</div>

@@ -340,8 +340,7 @@ export default function SettingsPage() {
             statusText: isFbConnected ? (isFbReady ? t('Đã kết nối') : t('Lỗi quyền gửi bài')) : t('Chưa kết nối'),
             statusColor: isFbConnected ? (isFbReady ? 'text-green-600' : 'text-amber-600') : 'text-gray-400',
             dotColor: isFbConnected ? (isFbReady ? 'bg-green-500 animate-pulse' : 'bg-amber-500 animate-pulse') : 'bg-gray-300',
-            borderColor: isFbConnected ? (isFbReady ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white') : 'border-gray-100 bg-white',
-            icon: '📘' 
+            borderColor: isFbConnected ? (isFbReady ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white') : 'border-gray-100 bg-white'
           },
           { 
             label: 'Email', 
@@ -349,8 +348,7 @@ export default function SettingsPage() {
             statusText: emailConn ? t('Đã kết nối') : t('Chưa kết nối'),
             statusColor: emailConn ? 'text-green-600' : 'text-gray-400',
             dotColor: emailConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
-            borderColor: emailConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
-            icon: '📧' 
+            borderColor: emailConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
           },
           { 
             label: 'Zalo', 
@@ -358,8 +356,7 @@ export default function SettingsPage() {
             statusText: zaloConn ? t('Đã kết nối') : t('Chưa kết nối'),
             statusColor: zaloConn ? 'text-green-600' : 'text-gray-400',
             dotColor: zaloConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
-            borderColor: zaloConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
-            icon: '💬' 
+            borderColor: zaloConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
           },
           { 
             label: 'Mailchimp', 
@@ -367,8 +364,7 @@ export default function SettingsPage() {
             statusText: mailchimpConn ? t('Đã kết nối') : t('Chưa kết nối'),
             statusColor: mailchimpConn ? 'text-green-600' : 'text-gray-400',
             dotColor: mailchimpConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
-            borderColor: mailchimpConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
-            icon: '🐵' 
+            borderColor: mailchimpConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
           },
           { 
             label: 'Telegram', 
@@ -376,8 +372,7 @@ export default function SettingsPage() {
             statusText: telegramConn ? t('Đã kết nối') : t('Chưa kết nối'),
             statusColor: telegramConn ? 'text-green-600' : 'text-gray-400',
             dotColor: telegramConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
-            borderColor: telegramConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
-            icon: '✈️' 
+            borderColor: telegramConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
           },
           { 
             label: 'Reddit', 
@@ -385,8 +380,7 @@ export default function SettingsPage() {
             statusText: redditConn ? t('Đã kết nối') : t('Chưa kết nối'),
             statusColor: redditConn ? 'text-green-600' : 'text-gray-400',
             dotColor: redditConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
-            borderColor: redditConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
-            icon: '👽' 
+            borderColor: redditConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
           },
           { 
             label: 'Moz API', 
@@ -394,13 +388,11 @@ export default function SettingsPage() {
             statusText: mozConn ? t('Đã kết nối') : t('Chưa kết nối'),
             statusColor: mozConn ? 'text-green-600' : 'text-gray-400',
             dotColor: mozConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
-            borderColor: mozConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white',
-            icon: '🦎' 
+            borderColor: mozConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
           },
         ].map(item => (
           <div key={item.label} className={`rounded-xl p-4 border-2 transition-all ${item.borderColor}`}>
             <div className="flex items-center gap-3">
-              <span className="text-2xl">{item.icon}</span>
               <div>
                 <p className="font-bold text-gray-900 text-sm">{item.label}</p>
                 <p className={`text-xs font-medium flex items-center gap-1 ${item.statusColor}`}>
@@ -452,15 +444,10 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #EA4335, #c5221f)' }}>
-                <svg className="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
-                </svg>
-              </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Email Marketing</h3>
                 {emailConn ? (
-                  <p className="text-sm text-green-600 font-medium">✅ {emailConn.pageName}</p>
+                  <p className="text-sm text-green-600 font-medium">{emailConn.pageName}</p>
                 ) : (
                   <p className="text-sm text-gray-400">{t('Gửi email quảng cáo tự động (Gmail, Outlook, Yahoo...)')}</p>
                 )}
@@ -473,7 +460,7 @@ export default function SettingsPage() {
                   disabled={emailTestLoading}
                   className="px-4 py-2 text-sm font-medium text-[#EA4335] bg-red-50 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50"
                 >
-                  {emailTestLoading ? t('⏳ Đang gửi...') : t('✉️ Gửi test')}
+                  {emailTestLoading ? t('Đang gửi...') : t('Gửi test')}
                 </button>
                 <button onClick={() => handleDisconnect('email')} className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
                   {t('Ngắt kết nối')}
@@ -481,19 +468,19 @@ export default function SettingsPage() {
               </div>
             ) : (
               <button onClick={() => { setEmailMode('form'); setEmailError(''); setEmailSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#EA4335' }}>
-                {t('⚡ Kết nối Email')}
+                {t('Kết nối Email')}
               </button>
             )}
           </div>
 
           {emailSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{emailSuccess}</div>}
           {emailTestMsg && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{emailTestMsg}</div>}
-          {emailError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {emailError}</div>}
+          {emailError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{emailError}</div>}
 
           {emailMode === 'form' && !emailConn && (
             <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
               <div className="bg-red-50 rounded-lg p-4 text-sm text-red-700">
-                <p className="font-bold mb-1">{t('📌 Hướng dẫn cho Gmail:')}</p>
+                <p className="font-bold mb-1">{t('Hướng dẫn cho Gmail:')}</p>
                 <ol className="list-decimal list-inside space-y-1">
                   <li>{t('Vào')} <a href="https://myaccount.google.com/apppasswords" target="_blank" className="underline font-medium">Google App Passwords</a></li>
                   <li>{t('Tạo "Mật khẩu ứng dụng" mới (chọn loại: Mail)')}</li>
@@ -513,7 +500,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setEmailMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleEmailConnect} disabled={!emailAddr || !emailPass || emailLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#EA4335' }}>
-                  {emailLoading ? t('⏳ Đang kiểm tra...') : t('🔌 Kết nối ngay')}
+                  {emailLoading ? t('Đang kiểm tra...') : t('Kết nối ngay')}
                 </button>
               </div>
             </div>
@@ -526,13 +513,10 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #0068FF, #0050CC)' }}>
-                <span className="text-white font-black text-xl">Z</span>
-              </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Zalo Official Account</h3>
                 {zaloConn ? (
-                  <p className="text-sm text-green-600 font-medium">✅ {zaloConn.pageName}</p>
+                  <p className="text-sm text-green-600 font-medium">{zaloConn.pageName}</p>
                 ) : (
                   <p className="text-sm text-gray-400">{t('Gửi tin nhắn tự động qua Zalo OA')}</p>
                 )}
@@ -545,22 +529,22 @@ export default function SettingsPage() {
             ) : (
               <div className="flex gap-2">
                 <button onClick={() => { setZaloMode('quick'); setZaloError(''); setZaloSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#0068FF' }}>
-                  {t('⚡ Kết nối nhanh')}
+                  {t('Kết nối nhanh')}
                 </button>
                 <button onClick={() => { setZaloMode('oauth'); setZaloError(''); setZaloSuccess(''); }} className="px-4 py-2 text-sm font-medium text-[#0068FF] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                  {t('🔗 Đăng nhập OAuth')}
+                  {t('Đăng nhập OAuth')}
                 </button>
               </div>
             )}
           </div>
 
           {zaloSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{zaloSuccess}</div>}
-          {zaloError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {zaloError}</div>}
+          {zaloError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{zaloError}</div>}
 
           {zaloMode === 'quick' && !zaloConn && (
             <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
               <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
-                <p className="font-bold mb-1">{t('📌 Cách lấy Token Zalo OA:')}</p>
+                <p className="font-bold mb-1">{t('Cách lấy Token Zalo OA:')}</p>
                 <ol className="list-decimal list-inside space-y-1">
                   <li>{t('Truy cập')} <a href="https://developers.zalo.me/" target="_blank" className="underline font-medium">Zalo Developers</a></li>
                   <li>{t('Vào mục Zalo OA → Lấy Access Token')}</li>
@@ -574,7 +558,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setZaloMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleZaloQuickConnect} disabled={!zaloToken || zaloLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#0068FF' }}>
-                  {zaloLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                  {zaloLoading ? t('Đang kết nối...') : t('Kết nối ngay')}
                 </button>
               </div>
             </div>
@@ -583,7 +567,7 @@ export default function SettingsPage() {
           {zaloMode === 'oauth' && !zaloConn && (
             <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
               <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
-                <p className="font-bold mb-1">{t('🔐 Đăng nhập OAuth tự động:')}</p>
+                <p className="font-bold mb-1">{t('Đăng nhập OAuth tự động:')}</p>
                 <p>{t('Nhập App ID & Secret Key từ')} <a href="https://developers.zalo.me/" target="_blank" className="underline font-medium">Zalo Developers</a></p>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -599,7 +583,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setZaloMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleZaloOAuth} disabled={!zaloAppId || !zaloAppSecret || zaloLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#0068FF' }}>
-                  {zaloLoading ? t('⏳ Đang mở Zalo...') : t('🚀 Đăng nhập Zalo')}
+                  {zaloLoading ? t('Đang mở Zalo...') : t('Đăng nhập Zalo')}
                 </button>
               </div>
             </div>
@@ -612,13 +596,10 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #007C89, #005F6B)' }}>
-                <span className="text-white font-black text-2xl">M</span>
-              </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Mailchimp</h3>
                 {mailchimpConn ? (
-                  <p className="text-sm text-green-600 font-medium">✅ {t('Đã cấu hình API key')}</p>
+                  <p className="text-sm text-green-600 font-medium">{t('Đã cấu hình API key')}</p>
                 ) : (
                   <p className="text-sm text-gray-400">{t('Gửi chiến dịch Email & đồng bộ danh sách với Mailchimp')}</p>
                 )}
@@ -636,7 +617,7 @@ export default function SettingsPage() {
           </div>
 
           {mcSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{mcSuccess}</div>}
-          {mcError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {mcError}</div>}
+          {mcError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{mcError}</div>}
 
           {mailchimpMode === 'form' && !mailchimpConn && (
             <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
@@ -660,7 +641,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setMailchimpMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleMailchimpConnect} disabled={!mcApiKey || !mcServer || mcLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#007C89' }}>
-                  {mcLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                  {mcLoading ? t('Đang kết nối...') : t('Kết nối ngay')}
                 </button>
               </div>
             </div>
@@ -673,13 +654,10 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #26A5E4, #1B86C2)' }}>
-                <span className="text-white font-black text-2xl">T</span>
-              </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Telegram Bot</h3>
                 {telegramConn ? (
-                  <p className="text-sm text-green-600 font-medium">✅ {telegramConn.pageName}</p>
+                  <p className="text-sm text-green-600 font-medium">{telegramConn.pageName}</p>
                 ) : (
                   <p className="text-sm text-gray-400">{t('Tự động đăng thông báo & bài viết lên Telegram Chat/Channel')}</p>
                 )}
@@ -697,7 +675,7 @@ export default function SettingsPage() {
           </div>
 
           {tgSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{tgSuccess}</div>}
-          {tgError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {tgError}</div>}
+          {tgError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{tgError}</div>}
 
           {telegramMode === 'form' && !telegramConn && (
             <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
@@ -722,7 +700,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setTelegramMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleTelegramConnect} disabled={!tgBotToken || !tgChatId || tgLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#26A5E4' }}>
-                  {tgLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                  {tgLoading ? t('Đang kết nối...') : t('Kết nối ngay')}
                 </button>
               </div>
             </div>
@@ -735,13 +713,10 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #FF4500, #D63900)' }}>
-                <span className="text-white font-black text-2xl">R</span>
-              </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Reddit Automation</h3>
                 {redditConn ? (
-                  <p className="text-sm text-green-600 font-medium">✅ {redditConn.pageName}</p>
+                  <p className="text-sm text-green-600 font-medium">{redditConn.pageName}</p>
                 ) : (
                   <p className="text-sm text-gray-400">{t('Tự động chia sẻ bài viết lên các Subreddit Reddit')}</p>
                 )}
@@ -759,7 +734,7 @@ export default function SettingsPage() {
           </div>
 
           {rdSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{rdSuccess}</div>}
-          {rdError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {rdError}</div>}
+          {rdError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{rdError}</div>}
 
           {redditMode === 'form' && !redditConn && (
             <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
@@ -796,7 +771,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setRedditMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleRedditConnect} disabled={!rdClientId || !rdClientSecret || !rdUsername || !rdPassword || !rdSubreddit || rdLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#FF4500' }}>
-                  {rdLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                  {rdLoading ? t('Đang kết nối...') : t('Kết nối ngay')}
                 </button>
               </div>
             </div>
@@ -809,13 +784,10 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm" style={{ background: 'linear-gradient(135deg, #00A3E0, #007BAA)' }}>
-                <span className="text-white font-black text-2xl">Z</span>
-              </div>
               <div>
                 <h3 className="text-lg font-bold text-gray-900">Moz Link Explorer</h3>
                 {mozConn ? (
-                  <p className="text-sm text-green-600 font-medium">✅ {mozConn.pageName}</p>
+                  <p className="text-sm text-green-600 font-medium">{mozConn.pageName}</p>
                 ) : (
                   <p className="text-sm text-gray-400">{t('Đo lường độ uy tín DA/PA của backlinks')}</p>
                 )}
@@ -833,7 +805,7 @@ export default function SettingsPage() {
           </div>
 
           {mozSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{mozSuccess}</div>}
-          {mozError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">❌ {mozError}</div>}
+          {mozError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{mozError}</div>}
 
           {mozMode === 'form' && !mozConn && (
             <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
@@ -857,7 +829,7 @@ export default function SettingsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setMozMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleMozConnect} disabled={!mozAccessId || !mozSecretKey || mozLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#00A3E0' }}>
-                  {mozLoading ? t('⏳ Đang kết nối...') : t('🔌 Kết nối ngay')}
+                  {mozLoading ? t('Đang kết nối...') : t('Kết nối ngay')}
                 </button>
               </div>
             </div>
@@ -935,7 +907,7 @@ function TwoFactorSection() {
 
   return (
     <div className="space-y-3 text-sm">
-      <p className="text-slate-600">{t('Trạng thái:')} {enabled ? t('✅ Đang bật') : t('Chưa bật')}</p>
+      <p className="text-slate-600">{t('Trạng thái:')} {enabled ? t('Đang bật') : t('Chưa bật')}</p>
       {msg && <p className="text-emerald-700">{msg}</p>}
       {err && <p className="text-red-600">{err}</p>}
       {setup && (

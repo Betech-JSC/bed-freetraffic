@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { IconPlus } from '@/components/icons';
 import { apiFetch, apiJson } from '@/lib/api';
 import { useLocale } from '@/context/LocaleContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -207,9 +206,9 @@ export default function ContentEditorPage() {
       }
       
       if (data.isDemo) {
-        setAiInfoTip(t('💡 Đang chạy ở chế độ Demo (chưa cấu hình OpenAI API Key). Thêm OPENAI_API_KEY ở file .env để chạy thực tế.'));
+        setAiInfoTip(t('Đang chạy ở chế độ Demo (chưa cấu hình OpenAI API Key). Thêm OPENAI_API_KEY ở file .env để chạy thực tế.'));
       } else {
-        setAiInfoTip(t('✨ AI đã tạo bài viết và hình ảnh thành công dựa trên phân tích URL đích.'));
+        setAiInfoTip(t('AI đã tạo bài viết và hình ảnh thành công dựa trên phân tích URL đích.'));
       }
       setShowAiPanel(false);
     } catch (err: unknown) {
@@ -233,18 +232,12 @@ export default function ContentEditorPage() {
             }}
             className="btn-primary flex items-center gap-1"
           >
-            <IconPlus className="w-4 h-4" />
             {t('Tạo nội dung')}
           </button>
         }
       />
-
-      {error && <div className="alert-error text-sm">{error}</div>}
-      {success && <div className="alert-info text-sm">{success}</div>}
-
-      {/* Guide Banner */}
+            {/* Guide Banner */}
       <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-        <span className="text-xl mt-0.5">💡</span>
         <div>
           <h4 className="font-bold text-slate-800 text-sm">{t('Hướng dẫn xoay vòng nội dung bài viết')}</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -284,7 +277,6 @@ export default function ContentEditorPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.length === 0 && !loading && (
           <div className="col-span-full bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center shadow-sm">
-            <div className="text-4xl mb-3">📝</div>
             <h3 className="text-base font-bold text-slate-800">{t('Chưa có bài viết mẫu nào')}</h3>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto leading-normal">
               {t('Soạn thảo bài viết mẫu đầu tiên hoặc sử dụng trợ lý viết bài AI để Bot bắt đầu có dữ liệu hoạt động.')}
@@ -297,7 +289,7 @@ export default function ContentEditorPage() {
                 setShowModal(true);
               }}
             >
-              {t('+ Tạo nội dung ngay')}
+              {t('Tạo nội dung ngay')}
             </button>
           </div>
         )}
@@ -326,7 +318,6 @@ export default function ContentEditorPage() {
                 </div>
               ) : (
                 <div className="h-24 bg-gradient-to-br from-brand/5 to-purple-50/20 border-b border-slate-100 flex items-center justify-center relative">
-                  <span className="text-2xl">📄</span>
                   {!tpl.isActive && (
                     <span className="absolute text-[8px] font-black tracking-wider text-slate-400 uppercase bg-slate-100 border px-1.5 py-0.5 rounded shadow-sm">{t('Đã tắt')}</span>
                   )}
@@ -352,7 +343,7 @@ export default function ContentEditorPage() {
             <div className="p-4 pt-0 space-y-3">
               {tpl.task && (
                 <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <span>{t('🤖 Gắn riêng:')}</span>
+                  <span>{t('Gắn riêng:')}</span>
                   <span className="font-bold text-slate-650 bg-slate-50 border px-1.5 py-0.5 rounded">{tpl.task.name}</span>
                 </div>
               )}
@@ -379,7 +370,7 @@ export default function ContentEditorPage() {
                 <button
                   type="button"
                   onClick={() => handleDelete(tpl.id)}
-                  className="flex-1 text-center py-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors cursor-pointer active:scale-95"
+                  className="flex-1 text-center py-1.5 text-xs font-bold text-red-650 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors cursor-pointer active:scale-95"
                 >
                   {t('Xóa')}
                 </button>
@@ -395,9 +386,9 @@ export default function ContentEditorPage() {
           <div className="modal-panel max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center pb-2.5 border-b">
               <h3 className="text-base font-black text-brand uppercase tracking-wider">
-                {editingId ? t('✏️ Chỉnh sửa nội dung mẫu') : t('📝 Soạn nội dung mẫu mới')}
+                {editingId ? t('Chỉnh sửa nội dung mẫu') : t('Soạn nội dung mẫu mới')}
               </h3>
-              <button onClick={resetForm} className="text-slate-400 hover:text-slate-600 font-bold cursor-pointer">✕</button>
+              <button onClick={resetForm} className="text-slate-400 hover:text-slate-600 font-bold cursor-pointer">X</button>
             </div>
 
             {aiInfoTip && <div className="alert-info text-[11px] font-bold py-2">{aiInfoTip}</div>}
@@ -407,7 +398,7 @@ export default function ContentEditorPage() {
               <div className="bg-gradient-to-r from-purple-500/10 to-brand/10 rounded-xl p-3 border border-brand/20">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-black text-brand flex items-center gap-1.5">
-                    <span>✨</span> {t('✨ Trợ lý viết bài thông minh AI (GPT)')}
+                    {t('Trợ lý viết bài thông minh AI (GPT)')}
                   </span>
                   <button
                     type="button"
@@ -457,7 +448,7 @@ export default function ContentEditorPage() {
                       disabled={generating}
                       onClick={handleGenerateAi}
                     >
-                      {generating ? t('⏳ Đang phân tích và viết bài...') : t('✨ Viết bài bằng AI ngay')}
+                      {generating ? t('Đang phân tích và viết bài...') : t('Viết bài bằng AI ngay')}
                     </button>
                   </div>
                 )}
@@ -512,7 +503,7 @@ export default function ContentEditorPage() {
                   onChange={(e) => setContent(e.target.value)}
                   rows={5}
                   className="input text-xs w-full py-2 leading-relaxed"
-                  placeholder={t(`VD:\n⚡ Giảm giá sâu 50% hôm nay!\n\n👉 Chi tiết xem tại: {url}\n\n📅 Ngày đăng: {date}`)}
+                  placeholder={t(`VD:\nGiảm giá sâu 50% hôm nay!\n\nChi tiết xem tại: {url}\n\nNgày đăng: {date}`)}
                 />
               </div>
 
@@ -533,14 +524,13 @@ export default function ContentEditorPage() {
                           setImageFile(null);
                           setImagePreview(null);
                         }}
-                        className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-600 shadow cursor-pointer"
+                        className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] font-bold hover:bg-red-650 shadow cursor-pointer"
                       >
-                        ✕
+                        X
                       </button>
                     </div>
                   ) : (
                     <label className="cursor-pointer block py-2">
-                      <div className="text-2xl mb-1">🖼️</div>
                       <p className="text-[11px] text-slate-500 font-bold">{t('Kéo thả hoặc Click chọn ảnh')}</p>
                       <p className="text-[9px] text-slate-400 mt-0.5">{t('Hỗ trợ JPG, PNG, GIF, WebP (Tối đa 10MB)')}</p>
                       <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
@@ -557,9 +547,9 @@ export default function ContentEditorPage() {
                   onChange={(e) => setTaskId(e.target.value)}
                   className="input text-xs font-semibold w-full py-2 bg-white"
                 >
-                  <option value="">{t('📌 Dùng chung cho tất cả các Bot')}</option>
+                  <option value="">{t('Dùng chung cho tất cả các Bot')}</option>
                   {tasks.map((tk: any) => (
-                    <option key={tk.id} value={tk.id}>🤖 {tk.name}</option>
+                    <option key={tk.id} value={tk.id}>Bot: {tk.name}</option>
                   ))}
                 </select>
               </div>
@@ -567,10 +557,10 @@ export default function ContentEditorPage() {
               {/* Live Preview block */}
               {(title || content) && (
                 <div className="bg-slate-50 border rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('👁️ Xem trước bài đăng')}</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Xem trước bài đăng')}</p>
                   <div className="bg-white rounded-lg p-3 shadow-sm border text-xs">
                     <p className="font-bold text-slate-900 mb-1.5">{title || t('(Chưa có tiêu đề)')}</p>
-                    <p className="text-slate-600 whitespace-pre-wrap leading-normal">
+                    <p className="text-slate-650 whitespace-pre-wrap leading-normal">
                       {content
                         .replace(/\{url\}/g, 'https://free-traffic-site.com')
                         .replace(/\{name\}/g, 'Tên Chiến Dịch')
@@ -601,7 +591,7 @@ export default function ContentEditorPage() {
                   disabled={saving}
                   className="btn-primary flex-1 py-2 text-xs"
                 >
-                  {saving ? t('⏳ Đang lưu...') : editingId ? t('💾 Lưu cập nhật') : t('✅ Tạo nội dung')}
+                  {saving ? t('Đang lưu...') : editingId ? t('Lưu cập nhật') : t('Tạo nội dung')}
                 </button>
               </div>
             </form>

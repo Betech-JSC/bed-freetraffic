@@ -58,6 +58,7 @@ model Workspace {
   orders            Order[]
   paymentConfig     PaymentConfig?
   cskhConfig        CskhConfig?
+  chatSessions      ChatSession[]
 }
 
 model UserWorkspace {
@@ -326,14 +327,16 @@ model Customer {
   company       String?
   status        String             @default("NEW")
   lastContactAt DateTime?
+  lastAiCareSentAt DateTime?
   workspaceId   Int?
   workspace     Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   notes         CustomerNote[]
   emailLogs     CustomerEmailLog[]
-  orders        Order[]
+  orders              Order[]
   emailWorkflowQueues EmailWorkflowQueue[]
+  chatSessions        ChatSession[]
 }
 
 model CustomerNote {
@@ -353,6 +356,7 @@ model CustomerEmailLog {
   status       String   @default("SENT")
   errorMessage String?
   sentAt       DateTime @default(now())
+  channel      String   @default("email")
 }
 
 // ——— Phase 3 ———
@@ -586,4 +590,44 @@ model CskhConfig {
   aiChatbotEnabled     Boolean    @default(false)
   knowledgeBaseText    String?
   notificationChannels String?
+  // Cấu hình AI Auto-Followup
+  followUpDelayHours   Int?       @default(0)   // Số giờ chờ trước khi gửi mail (0 = tắt)
+  followUpEmailSubject String?
+  followUpEmailBody    String?    @db.Text
+  // Cấu hình AI Bot tự động chăm sóc khách hàng theo lịch & đa kênh
+  autoCareEnabled      Boolean    @default(false)
+  autoCareScheduleType String     @default("AFTER_CREATION")
+  autoCareDelayHours   Int        @default(24)
+  autoCareIntervalDays Int        @default(7)
+  autoCareEmailSubject String?
+  autoCareEmailBody    String?    @db.Text
+  autoCareChannels     String     @default("email")
+}
+
+model ChatSession {
+  id                  String        @id @default(uuid())
+  workspaceId         Int
+  workspace           Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  customerId          Int?
+  customer            Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  ipAddress           String?
+  userAgent           String?
+  followUpScheduledAt DateTime?
+  followUpSent        Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  messages            ChatMessage[]
+
+  @@index([workspaceId])
+}
+
+model ChatMessage {
+  id        Int         @id @default(autoincrement())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sender    String      // "visitor" hoặc "bot"
+  content   String      @db.Text
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId])
 }

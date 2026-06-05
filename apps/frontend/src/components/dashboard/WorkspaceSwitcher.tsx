@@ -128,14 +128,6 @@ export default function WorkspaceSwitcher() {
             </span>
           </div>
         </div>
-        <svg
-          className={`w-4 h-4 text-slate-400 group-hover:text-white transition-transform duration-200 shrink-0 ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-        </svg>
       </button>
 
       {/* Dropdown Menu */}
@@ -160,9 +152,7 @@ export default function WorkspaceSwitcher() {
                 >
                   <span className="truncate">{ws.name}</span>
                   {isSelected && (
-                    <svg className="w-4 h-4 text-brand shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
+                    <span className="text-xs text-brand font-bold">Selected</span>
                   )}
                 </button>
               );
@@ -181,7 +171,7 @@ export default function WorkspaceSwitcher() {
               onClick={() => setShowNewForm(true)}
               className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-brand hover:text-brand-light hover:bg-white/5 rounded-lg transition-all text-left"
             >
-              <span className="text-sm font-bold">+</span> {t('workspaceCreate')}
+              {t('workspaceCreate')}
             </button>
           ) : (
             <form onSubmit={handleCreateWorkspace} className="p-2 border-t border-white/5 space-y-2 mt-2">

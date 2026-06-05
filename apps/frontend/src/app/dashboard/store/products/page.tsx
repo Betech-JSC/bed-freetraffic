@@ -110,9 +110,6 @@ export default function ProductsPage() {
           onClick={handleOpenCreate}
           className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg transition duration-200 shadow-md font-semibold text-sm flex items-center gap-2"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-          </svg>
           Thêm sản phẩm mới
         </button>
       </div>
@@ -120,14 +117,14 @@ export default function ProductsPage() {
       {success && (
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg text-sm flex justify-between">
           <span>{success}</span>
-          <button onClick={() => setSuccess('')} className="hover:text-white">✕</button>
+          <button onClick={() => setSuccess('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
       {error && (
         <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-lg text-sm flex justify-between">
           <span>{error}</span>
-          <button onClick={() => setError('')} className="hover:text-white">✕</button>
+          <button onClick={() => setError('')} className="hover:text-white text-xs font-semibold">Đóng</button>
         </div>
       )}
 
@@ -213,9 +210,6 @@ export default function ProductsPage() {
           </div>
         ) : products.length === 0 ? (
           <div className="col-span-full text-center py-16 bg-slate-900 border border-slate-800 rounded-xl">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-600 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-            </svg>
             <h4 className="text-white font-medium mb-1">Chưa có sản phẩm nào</h4>
             <p className="text-slate-400 text-sm mb-4">Hãy bắt đầu tạo sản phẩm dịch vụ/sản phẩm số đầu tiên để triển khai bán hàng.</p>
             <button

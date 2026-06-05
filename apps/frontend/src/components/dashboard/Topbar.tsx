@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { IconChevronDown, IconLogout, IconSearch, IconSettings } from '@/components/icons';
 import { useLocale } from '@/context/LocaleContext';
 
 type StoredUser = {
@@ -84,11 +83,10 @@ export function Topbar() {
       <div className="h-full flex items-center justify-between gap-6 px-6 lg:px-8">
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <div className="relative w-full max-w-md hidden sm:block">
-            <IconSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="search"
               placeholder={t("Tìm chiến dịch, từ khóa...")}
-              className="w-full h-10 pl-9 pr-3 text-sm text-slate-800 bg-slate-100/80 border border-transparent rounded-xl outline-none transition-all placeholder:text-slate-400 hover:bg-slate-100 focus:bg-white focus:border-brand/25 focus:ring-2 focus:ring-brand/10"
+              className="w-full h-10 pl-4 pr-3 text-sm text-slate-800 bg-slate-100/80 border border-transparent rounded-xl outline-none transition-all placeholder:text-slate-400 hover:bg-slate-100 focus:bg-white focus:border-brand/25 focus:ring-2 focus:ring-brand/10"
             />
           </div>
 
@@ -151,9 +149,6 @@ export function Topbar() {
                   <span className="block text-sm font-semibold text-slate-900 truncate leading-tight">{displayName}</span>
                   <span className="block text-[11px] text-slate-500 truncate leading-snug">{roleLabel(user.role)}</span>
                 </span>
-                <IconChevronDown
-                  className={`w-4 h-4 shrink-0 text-slate-400 hidden md:block transition-transform ${menuOpen ? 'rotate-180' : ''}`}
-                />
               </button>
 
               {menuOpen && (
@@ -174,7 +169,6 @@ export function Topbar() {
                       onClick={() => setMenuOpen(false)}
                       className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                     >
-                      <IconSettings className="w-4 h-4 text-slate-400" />
                       {t("Cài đặt tài khoản")}
                     </Link>
                     <button
@@ -183,7 +177,6 @@ export function Topbar() {
                       onClick={logout}
                       className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
-                      <IconLogout className="w-4 h-4" />
                       {t("Đăng xuất")}
                     </button>
                   </div>

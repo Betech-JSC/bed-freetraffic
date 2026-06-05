@@ -1,5 +1,7 @@
 import { Router, Response, Request } from 'express';
 import prisma from '../lib/prisma';
+import { handleVisitorMessage } from '../services/cskhService';
+import { getChatWidgetHtml } from '../services/chatWidgetTemplate';
 
 const router = Router();
 
@@ -279,10 +281,52 @@ router.get('/pages/:slug/html', async (req: Request, res: Response): Promise<voi
       html = headInject + html;
     }
 
+    // Inject Live Chat Widget if enabled
+    if (page.workspaceId) {
+      const cskhConfig = await prisma.cskhConfig.findUnique({
+        where: { workspaceId: page.workspaceId },
+      });
+      if (cskhConfig?.liveChatEnabled) {
+        const widgetHtml = getChatWidgetHtml(page.workspaceId);
+        if (html.includes('</body>')) {
+          html = html.replace('</body>', `${widgetHtml}\n</body>`);
+        } else {
+          html = html + '\n' + widgetHtml;
+        }
+      }
+    }
+
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (error: any) {
     res.status(500).send('<h1>Lỗi hệ thống khi tải trang</h1>');
+  }
+});
+
+// Public chat message processing
+router.post('/cskh/chat', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { workspaceId, sessionId, message } = req.body;
+    if (!workspaceId || !message) {
+      res.status(400).json({ error: 'workspaceId và message là bắt buộc.' });
+      return;
+    }
+
+    const ip = (req.headers['x-forwarded-for'] as string) || req.ip || '';
+    const userAgent = req.headers['user-agent'] || '';
+
+    const result = await handleVisitorMessage(
+      parseInt(String(workspaceId), 10),
+      sessionId,
+      message,
+      ip,
+      userAgent
+    );
+
+    res.json(result);
+  } catch (error: any) {
+    console.error('Lỗi API Chat công khai:', error);
+    res.status(500).json({ error: error.message || 'Lỗi hệ thống khi xử lý chat' });
   }
 });
 
