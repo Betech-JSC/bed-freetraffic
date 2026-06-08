@@ -62,7 +62,9 @@ async function getMetricValue(metric: string): Promise<number> {
 
 function compare(value: number, threshold: number, comparison: string): boolean {
   if (comparison === 'gt') return value > threshold;
+  if (comparison === 'gte') return value >= threshold;
   if (comparison === 'eq') return value === threshold;
+  if (comparison === 'lte') return value <= threshold;
   return value < threshold;
 }
 
