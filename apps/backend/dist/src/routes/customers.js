@@ -55,7 +55,7 @@ router.get('/:id', async (req, res) => {
     res.json(customer);
 });
 router.post('/', auth_1.requireWrite, async (req, res) => {
-    const { name, email, phone, company, status, note } = req.body;
+    const { name, email, phone, zaloUserId, company, status, note } = req.body;
     if (!name?.trim() || !email?.trim()) {
         res.status(400).json({ error: 'Tên và email là bắt buộc' });
         return;
@@ -66,6 +66,7 @@ router.post('/', auth_1.requireWrite, async (req, res) => {
                 name: name.trim(),
                 email: email.trim().toLowerCase(),
                 phone: phone?.trim() || null,
+                zaloUserId: zaloUserId?.trim() || null,
                 company: company?.trim() || null,
                 status: status && STATUSES.includes(status) ? status : 'NEW',
                 workspaceId: req.workspaceId,
@@ -88,7 +89,7 @@ router.post('/', auth_1.requireWrite, async (req, res) => {
 });
 router.patch('/:id', auth_1.requireWrite, async (req, res) => {
     const id = parseInt(req.params.id);
-    const { name, email, phone, company, status } = req.body;
+    const { name, email, phone, zaloUserId, company, status } = req.body;
     const data = {};
     if (name != null)
         data.name = String(name).trim();
@@ -96,6 +97,8 @@ router.patch('/:id', auth_1.requireWrite, async (req, res) => {
         data.email = String(email).trim().toLowerCase();
     if (phone !== undefined)
         data.phone = phone?.trim() || null;
+    if (zaloUserId !== undefined)
+        data.zaloUserId = zaloUserId?.trim() || null;
     if (company !== undefined)
         data.company = company?.trim() || null;
     if (status != null && STATUSES.includes(status))
@@ -171,6 +174,18 @@ router.post('/send-care', auth_1.requireWrite, async (req, res) => {
         const smtpCfg = await (0, smtp_1.getSmtpConfig)(req.workspaceId);
         fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
     }
+    let zaloConn = null;
+    if (channel === 'zalo') {
+        zaloConn = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'zalo', workspaceId: req.workspaceId }
+        });
+        if (!zaloConn || zaloConn.status !== 'CONNECTED' || !zaloConn.accessToken) {
+            res.status(400).json({
+                error: 'Chưa kết nối Zalo OA. Vui lòng kết nối Zalo OA trong Cài đặt trước.',
+            });
+            return;
+        }
+    }
     const customers = await prisma_1.default.customer.findMany({
         where: {
             id: { in: customerIds.map((x) => parseInt(String(x))) },
@@ -194,11 +209,58 @@ router.post('/send-care', auth_1.requireWrite, async (req, res) => {
                 });
             }
             else if (channel === 'zalo') {
-                if (!customer.phone) {
-                    throw new Error('Khách hàng chưa đăng ký số điện thoại để nhận Zalo.');
+                const plainText = html.replace(/<[^>]+>/g, '');
+                if (customer.zaloUserId) {
+                    const zaloRes = await fetch('https://openapi.zalo.me/v3.0/oa/message/cs', {
+                        method: 'POST',
+                        headers: {
+                            'access_token': zaloConn.accessToken,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            recipient: {
+                                user_id: customer.zaloUserId
+                            },
+                            message: {
+                                text: `${renderedSubject}\n\n${plainText}`
+                            }
+                        })
+                    });
+                    const zaloData = await zaloRes.json();
+                    if (zaloData.error !== 0 && zaloData.error !== undefined) {
+                        throw new Error(zaloData.message || `Zalo OA API Error code ${zaloData.error}`);
+                    }
                 }
-                // Mock Zalo sending
-                console.log(`[Zalo OA Mock] Gửi tin nhắn đến ${customer.phone}: ${renderedSubject} - ${html.slice(0, 100)}...`);
+                else if (customer.phone) {
+                    let phoneFormatted = customer.phone.replace(/[^0-9]/g, '');
+                    if (phoneFormatted.startsWith('0')) {
+                        phoneFormatted = '84' + phoneFormatted.substring(1);
+                    }
+                    const znsTemplateId = process.env.ZALO_ZNS_TEMPLATE_ID || 'default';
+                    const znsRes = await fetch('https://business.openapi.zalo.me/message/template', {
+                        method: 'POST',
+                        headers: {
+                            'access_token': zaloConn.accessToken,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            phone: phoneFormatted,
+                            template_id: znsTemplateId,
+                            template_data: {
+                                name: customer.name,
+                                subject: renderedSubject,
+                                content: plainText.substring(0, 100)
+                            }
+                        })
+                    });
+                    const znsData = await znsRes.json();
+                    if (znsData.error !== 0 && znsData.error !== undefined) {
+                        throw new Error(`Zalo API error: ${znsData.message || 'Không gửi được tin nhắn'}. Bạn cần liên kết Zalo User ID hoặc đăng ký ZNS Template.`);
+                    }
+                }
+                else {
+                    throw new Error('Khách hàng này không có Zalo User ID hoặc Số điện thoại để gửi Zalo.');
+                }
             }
             else if (channel === 'messenger') {
                 // Mock Messenger sending

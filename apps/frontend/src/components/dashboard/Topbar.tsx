@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale } from '@/context/LocaleContext';
+import { apiUrl } from '@/lib/api';
+
 
 type StoredUser = {
   name?: string;
@@ -40,8 +42,9 @@ export function Topbar() {
   }, []);
 
   useEffect(() => {
-    fetch('/api/health')
+    fetch(apiUrl('/api/health'))
       .then((r) => (r.ok ? r.json() : null))
+
       .then((h) => setApiOnline(h?.status === 'ok'))
       .catch(() => setApiOnline(false));
   }, []);

@@ -7,29 +7,13 @@ exports.startRssScannerEngine = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const dispatch_1 = require("../lib/dispatch");
+const render_1 = require("../lib/dispatch/render");
 const aiGenerate_1 = require("../services/aiGenerate");
+const automationTemplate_1 = require("../services/automationTemplate");
 function extractTag(xml, tag) {
     const regex = new RegExp(`<${tag}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`, 'i');
     const m = regex.exec(xml);
     return m ? m[1].trim() : '';
-}
-async function getRandomTemplate(taskId) {
-    const templates = await prisma_1.default.postTemplate.findMany({
-        where: {
-            isActive: true,
-            OR: [{ taskId }, { taskId: null }],
-        },
-    });
-    if (templates.length === 0)
-        return null;
-    return templates[Math.floor(Math.random() * templates.length)];
-}
-function renderContent(templateContent, article) {
-    return templateContent
-        .replace(/\{url\}/g, article.link)
-        .replace(/\{name\}/g, article.title)
-        .replace(/\{description\}/g, article.description)
-        .replace(/\{date\}/g, new Date(article.pubDate).toLocaleDateString('vi-VN'));
 }
 const startRssScannerEngine = () => {
     console.log('📰 RSS Reader Bot Engine Started...');
@@ -98,16 +82,7 @@ const startRssScannerEngine = () => {
                         console.log(`[RSS BOT] Không có bài viết mới kể từ ${prevPubDate || 'lần chạy trước'}`);
                         continue;
                     }
-                    let platformList = [];
-                    try {
-                        platformList = JSON.parse(task.platforms);
-                        if (!Array.isArray(platformList)) {
-                            platformList = [String(task.platforms)];
-                        }
-                    }
-                    catch {
-                        platformList = String(task.platforms).split(',').map(p => p.trim());
-                    }
+                    const platformList = (0, dispatch_1.parsePlatforms)(task.platforms);
                     const platformsStr = platformList.join(',');
                     for (const item of itemsToPublish) {
                         console.log(`[RSS BOT] Đang đăng bài viết mới: "${item.title}"`);
@@ -126,10 +101,15 @@ const startRssScannerEngine = () => {
                             catch (err) {
                                 console.error('[RSS BOT AI ERROR]:', err);
                                 // Fallback to template/default if AI fails
-                                const template = await getRandomTemplate(task.id);
+                                const template = await (0, automationTemplate_1.getRandomTemplate)(task.id);
                                 if (template) {
                                     title = template.title;
-                                    content = renderContent(template.content, item);
+                                    content = (0, render_1.renderContent)(template.content, {
+                                        urlTarget: item.link,
+                                        name: item.title,
+                                        description: item.description,
+                                        date: item.pubDate,
+                                    });
                                     imageUrl = template.thumbnailUrl || template.imageUrl;
                                 }
                                 else {
@@ -138,10 +118,15 @@ const startRssScannerEngine = () => {
                             }
                         }
                         else {
-                            const template = await getRandomTemplate(task.id);
+                            const template = await (0, automationTemplate_1.getRandomTemplate)(task.id);
                             if (template) {
                                 title = template.title;
-                                content = renderContent(template.content, item);
+                                content = (0, render_1.renderContent)(template.content, {
+                                    urlTarget: item.link,
+                                    name: item.title,
+                                    description: item.description,
+                                    date: item.pubDate,
+                                });
                                 imageUrl = template.thumbnailUrl || template.imageUrl;
                             }
                             else {
@@ -156,7 +141,8 @@ const startRssScannerEngine = () => {
                             content,
                             imageUrl,
                             urlTarget: item.link,
-                            emailRecipients: task.emailRecipients || undefined
+                            emailRecipients: task.emailRecipients || undefined,
+                            workspaceId: task.workspaceId || undefined,
                         });
                         // Log results
                         for (const res of results) {

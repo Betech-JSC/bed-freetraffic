@@ -8,10 +8,14 @@ exports.resolveUploadPath = resolveUploadPath;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 function renderContent(content, vars) {
+    const dateStr = vars.date
+        ? new Date(vars.date).toLocaleDateString('vi-VN')
+        : new Date().toLocaleDateString('vi-VN');
     return content
         .replace(/\{url\}/g, vars.urlTarget || '')
         .replace(/\{name\}/g, vars.name || '')
-        .replace(/\{date\}/g, new Date().toLocaleDateString('vi-VN'));
+        .replace(/\{description\}/g, vars.description || '')
+        .replace(/\{date\}/g, dateStr);
 }
 function resolveUploadPath(imageUrl) {
     if (!imageUrl)

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { apiJson } from '@/lib/api';
+import { apiJson, apiUrl } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useLocale } from '@/context/LocaleContext';
 import {
@@ -71,7 +71,7 @@ export default function BacklinksPage() {
 
   useEffect(() => {
     load();
-    fetch('/api/health')
+    fetch(apiUrl('/api/health'))
       .then((r) => r.json())
       .then((h: { apiVersion?: string; features?: string[] }) => {
         if (!h.features?.includes('backlinks-scan')) {

@@ -33,7 +33,21 @@ async function dispatchToPlatform(platform, payload) {
     return { success: false, message: `Kênh "${platform}" chưa hỗ trợ` };
 }
 function parsePlatforms(platforms) {
-    return platforms
+    if (!platforms)
+        return [];
+    const trimmed = platforms.trim();
+    if (trimmed.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(trimmed);
+            if (Array.isArray(parsed)) {
+                return parsed.map((p) => String(p).trim().toLowerCase()).filter(Boolean);
+            }
+        }
+        catch {
+            // ignore and fall through
+        }
+    }
+    return trimmed
         .split(',')
         .map((x) => x.trim().toLowerCase())
         .filter(Boolean);

@@ -59,8 +59,12 @@ async function getMetricValue(metric) {
 function compare(value, threshold, comparison) {
     if (comparison === 'gt')
         return value > threshold;
+    if (comparison === 'gte')
+        return value >= threshold;
     if (comparison === 'eq')
         return value === threshold;
+    if (comparison === 'lte')
+        return value <= threshold;
     return value < threshold;
 }
 async function shouldFireRule(ruleId) {
