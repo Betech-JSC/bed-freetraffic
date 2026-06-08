@@ -23,6 +23,7 @@ type CustomerRow = {
   name: string;
   email: string;
   phone: string | null;
+  zaloUserId: string | null;
   company: string | null;
   status: string;
   lastContactAt: string | null;
@@ -74,7 +75,10 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
 
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', company: '', status: 'NEW', note: '' });
+  const [addForm, setAddForm] = useState({ name: '', email: '', phone: '', zaloUserId: '', company: '', status: 'NEW', note: '' });
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState({ id: 0, name: '', email: '', phone: '', zaloUserId: '', company: '', status: 'NEW' });
 
   // Mailchimp sync states
   const [showSyncModal, setShowSyncModal] = useState(false);
@@ -161,11 +165,38 @@ export default function CustomersPage() {
         body: JSON.stringify(addForm),
       });
       setShowAdd(false);
-      setAddForm({ name: '', email: '', phone: '', company: '', status: 'NEW', note: '' });
+      setAddForm({ name: '', email: '', phone: '', zaloUserId: '', company: '', status: 'NEW', note: '' });
       setSuccess('Đã thêm khách hàng');
       await loadList();
     } catch (e: unknown) {
       setActionError(e instanceof Error ? e.message : 'Không thêm được');
+    }
+  };
+
+  const editCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionError('');
+    try {
+      await apiJson(`/customers/${editForm.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editForm.name,
+          email: editForm.email,
+          phone: editForm.phone,
+          zaloUserId: editForm.zaloUserId,
+          company: editForm.company,
+          status: editForm.status,
+        }),
+      });
+      setShowEdit(false);
+      setSuccess('Đã cập nhật thông tin khách hàng');
+      await loadList();
+      if (selectedId === editForm.id) {
+        await loadDetail(editForm.id);
+      }
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Không thể cập nhật thông tin');
     }
   };
 
@@ -653,6 +684,24 @@ export default function CustomersPage() {
                       </select>
                       <button
                         type="button"
+                        onClick={() => {
+                          setEditForm({
+                            id: detail.id,
+                            name: detail.name,
+                            email: detail.email,
+                            phone: detail.phone || '',
+                            zaloUserId: detail.zaloUserId || '',
+                            company: detail.company || '',
+                            status: detail.status,
+                          });
+                          setShowEdit(true);
+                        }}
+                        className="text-xs bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm"
+                      >
+                        ✏️ Sửa thông tin
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleDelete(detail.id)}
                         className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm"
                       >
@@ -661,10 +710,14 @@ export default function CustomersPage() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 text-xs pt-2 border-t text-slate-600">
+                  <div className="grid grid-cols-3 gap-4 text-xs pt-2 border-t text-slate-600">
                     <div>
                       <span className="font-bold text-slate-400 uppercase tracking-wide">Số điện thoại:</span>
                       <p className="text-slate-800 font-medium mt-0.5">{detail.phone || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 uppercase tracking-wide">Zalo User ID:</span>
+                      <p className="text-slate-800 font-medium mt-0.5">{detail.zaloUserId || '—'}</p>
                     </div>
                     <div>
                       <span className="font-bold text-slate-400 uppercase tracking-wide">Công ty:</span>
@@ -832,6 +885,7 @@ export default function CustomersPage() {
               <input className="input text-xs py-2.5" placeholder="Họ tên khách hàng *" value={addForm.name} onChange={(e) => setAddForm({ ...addForm, name: e.target.value })} required />
               <input className="input text-xs py-2.5" type="email" placeholder="Địa chỉ Email *" value={addForm.email} onChange={(e) => setAddForm({ ...addForm, email: e.target.value })} required />
               <input className="input text-xs py-2.5" placeholder="Số điện thoại" value={addForm.phone} onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })} />
+              <input className="input text-xs py-2.5" placeholder="Zalo User ID" value={addForm.zaloUserId} onChange={(e) => setAddForm({ ...addForm, zaloUserId: e.target.value })} />
               <input className="input text-xs py-2.5" placeholder="Tên công ty" value={addForm.company} onChange={(e) => setAddForm({ ...addForm, company: e.target.value })} />
               
               <div>
@@ -859,6 +913,45 @@ export default function CustomersPage() {
               </button>
               <button type="submit" className="btn-primary flex-1">
                 Lưu khách hàng
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showEdit && (
+        <div className="modal-overlay" onClick={() => setShowEdit(false)}>
+          <form className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()} onSubmit={editCustomer}>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-lg font-bold text-brand">Chỉnh sửa khách hàng</h3>
+              <button type="button" onClick={() => setShowEdit(false)} className="text-gray-400 hover:text-gray-650 font-bold">Đóng</button>
+            </div>
+            
+            <div className="space-y-3">
+              <input className="input text-xs py-2.5" placeholder="Họ tên khách hàng *" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+              <input className="input text-xs py-2.5" type="email" placeholder="Địa chỉ Email *" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+              <input className="input text-xs py-2.5" placeholder="Số điện thoại" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+              <input className="input text-xs py-2.5" placeholder="Zalo User ID" value={editForm.zaloUserId} onChange={(e) => setEditForm({ ...editForm, zaloUserId: e.target.value })} />
+              <input className="input text-xs py-2.5" placeholder="Tên công ty" value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
+              
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Trạng thái chăm sóc</label>
+                <select className="input text-xs font-semibold py-2.5 w-full" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button type="button" className="btn-secondary flex-1" onClick={() => setShowEdit(false)}>
+                Hủy
+              </button>
+              <button type="submit" className="btn-primary flex-1">
+                Lưu thay đổi
               </button>
             </div>
           </form>

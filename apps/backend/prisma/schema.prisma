@@ -328,6 +328,7 @@ model Customer {
   name          String
   email         String             @unique
   phone         String?
+  zaloUserId    String?
   company       String?
   status        String             @default("NEW")
   lastContactAt DateTime?
