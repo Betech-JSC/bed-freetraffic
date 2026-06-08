@@ -106,18 +106,45 @@ async function postToEmail(task: any): Promise<{ success: boolean; message: stri
     });
 
     const postContent = renderContent(template, { urlTarget: linkTarget, name: task.name });
-    const html = `
+    let html = `
       <h2>${template.title}</h2>
       <div style="white-space:pre-line;line-height:1.6">${postContent.replace(/\n/g, '<br>')}</div>
+    `;
+
+    const attachments: any[] = [];
+    const imageUrl = template.imageUrl;
+    if (imageUrl) {
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        html += `<div style="margin-top:16px;"><img src="${imageUrl}" style="max-width:100%;height:auto;border-radius:8px;display:block;" /></div>`;
+      } else {
+        const imagePath = resolveUploadPath(imageUrl);
+        if (imagePath) {
+          html += `<div style="margin-top:16px;"><img src="cid:post_image" style="max-width:100%;height:auto;border-radius:8px;display:block;" /></div>`;
+          attachments.push({
+            filename: path.basename(imagePath),
+            path: imagePath,
+            cid: 'post_image'
+          });
+        }
+      }
+    }
+
+    html += `
       <p style="margin-top:16px"><a href="${linkTarget}">👉 Xem chi tiết tại đây</a></p>
     `;
 
-    await transporter.sendMail({
+    const mailOptions: any = {
       from: config.email,
       to: recipients.join(', '),
       subject: template.title,
       html
-    });
+    };
+
+    if (attachments.length > 0) {
+      mailOptions.attachments = attachments;
+    }
+
+    await transporter.sendMail(mailOptions);
 
     return {
       success: true,
@@ -253,16 +280,37 @@ async function publishEmailWithTemplate(
     auth: { user: config.email, pass: config.password },
   });
   const postContent = renderContent(template, { urlTarget: task.urlTarget, name: template.title });
-  const imagePath = resolveUploadPath(template.imageUrl ?? null);
+  const imageUrl = template.imageUrl;
+  let html = `<h2>${template.title}</h2><p>${postContent.replace(/\n/g, '<br>')}</p>`;
+  const attachments: any[] = [];
+
+  if (imageUrl) {
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      html += `<div style="margin-top:16px;"><img src="${imageUrl}" style="max-width:100%;height:auto;border-radius:8px;display:block;" /></div>`;
+    } else {
+      const imagePath = resolveUploadPath(imageUrl);
+      if (imagePath) {
+        html += `<div style="margin-top:16px;"><img src="cid:post_image" style="max-width:100%;height:auto;border-radius:8px;display:block;" /></div>`;
+        attachments.push({
+          filename: path.basename(imagePath),
+          path: imagePath,
+          cid: 'post_image'
+        });
+      }
+    }
+  }
+
   const mailOptions: nodemailer.SendMailOptions = {
     from: config.email,
     to: recipients.join(', '),
     subject: template.title,
-    html: `<h2>${template.title}</h2><p>${postContent.replace(/\n/g, '<br>')}</p>`,
+    html
   };
-  if (imagePath) {
-    mailOptions.attachments = [{ filename: path.basename(imagePath), path: imagePath }];
+
+  if (attachments.length > 0) {
+    mailOptions.attachments = attachments;
   }
+
   await transporter.sendMail(mailOptions);
   return { success: true, message: 'Gửi email thành công' };
 }
@@ -297,6 +345,58 @@ async function publishZaloWithTemplate(
   return { success: true, message: 'Đăng Zalo thành công' };
 }
 
+export async function executeAutomationTask(task: any) {
+  console.log(`[BOT] Thực thi: ${task.name} (ID: ${task.id})`);
+
+  let platforms: string[] = [];
+  try {
+    platforms = JSON.parse(task.platforms);
+  } catch {
+    platforms = ['facebook'];
+  }
+
+  for (const platform of platforms) {
+    let result = { success: false, message: `Nền tảng ${platform} chưa được tích hợp.` };
+
+    if (platform === 'facebook') {
+      result = await postToFacebook(task);
+    } else if (platform === 'email') {
+      result = await postToEmail(task);
+    } else if (platform === 'zalo') {
+      result = await postToZalo(task);
+    } else if (platform === 'youtube' || platform === 'community') {
+      const { dispatchToPlatform } = await import('../lib/dispatch');
+      const resolved = await resolveAutomationPost(task);
+      if (!resolved) {
+        result = { success: false, message: 'Chưa có nội dung' };
+      } else {
+        result = await dispatchToPlatform(platform, {
+          title: resolved.title,
+          content: resolved.content,
+          imageUrl: resolved.imageUrl,
+          urlTarget: resolved.urlTarget,
+        });
+      }
+    }
+
+    await prisma.botLog.create({
+      data: {
+        taskId: task.id,
+        action: `POST_${platform.toUpperCase()}`,
+        message: result.message,
+        status: result.success ? 'SUCCESS' : 'ERROR'
+      }
+    });
+
+    console.log(`  -> [${platform}] ${result.message}`);
+  }
+
+  await prisma.automationTask.update({
+    where: { id: task.id },
+    data: { lastRunAt: new Date() }
+  });
+}
+
 export const startBots = () => {
   console.log("🤖 Automation Bot Engine Started...");
 
@@ -313,55 +413,7 @@ export const startBots = () => {
         const intervalMs = task.interval * 60 * 1000;
 
         if (now.getTime() - lastRun >= intervalMs) {
-          console.log(`[BOT] Thực thi: ${task.name} (ID: ${task.id})`);
-
-          let platforms: string[] = [];
-          try {
-            platforms = JSON.parse(task.platforms);
-          } catch {
-            platforms = ['facebook'];
-          }
-
-          for (const platform of platforms) {
-            let result = { success: false, message: `Nền tảng ${platform} chưa được tích hợp.` };
-
-            if (platform === 'facebook') {
-              result = await postToFacebook(task);
-            } else if (platform === 'email') {
-              result = await postToEmail(task);
-            } else if (platform === 'zalo') {
-              result = await postToZalo(task);
-            } else if (platform === 'youtube' || platform === 'community') {
-              const { dispatchToPlatform } = await import('../lib/dispatch');
-              const resolved = await resolveAutomationPost(task);
-              if (!resolved) {
-                result = { success: false, message: 'Chưa có nội dung' };
-              } else {
-                result = await dispatchToPlatform(platform, {
-                  title: resolved.title,
-                  content: resolved.content,
-                  imageUrl: resolved.imageUrl,
-                  urlTarget: resolved.urlTarget,
-                });
-              }
-            }
-
-            await prisma.botLog.create({
-              data: {
-                taskId: task.id,
-                action: `POST_${platform.toUpperCase()}`,
-                message: result.message,
-                status: result.success ? 'SUCCESS' : 'ERROR'
-              }
-            });
-
-            console.log(`  -> [${platform}] ${result.message}`);
-          }
-
-          await prisma.automationTask.update({
-            where: { id: task.id },
-            data: { lastRunAt: new Date() }
-          });
+          await executeAutomationTask(task);
         }
       }
     } catch (error) {

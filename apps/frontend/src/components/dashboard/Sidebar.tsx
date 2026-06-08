@@ -33,7 +33,7 @@ export function Sidebar() {
     
     // Email & Automation Campaigns
     { href: '/dashboard/email', label: t('emailCampaigns') },
-    { href: '/dashboard/automation', label: t('automation') + ' Bot' },
+    { href: '/dashboard/automation', label: t('automation') + ' Bot', exact: true },
     { href: '/dashboard/automation/workflows', label: 'Email Automation' },
     
     // Store & Sales

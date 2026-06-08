@@ -36,6 +36,72 @@ export async function sendTelegramAlert(workspaceId: number, text: string): Prom
   }
 }
 
+async function extractNameFromMessage(
+  message: string,
+  email: string,
+  apiKey: string,
+  url: string,
+  model: string,
+  headers: Record<string, string>
+): Promise<string> {
+  const defaultName = email.split('@')[0];
+  try {
+    let response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'Bạn là trợ lý AI chuyên trích xuất họ và tên (hoặc tên gọi) của khách hàng từ nội dung tin nhắn trò chuyện bằng tiếng Việt. Chỉ trả về chuỗi tên sạch được viết hoa chữ cái đầu (Ví dụ: "Lê Duy Khanh", "Nguyễn Văn A"), không trả về thêm bất kỳ từ giải thích hay ký tự thừa nào. Nếu không tìm thấy tên trong tin nhắn, chỉ trả về chuỗi rỗng "".'
+          },
+          { role: 'user', content: `Nội dung tin nhắn: "${message}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 50,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    // Fallback model if primary failed (e.g. rate limit 429)
+    if (!response.ok && apiKey.startsWith('sk-or-')) {
+      console.warn(`[extractName] Primary model failed (${response.status}). Trying fallback Qwen...`);
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'qwen/qwen-2.5-72b-instruct:free',
+          messages: [
+            {
+              role: 'system',
+              content: 'Bạn là trợ lý AI chuyên trích xuất họ và tên (hoặc tên gọi) của khách hàng từ nội dung tin nhắn trò chuyện bằng tiếng Việt. Chỉ trả về chuỗi tên sạch được viết hoa chữ cái đầu (Ví dụ: "Lê Duy Khanh", "Nguyễn Văn A"), không trả về thêm bất kỳ từ giải thích hay ký tự thừa nào. Nếu không tìm thấy tên trong tin nhắn, chỉ trả về chuỗi rỗng "".'
+            },
+            { role: 'user', content: `Nội dung tin nhắn: "${message}"` }
+          ],
+          temperature: 0.1,
+          max_tokens: 50,
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+    }
+
+    if (response.ok) {
+      const data = await response.json() as any;
+      const extracted = data.choices?.[0]?.message?.content?.trim();
+      if (extracted) {
+        const cleanName = extracted.replace(/^["']|["']$/g, '').trim();
+        if (cleanName && cleanName.length < 50 && cleanName !== "") {
+          return cleanName;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Lỗi khi gọi AI trích xuất tên khách hàng:', err);
+  }
+  return defaultName;
+}
+
 export async function handleVisitorMessage(
   workspaceId: number,
   sessionId: string | undefined,
@@ -70,6 +136,21 @@ export async function handleVisitorMessage(
     }
   });
 
+  // Check if agent takeover is active (any agent message in the last 30 minutes)
+  const lastAgentMsg = await prisma.chatMessage.findFirst({
+    where: { sessionId: session.id, sender: 'agent' },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const hasAgentTakeover = lastAgentMsg && (Date.now() - new Date(lastAgentMsg.createdAt).getTime() < 30 * 60 * 1000);
+  if (hasAgentTakeover) {
+    return {
+      sessionId: session.id,
+      reply: '',
+      customerId: session.customerId,
+    };
+  }
+
   // 3. Load CSKH Configuration
   const config = await prisma.cskhConfig.findUnique({
     where: { workspaceId }
@@ -83,30 +164,46 @@ export async function handleVisitorMessage(
 
   if (aiEnabled && ai.apiKey) {
     try {
-      // Load recent message history for context (last 8 messages)
+      // Load recent message history for context (last 8 messages, sorted descending then reversed)
       const history = await prisma.chatMessage.findMany({
         where: { sessionId: session.id },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         take: 8,
       });
+      history.reverse();
 
       const messagesForAi = history.map(msg => ({
         role: msg.sender === 'visitor' ? 'user' as const : 'assistant' as const,
         content: msg.content,
       }));
 
+      const defaultKb = `Be Traffic (Growth OS) là một nền tảng tối ưu hóa traffic và bán hàng tự động All-in-One.
+Các tính năng và dịch vụ chính:
+1. Đăng bài đa kênh tự động: Lên lịch và xuất bản bài đăng lên Facebook, Zalo, YouTube.
+2. SEO Tools: Quét và chấm điểm SEO website (SEO Onpage Auditor), quét và kiểm tra chất lượng backlink.
+3. Landing Page & Visual Builder: Thiết kế kéo thả trang đích trực quan không cần code, chèn tracking pixel.
+4. Custom Forms & CRM: Thiết kế biểu mẫu thu thập Leads đăng ký, lưu trữ và chăm sóc khách hàng tập trung.
+5. Email Drip Campaign: Thiết lập chuỗi email tự động gửi bám đuổi chăm sóc khách hàng.
+6. CSKH AI & Chatbot: Hỗ trợ live chat trực tuyến, tự động ghi nhận lead (Email, SĐT) và cảnh báo về Telegram, tự động follow-up sau khi chat kết thúc.
+7. Thanh toán đối soát tự động: Tích hợp cổng PayOS VietQR và Stripe quốc tế để nâng hạng khách hàng khi thanh toán thành công.`;
+
+      const effectiveKb = kbText 
+        ? `${kbText}\n\nThông tin thêm về hệ thống:\n${defaultKb}` 
+        : defaultKb;
+
       const systemPrompt = `Bạn là chatbot chăm sóc khách hàng tự động thông minh bằng tiếng Việt của chúng tôi.
 Dưới đây là tri thức của hệ thống (Knowledge Base):
 ---
-${kbText || 'Hiện chưa có thông tin tri thức cụ thể.'}
+${effectiveKb}
 ---
 Nhiệm vụ của bạn:
 1. Trả lời câu hỏi của khách hàng dựa trên thông tin Tri thức trên một cách lịch sự, thân thiện và chuyên nghiệp.
-2. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự từ chối trả lời trực tiếp và đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
-3. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
-4. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
+2. Hãy tư vấn linh hoạt và trả lời trực tiếp câu hỏi của khách dựa trên Tri thức. Tránh việc chào hỏi lặp lại nhiều lần nếu khách đã ở trong cuộc hội thoại.
+3. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
+4. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
+5. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
 
-      const response = await fetch(ai.url, {
+      let response = await fetch(ai.url, {
         method: 'POST',
         headers: ai.headers,
         body: JSON.stringify({
@@ -120,6 +217,25 @@ Nhiệm vụ của bạn:
         }),
         signal: AbortSignal.timeout(15000),
       });
+
+      // Fallback model if primary failed (e.g. rate limit 429 or 502)
+      if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
+        console.warn(`[cskhChat] Primary model ${ai.model} failed (${response.status}). Trying fallback Qwen...`);
+        response = await fetch(ai.url, {
+          method: 'POST',
+          headers: ai.headers,
+          body: JSON.stringify({
+            model: 'qwen/qwen-2.5-72b-instruct:free',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...messagesForAi
+            ],
+            temperature: 0.7,
+            max_tokens: 500,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+      }
 
       if (response.ok) {
         const data = await response.json() as {
@@ -171,6 +287,14 @@ Nhiệm vụ của bạn:
       if (phone && !customer.phone) {
         updatedData.phone = phone;
       }
+      // If the current name is default (equals email prefix) and we extracted a better name
+      const defaultName = email.split('@')[0];
+      if (customer.name === defaultName && ai.apiKey) {
+        const extractedName = await extractNameFromMessage(message, email, ai.apiKey, ai.url, ai.model, ai.headers);
+        if (extractedName && extractedName !== defaultName) {
+          updatedData.name = extractedName;
+        }
+      }
       updatedData.lastContactAt = new Date();
 
       customer = await prisma.customer.update({
@@ -179,9 +303,14 @@ Nhiệm vụ của bạn:
       });
     } else {
       // Create new customer
+      let name = email.split('@')[0];
+      if (ai.apiKey) {
+        name = await extractNameFromMessage(message, email, ai.apiKey, ai.url, ai.model, ai.headers);
+      }
+
       customer = await prisma.customer.create({
         data: {
-          name: email.split('@')[0],
+          name,
           email,
           phone,
           status: 'NEW',

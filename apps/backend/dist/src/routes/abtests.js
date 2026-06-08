@@ -30,7 +30,7 @@ router.use(auth_1.authenticate, workspace_1.workspaceMiddleware);
 router.get('/running', async (req, res) => {
     const tests = await prisma_1.default.abTest.findMany({
         where: { status: 'RUNNING', workspaceId: req.workspaceId },
-        select: { id: true, name: true, templateAId: true, templateBId: true },
+        select: { id: true, name: true, templateAId: true, templateBId: true, landingPageAId: true, landingPageBId: true },
         orderBy: { createdAt: 'desc' },
     });
     res.json(tests);
@@ -38,13 +38,13 @@ router.get('/running', async (req, res) => {
 router.get('/', async (req, res) => {
     const tests = await prisma_1.default.abTest.findMany({
         where: { workspaceId: req.workspaceId },
-        include: { templateA: true, templateB: true },
+        include: { templateA: true, templateB: true, landingPageA: true, landingPageB: true },
         orderBy: { createdAt: 'desc' },
     });
     res.json(tests);
 });
 router.post('/', auth_1.requireWrite, async (req, res) => {
-    const { name, templateAId, templateBId } = req.body;
+    const { name, templateAId, templateBId, landingPageAId, landingPageBId } = req.body;
     if (!name) {
         res.status(400).json({ error: 'name là bắt buộc' });
         return;
@@ -54,10 +54,12 @@ router.post('/', auth_1.requireWrite, async (req, res) => {
             name,
             templateAId: templateAId ? parseInt(templateAId) : null,
             templateBId: templateBId ? parseInt(templateBId) : null,
+            landingPageAId: landingPageAId ? parseInt(landingPageAId) : null,
+            landingPageBId: landingPageBId ? parseInt(landingPageBId) : null,
             status: 'RUNNING',
             workspaceId: req.workspaceId,
         },
-        include: { templateA: true, templateB: true },
+        include: { templateA: true, templateB: true, landingPageA: true, landingPageB: true },
     });
     res.status(201).json(test);
 });
@@ -102,19 +104,38 @@ router.post('/:id/complete', auth_1.requireWrite, async (req, res) => {
         res.status(404).json({ error: 'Không tìm thấy' });
         return;
     }
-    const scoreA = test.impressionsA > 0 ? test.clicksA / test.impressionsA : 0;
-    const scoreB = test.impressionsB > 0 ? test.clicksB / test.impressionsB : 0;
+    const clicksA = test.clicksA;
+    const clicksB = test.clicksB;
+    const impressionsA = test.impressionsA;
+    const impressionsB = test.impressionsB;
+    const scoreA = impressionsA > 0 ? clicksA / impressionsA : 0;
+    const scoreB = impressionsB > 0 ? clicksB / impressionsB : 0;
+    const totalConversions = clicksA + clicksB;
+    const totalImpressions = impressionsA + impressionsB;
+    const totalNonConversions = totalImpressions - totalConversions;
+    let isSignificant = false;
+    let chiSquare = 0;
+    if (impressionsA > 0 && impressionsB > 0 && totalConversions > 0 && totalNonConversions > 0) {
+        const o11 = clicksA;
+        const o12 = impressionsA - clicksA;
+        const o21 = clicksB;
+        const o22 = impressionsB - clicksB;
+        const numerator = totalImpressions * Math.pow(o11 * o22 - o12 * o21, 2);
+        const denominator = impressionsA * impressionsB * totalConversions * totalNonConversions;
+        if (denominator > 0) {
+            chiSquare = numerator / denominator;
+            // Critical value for alpha = 0.05 (df = 1) is 3.841
+            if (chiSquare > 3.841) {
+                isSignificant = true;
+            }
+        }
+    }
     let winner;
-    if (test.clicksA + test.clicksB > 0) {
-        winner = scoreA > scoreB ? 'A' : scoreB > scoreA ? 'B' : 'tie';
+    if (isSignificant) {
+        winner = scoreA > scoreB ? 'A' : 'B';
     }
     else {
-        winner =
-            test.impressionsA > test.impressionsB
-                ? 'A'
-                : test.impressionsB > test.impressionsA
-                    ? 'B'
-                    : 'tie';
+        winner = 'tie';
     }
     const updated = await prisma_1.default.abTest.update({
         where: { id },

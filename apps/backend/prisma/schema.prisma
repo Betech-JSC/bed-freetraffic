@@ -246,6 +246,10 @@ model ContentSchedule {
   attemptCount    Int        @default(0)
   workspaceId     Int?
   workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  overlayText      String?
+  overlayWatermark String?
+  overlayPosition  String?    @default("bottom-right")
+  overlayFontSize  Int?       @default(32)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 }
@@ -385,24 +389,28 @@ model AlertLog {
 }
 
 model AbTest {
-  id           Int               @id @default(autoincrement())
-  name         String
-  status       String            @default("RUNNING")
-  templateAId  Int?
-  templateBId  Int?
-  templateA    PostTemplate?     @relation("VariantA", fields: [templateAId], references: [id], onDelete: SetNull)
-  templateB    PostTemplate?     @relation("VariantB", fields: [templateBId], references: [id], onDelete: SetNull)
-  impressionsA Int               @default(0)
-  impressionsB Int               @default(0)
-  clicksA      Int               @default(0)
-  clicksB      Int               @default(0)
-  winner       String?
-  schedules    ContentSchedule[]
-  automations  AutomationTask[]
-  workspaceId  Int?
-  workspace    Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id             Int               @id @default(autoincrement())
+  name           String
+  status         String            @default("RUNNING")
+  templateAId    Int?
+  templateBId    Int?
+  templateA      PostTemplate?     @relation("VariantA", fields: [templateAId], references: [id], onDelete: SetNull)
+  templateB      PostTemplate?     @relation("VariantB", fields: [templateBId], references: [id], onDelete: SetNull)
+  landingPageAId Int?
+  landingPageBId Int?
+  landingPageA   LandingPage?      @relation("LpVariantA", fields: [landingPageAId], references: [id], onDelete: SetNull)
+  landingPageB   LandingPage?      @relation("LpVariantB", fields: [landingPageBId], references: [id], onDelete: SetNull)
+  impressionsA   Int               @default(0)
+  impressionsB   Int               @default(0)
+  clicksA        Int               @default(0)
+  clicksB        Int               @default(0)
+  winner         String?
+  schedules      ContentSchedule[]
+  automations    AutomationTask[]
+  workspaceId    Int?
+  workspace      Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 }
 
 model BlogPost {
@@ -438,6 +446,8 @@ model LandingPage {
   workspaceId  Int?
   workspace    Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   forms        CustomForm[]
+  abTestsA     AbTest[]         @relation("LpVariantA")
+  abTestsB     AbTest[]         @relation("LpVariantB")
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 

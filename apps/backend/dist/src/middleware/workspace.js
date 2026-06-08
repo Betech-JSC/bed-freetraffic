@@ -71,6 +71,12 @@ async function workspaceMiddleware(req, res, next) {
     const email = req.user.email;
     const headerWsId = req.headers['x-workspace-id'];
     try {
+        // Check if user exists in the database to prevent foreign key errors with legacy tokens
+        const userExists = await prisma_1.default.user.findUnique({ where: { id: userId } });
+        if (!userExists) {
+            res.status(401).json({ error: 'Tài khoản không tồn tại trong hệ thống. Vui lòng đăng nhập lại.' });
+            return;
+        }
         if (headerWsId) {
             const parsedId = parseInt(headerWsId, 10);
             if (!isNaN(parsedId)) {

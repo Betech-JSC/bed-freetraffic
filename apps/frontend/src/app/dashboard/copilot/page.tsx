@@ -65,6 +65,8 @@ export default function CopilotPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [aiGenImage, setAiGenImage] = useState(false);
   const [imageLoadingIndex, setImageLoadingIndex] = useState<number | null>(null);
+  const [autoWatermark, setAutoWatermark] = useState(false);
+  const [watermarkText, setWatermarkText] = useState('');
 
   const handleGenerateCardImage = async (index: number) => {
     const item = plan[index];
@@ -226,6 +228,12 @@ export default function CopilotPage() {
           imageUrl: item.imageUrl || null,
           status: 'PENDING'
         };
+
+        if (autoWatermark && watermarkText.trim()) {
+          body.overlayText = watermarkText.trim();
+          body.overlayPosition = 'bottom-right';
+          body.overlayFontSize = 32;
+        }
 
         if (item.platform === 'email') {
           body.recipients = recipients.trim() || null;
@@ -451,6 +459,31 @@ export default function CopilotPage() {
                 <label htmlFor="aiGenImage" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
                   Tự động tạo ảnh minh họa
                 </label>
+              </div>
+
+              <div className="space-y-2 py-2 bg-slate-50/60 px-3 rounded-xl border border-slate-200/50">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="autoWatermark"
+                    checked={autoWatermark}
+                    onChange={e => setAutoWatermark(e.target.checked)}
+                    disabled={loading}
+                    className="h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand accent-brand cursor-pointer"
+                  />
+                  <label htmlFor="autoWatermark" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    {t('Tự động đóng dấu ảnh')}
+                  </label>
+                </div>
+                {autoWatermark && (
+                  <input
+                    type="text"
+                    value={watermarkText}
+                    onChange={e => setWatermarkText(e.target.value)}
+                    placeholder={t('Chữ đóng dấu (Ví dụ: © Brand)')}
+                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-xs text-slate-850 focus:outline-none focus:border-brand shadow-inner animate-in slide-in-from-top-1"
+                  />
+                )}
               </div>
             </div>
 

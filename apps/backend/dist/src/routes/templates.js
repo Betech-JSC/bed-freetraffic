@@ -35,7 +35,6 @@ const upload = (0, multer_1.default)({
             cb(new Error('Chỉ chấp nhận file ảnh (jpg, png, gif, webp)'));
     }
 });
-const aiGenerate_2 = require("../services/aiGenerate");
 // Lấy danh sách tất cả nội dung mẫu
 router.get('/', async (req, res) => {
     try {
@@ -157,12 +156,7 @@ router.post('/generate-ai', async (req, res) => {
         }
         let imageUrl = null;
         if (generateImage) {
-            if (!apiKey) {
-                imageUrl = `https://picsum.photos/seed/${Math.round(Math.random() * 1000)}/800/600`;
-            }
-            else {
-                imageUrl = await (0, aiGenerate_1.generateAiImage)(aiPrompt || result.title || 'Marketing banner');
-            }
+            imageUrl = await (0, aiGenerate_1.generateAiImage)(aiPrompt || result.title || 'Marketing banner');
         }
         res.json({
             title: result.title,
@@ -175,15 +169,41 @@ router.post('/generate-ai', async (req, res) => {
         res.status(500).json({ error: err instanceof Error ? err.message : 'Lỗi gọi AI GPT' });
     }
 });
+// Render ảnh AI từ tiêu đề/prompt (sử dụng Pollinations/DALL-E)
+router.post('/generate-image', async (req, res) => {
+    const { prompt } = req.body;
+    if (!prompt?.trim()) {
+        res.status(400).json({ error: 'Tiêu đề hoặc prompt là bắt buộc để sinh ảnh' });
+        return;
+    }
+    try {
+        const imageUrl = await (0, aiGenerate_1.generateAiImage)(prompt);
+        res.json({ imageUrl });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi sinh ảnh AI' });
+    }
+});
 // Lên kế hoạch nội dung tự động bằng AI Copilot
 router.post('/copilot-plan', async (req, res) => {
-    const { topic, industry, tone, postCount } = req.body;
+    const { topic, industry, tone, postCount, generateImage } = req.body;
     if (!topic || !industry || !tone) {
         res.status(400).json({ error: 'Chủ đề, ngành nghề và giọng điệu là bắt buộc' });
         return;
     }
     try {
-        const plan = await (0, aiGenerate_2.generateAiContentPlan)(topic, industry, tone, postCount ? parseInt(postCount) : 5);
+        const plan = await (0, aiGenerate_1.generateAiContentPlan)(topic, industry, tone, postCount ? parseInt(postCount) : 5);
+        if (generateImage) {
+            for (const item of plan) {
+                try {
+                    item.imageUrl = await (0, aiGenerate_1.generateAiImage)(item.title);
+                }
+                catch (e) {
+                    console.error('Error generating image for copilot item:', e);
+                    item.imageUrl = null;
+                }
+            }
+        }
         res.json({
             plan,
             isDemo: !process.env.OPENAI_API_KEY
@@ -207,6 +227,7 @@ router.post('/copilot-save', async (req, res) => {
                 data: {
                     title: item.title,
                     content: item.content,
+                    imageUrl: item.imageUrl || null,
                     workspaceId: req.workspaceId
                 }
             });

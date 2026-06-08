@@ -57,8 +57,9 @@ router.get('/blog/posts/:slug', async (req: Request, res: Response): Promise<voi
 router.get('/pages/:slug', async (req: Request, res: Response): Promise<void> => {
   try {
     const slug = req.params.slug as string;
+    const preview = req.query.preview === 'true';
     const page = await prisma.landingPage.findFirst({
-      where: { slug, status: 'PUBLISHED' },
+      where: preview ? { slug } : { slug, status: 'PUBLISHED' },
     });
     if (!page) {
       res.status(404).json({ error: 'Không tìm thấy trang đích hoặc trang chưa xuất bản' });
@@ -215,6 +216,32 @@ router.post('/forms/submit', async (req: Request, res: Response): Promise<void> 
       }
     }
 
+    // Check for A/B testing cookies to register a conversion
+    const cookieHeader = req.headers.cookie || '';
+    const cookies = cookieHeader.split(';').map(c => c.trim());
+    for (const cookie of cookies) {
+      if (cookie.startsWith('ab_variant_')) {
+        const parts = cookie.split('=');
+        if (parts.length === 2) {
+          const testIdStr = parts[0].replace('ab_variant_', '');
+          const variantVal = parts[1];
+          const testId = parseInt(testIdStr, 10);
+          if (!isNaN(testId)) {
+            prisma.abTest.findUnique({
+              where: { id: testId }
+            }).then(test => {
+              if (test && test.status === 'RUNNING') {
+                prisma.abTest.update({
+                  where: { id: testId },
+                  data: variantVal === 'B' ? { clicksB: { increment: 1 } } : { clicksA: { increment: 1 } }
+                }).catch(err => console.error('Error incrementing clicks:', err));
+              }
+            }).catch(err => console.error('Error finding abTest:', err));
+          }
+        }
+      }
+    }
+
     res.json({
       success: true,
       message: 'Đăng ký thành công',
@@ -229,15 +256,70 @@ router.post('/forms/submit', async (req: Request, res: Response): Promise<void> 
 router.get('/pages/:slug/html', async (req: Request, res: Response): Promise<void> => {
   try {
     const slug = req.params.slug as string;
+    const preview = req.query.preview === 'true';
     const page = await prisma.landingPage.findFirst({
-      where: { slug, status: 'PUBLISHED' },
+      where: preview ? { slug } : { slug, status: 'PUBLISHED' },
     });
     if (!page) {
       res.status(404).send('<h1>404 - Không tìm thấy trang</h1>');
       return;
     }
 
-    let html = page.htmlContent;
+    let targetPage = page;
+    let activeTest = null;
+    let variant: 'A' | 'B' = 'A';
+
+    if (!preview) {
+      activeTest = await prisma.abTest.findFirst({
+        where: {
+          landingPageAId: page.id,
+          status: 'RUNNING'
+        }
+      });
+
+      if (activeTest) {
+        // Parse cookie manually
+        const cookieHeader = req.headers.cookie || '';
+        const cookieName = `ab_variant_${activeTest.id}`;
+        const matches = cookieHeader.match(new RegExp(
+          "(?:^|; )" + cookieName.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+        ));
+        let variantCookie = matches ? decodeURIComponent(matches[1]) : '';
+
+        if (variantCookie === 'A' || variantCookie === 'B') {
+          variant = variantCookie as 'A' | 'B';
+        } else {
+          // 50/50 Split
+          variant = Math.random() < 0.5 ? 'A' : 'B';
+          res.setHeader('Set-Cookie', `${cookieName}=${variant}; Path=/; Max-Age=31536000; SameSite=Lax`);
+        }
+
+        // If variant B, load Variant B page details
+        if (variant === 'B' && activeTest.landingPageBId) {
+          const pageB = await prisma.landingPage.findUnique({
+            where: { id: activeTest.landingPageBId }
+          });
+          if (pageB) {
+            targetPage = pageB;
+          }
+        }
+
+        // Increment impressions in database asynchronously
+        if (variant === 'A') {
+          prisma.abTest.update({
+            where: { id: activeTest.id },
+            data: { impressionsA: { increment: 1 } }
+          }).catch(err => console.error('Error incrementing impressionsA:', err));
+        } else {
+          prisma.abTest.update({
+            where: { id: activeTest.id },
+            data: { impressionsB: { increment: 1 } }
+          }).catch(err => console.error('Error incrementing impressionsB:', err));
+        }
+      }
+    }
+
+    let html = targetPage.htmlContent;
     let headInject = '';
 
     // Inject Facebook Pixel
@@ -284,12 +366,12 @@ router.get('/pages/:slug/html', async (req: Request, res: Response): Promise<voi
       html = headInject + html;
     }
 
-    // Inject Live Chat Widget if enabled
+    // Inject Live Chat Widget if enabled or previewing
     if (page.workspaceId) {
       const cskhConfig = await prisma.cskhConfig.findUnique({
         where: { workspaceId: page.workspaceId },
       });
-      if (cskhConfig?.liveChatEnabled) {
+      if (cskhConfig?.liveChatEnabled || preview) {
         const widgetHtml = getChatWidgetHtml(page.workspaceId);
         if (html.includes('</body>')) {
           html = html.replace('</body>', `${widgetHtml}\n</body>`);
@@ -298,6 +380,25 @@ router.get('/pages/:slug/html', async (req: Request, res: Response): Promise<voi
         }
       }
     }
+
+    let theme = 'ocean-breeze';
+    try {
+      if (page.layoutJson) {
+        const layout = JSON.parse(page.layoutJson);
+        if (layout.theme) {
+          theme = layout.theme;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    let workspaceName = 'Trang chủ';
+    if (page.workspaceId) {
+      const ws = await prisma.workspace.findUnique({ where: { id: page.workspaceId } });
+      if (ws) workspaceName = ws.name;
+    }
+    html = injectNavbarAndFooter(html, slug, workspaceName, 'home', theme);
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
@@ -333,8 +434,34 @@ router.post('/cskh/chat', async (req: Request, res: Response): Promise<void> => 
   }
 });
 
+// Public chat session sync endpoint (polling)
+router.get('/cskh/chat/sync', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const sessionId = req.query.sessionId as string;
+    if (!sessionId) {
+      res.status(400).json({ error: 'sessionId là bắt buộc.' });
+      return;
+    }
+
+    const messages = await prisma.chatMessage.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        sender: true,
+        content: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({ success: true, messages });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi đồng bộ tin nhắn.' });
+  }
+});
+
 // Public Checkout Endpoint (VietQR / Stripe)
-router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
+const handleCheckout = async (req: Request, res: Response): Promise<void> => {
   try {
     const { workspaceId, customerEmail, customerName, customerPhone, productId, paymentMethod, returnUrl, cancelUrl } = req.body;
     if (!workspaceId || !customerEmail || !productId || !paymentMethod) {
@@ -493,6 +620,971 @@ router.post('/checkout', async (req: Request, res: Response): Promise<void> => {
   } catch (error: any) {
     console.error('[Public Checkout Error]:', error);
     res.status(500).json({ error: error.message || 'Lỗi xử lý thanh toán.' });
+  }
+};
+
+router.post('/checkout', handleCheckout);
+router.post('/orders/checkout', handleCheckout);
+
+// =======================================================
+// MULTI-PAGE WEBSITE GENERATOR & CUSTOMER PORTAL SUPPORT
+// =======================================================
+
+const isColorLight = (hex: string): boolean => {
+  const cleanHex = (hex || '').replace('#', '');
+  if (cleanHex.length !== 6) return false;
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 150;
+};
+
+const getDynamicFallbackProducts = (title: string, theme: string) => {
+  const combined = `${title} ${theme}`.toLowerCase();
+  
+  if (combined.includes('mật ong') || combined.includes('honey') || combined.includes('ong')) {
+    return [
+      { id: 'fallback-1', idNum: 9901, name: 'Mật Ong Rừng Tây Bắc', description: 'Mật ong rừng tự nhiên nguyên chất được khai thác trực tiếp từ rừng Tây Bắc.', price: 250000, currency: 'VND' },
+      { id: 'fallback-2', idNum: 9902, name: 'Mật Ong Hoa Nhãn', description: 'Mật ong từ hoa nhãn ngọt thanh, giàu dưỡng chất tốt cho sức khỏe.', price: 180000, currency: 'VND' },
+      { id: 'fallback-3', idNum: 9903, name: 'Mật Ong Bạc Hà', description: 'Mật ong hoa bạc hà đặc sản Hà Giang thơm mát, chất lượng thượng hạng.', price: 320000, currency: 'VND' }
+    ];
+  }
+  
+  if (combined.includes('học') || combined.includes('course') || combined.includes('lập trình') || combined.includes('đào tạo') || combined.includes('tiếng anh') || theme === 'education-theme') {
+    return [
+      { id: 'fallback-1', idNum: 9901, name: 'Khóa Học HTML/CSS/JS Cơ Bản', description: 'Khóa học nền tảng lập trình web cho người mới bắt đầu từ số 0.', price: 499000, currency: 'VND' },
+      { id: 'fallback-2', idNum: 9902, name: 'Khóa Học React & Next.js Pro', description: 'Xây dựng dự án web thực tế chuẩn chuyên nghiệp cùng Mentor.', price: 999000, currency: 'VND' },
+      { id: 'fallback-3', idNum: 9903, name: 'Khóa Học Node.js Backend Developer', description: 'Làm chủ kiến trúc hệ thống và cơ sở dữ liệu chuyên sâu.', price: 899000, currency: 'VND' }
+    ];
+  }
+  
+  if (combined.includes('vé') || combined.includes('bay') || combined.includes('flight') || combined.includes('du lịch') || combined.includes('travel') || combined.includes('tour') || theme === 'saleticket-theme') {
+    return [
+      { id: 'fallback-1', idNum: 9901, name: 'Combo Vé Máy Bay & Resort 3N2Đ', description: 'Trọn gói vé máy bay khứ hồi kèm phòng nghỉ dưỡng cao cấp ven biển.', price: 2490000, currency: 'VND' },
+      { id: 'fallback-2', idNum: 9902, name: 'Tour Du Lịch Trọn Gói Đà Lạt', description: 'Khám phá thành phố ngàn hoa thơ mộng với hướng dẫn viên chu đáo.', price: 3190000, currency: 'VND' },
+      { id: 'fallback-3', idNum: 9903, name: 'Vé Máy Bay Khứ Hồi Hà Nội - Phú Quốc', description: 'Hãng hàng không chất lượng, giờ bay đẹp, hỗ trợ 24/7.', price: 1890000, currency: 'VND' }
+    ];
+  }
+
+  if (combined.includes('hải sản') || combined.includes('seafood') || combined.includes('tôm') || combined.includes('cá') || combined.includes('ngâm tương') || theme === 'sale-theme') {
+    return [
+      { id: 'fallback-1', idNum: 9901, name: 'Tôm Sú Cà Mau Ngâm Tương', description: 'Tôm sú tươi sống ngâm nước tương cốt gia truyền đậm vị đặc sản.', price: 250000, currency: 'VND' },
+      { id: 'fallback-2', idNum: 9902, name: 'Cá Hồi Na Uy Ngâm Tương', description: 'Cá hồi Na Uy tươi rói ngâm tương mẻ mới làm sạch sẽ mỗi ngày.', price: 280000, currency: 'VND' },
+      { id: 'fallback-3', idNum: 9903, name: 'Mực Trứng Sốt Tương Cay', description: 'Mực trứng nhiều gạch bùi béo sốt tương ớt cay nồng đậm vị.', price: 190000, currency: 'VND' }
+    ];
+  }
+
+  const cleanTitle = title || 'Sản phẩm';
+  return [
+    { id: 'fallback-1', idNum: 9901, name: `${cleanTitle} Cao Cấp`, description: 'Mô tả chi tiết sản phẩm chất lượng cao của cửa hàng.', price: 150000, currency: 'VND' },
+    { id: 'fallback-2', idNum: 9902, name: `${cleanTitle} Thượng Hạng`, description: 'Sản phẩm tuyển chọn loại thượng hạng chất lượng vượt trội.', price: 250000, currency: 'VND' },
+    { id: 'fallback-3', idNum: 9903, name: `${cleanTitle} Đặc Biệt`, description: 'Sản phẩm độc quyền phiên bản giới hạn đặc biệt.', price: 350000, currency: 'VND' }
+  ];
+};
+
+function injectNavbarAndFooter(html: string, slug: string, workspaceName: string, activeTab: string, theme = 'ocean-breeze'): string {
+  let headInject = '';
+  if (!html.includes('tailwindcss') && !html.includes('cdn.tailwindcss.com')) {
+    headInject += `<script src="https://cdn.tailwindcss.com"></script>\n`;
+  }
+  if (!html.includes('fonts.googleapis.com')) {
+    headInject += `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
+</style>\n`;
+  }
+
+  const isDark = html.includes('bg-gray-950') || html.includes('bg-slate-950') || html.includes('bg-gray-900') || html.includes('background-color: #0f172a') || html.includes('background-color: #030712') || html.includes('background-color: #0b0f19') || html.includes('background-color: #111827');
+
+  let activeColorClass = 'text-[#f25c22]';
+  let btnColorClass = 'bg-[#f25c22] hover:bg-[#d94d1a]';
+  
+  if (theme === 'saleticket-theme') {
+    activeColorClass = 'text-sky-600';
+    btnColorClass = 'bg-sky-600 hover:bg-sky-700';
+  } else if (theme === 'education-theme') {
+    activeColorClass = 'text-[#f05123]';
+    btnColorClass = 'bg-[#f05123] hover:bg-[#d94416]';
+  }
+
+  const navClass = isDark 
+    ? 'backdrop-blur-md bg-slate-950/80 border-b border-slate-900/60 text-slate-200' 
+    : 'backdrop-blur-md bg-white/80 border-b border-slate-100 text-slate-800';
+
+  const linkClass = isDark
+    ? 'hover:text-[#f25c22] text-slate-300'
+    : 'hover:text-[#f25c22] text-slate-600';
+
+  const loginClass = isDark
+    ? 'text-slate-400 hover:text-slate-100'
+    : 'text-slate-600 hover:text-slate-900';
+
+  const navbarHtml = `
+<header class="sticky top-0 z-50 w-full ${navClass} transition-all duration-300">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+    <a href="/api/public/pages/${slug}/html" class="text-xl font-black tracking-tight ${activeColorClass} hover:opacity-90 transition">${workspaceName}</a>
+    <nav class="hidden md:flex gap-6 items-center text-sm font-bold">
+      <a href="/api/public/pages/${slug}/html" class="transition ${activeTab === 'home' ? activeColorClass : linkClass}">Trang chủ</a>
+      <a href="/api/public/pages/${slug}/html/products" class="transition ${activeTab === 'products' ? activeColorClass : linkClass}">Sản phẩm</a>
+      <a href="/api/public/pages/${slug}/html/about" class="transition ${activeTab === 'about' ? activeColorClass : linkClass}">Giới thiệu</a>
+    </nav>
+    <div class="flex gap-3 items-center" id="nav-auth-section">
+      <a href="/api/public/pages/${slug}/html/login" class="text-xs ${loginClass} px-3 py-1.5 font-bold transition">Đăng nhập</a>
+      <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+    </div>
+  </div>
+</header>
+<script>
+  (function() {
+    const name = localStorage.getItem('customerName');
+    const authSec = document.getElementById('nav-auth-section');
+    if (authSec) {
+      if (name) {
+        authSec.innerHTML = \`
+          <span class="text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}">Xin chào, <strong class="${activeColorClass}">\${name}</strong></span>
+          <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-350' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-3 py-1.5 rounded-lg font-bold transition ml-2">Đăng xuất</button>
+        \`;
+      }
+    }
+  })();
+</script>
+`;
+
+  let resultHtml = html;
+  if (headInject) {
+    if (resultHtml.includes('</head>')) {
+      resultHtml = resultHtml.replace('</head>', `${headInject}</head>`);
+    } else {
+      resultHtml = headInject + resultHtml;
+    }
+  }
+
+  if (resultHtml.includes('<body class="')) {
+    const idx = resultHtml.indexOf('<body class="');
+    const bodyTagCloseIdx = resultHtml.indexOf('>', idx);
+    if (bodyTagCloseIdx !== -1) {
+      resultHtml = resultHtml.substring(0, bodyTagCloseIdx + 1) + navbarHtml + resultHtml.substring(bodyTagCloseIdx + 1);
+    }
+  } else if (resultHtml.includes('<body>')) {
+    resultHtml = resultHtml.replace('<body>', `<body>${navbarHtml}`);
+  } else {
+    resultHtml = navbarHtml + resultHtml;
+  }
+
+  return resultHtml;
+}
+
+function renderPage(slug: string, workspaceName: string, title: string, contentHtml: string, activeTab: string, theme = 'ocean-breeze'): string {
+  let activeColorClass = 'text-[#f25c22]';
+  let btnColorClass = 'bg-[#f25c22] hover:bg-[#d94d1a]';
+  let hoverTextClass = 'hover:text-[#f25c22]';
+
+  if (theme === 'saleticket-theme') {
+    activeColorClass = 'text-sky-600';
+    btnColorClass = 'bg-sky-600 hover:bg-sky-700';
+    hoverTextClass = 'hover:text-sky-600';
+  } else if (theme === 'education-theme') {
+    activeColorClass = 'text-[#f05123]';
+    btnColorClass = 'bg-[#f05123] hover:bg-[#d94416]';
+    hoverTextClass = 'hover:text-[#f05123]';
+  }
+
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title} - ${workspaceName}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; background-color: #f8fafc; color: #0f172a; scroll-behavior: smooth; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col justify-between">
+  <div>
+    <header class="sticky top-0 z-50 w-full backdrop-blur-md bg-white/80 border-b border-slate-100 text-slate-800 transition-all duration-300">
+      <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+        <a href="/api/public/pages/${slug}/html" class="text-xl font-black tracking-tight ${activeColorClass} hover:opacity-90 transition">${workspaceName}</a>
+        <nav class="hidden md:flex gap-6 items-center text-sm font-bold">
+          <a href="/api/public/pages/${slug}/html" class="transition ${hoverTextClass} ${activeTab === 'home' ? activeColorClass : 'text-slate-600'}">Trang chủ</a>
+          <a href="/api/public/pages/${slug}/html/products" class="transition ${hoverTextClass} ${activeTab === 'products' ? activeColorClass : 'text-slate-600'}">Sản phẩm</a>
+          <a href="/api/public/pages/${slug}/html/about" class="transition ${hoverTextClass} ${activeTab === 'about' ? activeColorClass : 'text-slate-600'}">Giới thiệu</a>
+        </nav>
+        <div class="flex gap-3 items-center" id="nav-auth-section">
+          <a href="/api/public/pages/${slug}/html/login" class="text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 font-bold transition">Đăng nhập</a>
+          <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="py-12">
+      ${contentHtml}
+    </main>
+  </div>
+
+  <footer class="py-10 px-6 bg-slate-900 text-slate-400 text-center border-t border-slate-800">
+    <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+      <h4 class="text-white font-bold text-base">${workspaceName}</h4>
+      <p class="text-xs">© ${new Date().getFullYear()} ${workspaceName}. Bảo lưu mọi quyền.</p>
+    </div>
+  </footer>
+
+  <script>
+    (function() {
+      const name = localStorage.getItem('customerName');
+      const authSec = document.getElementById('nav-auth-section');
+      if (authSec) {
+        if (name) {
+          authSec.innerHTML = \`
+            <span class="text-xs font-semibold text-slate-600">Xin chào, <strong class="${activeColorClass}">\${name}</strong></span>
+            <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition ml-2">Đăng xuất</button>
+          \`;
+        }
+      }
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+// Public Customer Auth APIs
+router.post('/auth/register', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, email, phone, company, workspaceId } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'Địa chỉ Email là bắt buộc' });
+      return;
+    }
+    const wsId = parseInt(workspaceId as string);
+    if (isNaN(wsId)) {
+      res.status(400).json({ error: 'Workspace ID không hợp lệ' });
+      return;
+    }
+
+    let customer = await prisma.customer.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (customer) {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          name: name || customer.name,
+          phone: phone || customer.phone,
+          company: company || customer.company,
+          workspaceId: wsId,
+        },
+      });
+    } else {
+      customer = await prisma.customer.create({
+        data: {
+          name: name || email.split('@')[0],
+          email: email.toLowerCase(),
+          phone: phone || null,
+          company: company || null,
+          status: 'NEW',
+          workspaceId: wsId,
+        },
+      });
+    }
+
+    res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi đăng ký tài khoản' });
+  }
+});
+
+router.post('/auth/login', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, workspaceId } = req.body;
+    if (!email) {
+      res.status(400).json({ error: 'Địa chỉ Email là bắt buộc' });
+      return;
+    }
+    const wsId = parseInt(workspaceId as string);
+    if (isNaN(wsId)) {
+      res.status(400).json({ error: 'Workspace ID không hợp lệ' });
+      return;
+    }
+
+    const customer = await prisma.customer.findFirst({
+      where: { email: email.toLowerCase(), workspaceId: wsId },
+    });
+
+    if (!customer) {
+      res.status(404).json({ error: 'Không tìm thấy thông tin khách hàng với email này trong hệ thống' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi đăng nhập' });
+  }
+});
+// Subpages handlers
+router.get('/pages/:slug/html/products', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const slug = req.params.slug as string;
+    const page = await prisma.landingPage.findFirst({
+      where: { slug }
+    });
+    if (!page) {
+      res.status(404).send('<h1>404 - Không tìm thấy trang</h1>');
+      return;
+    }
+
+    let workspaceName = 'Trang chủ';
+    if (page.workspaceId) {
+      const ws = await prisma.workspace.findUnique({ where: { id: page.workspaceId } });
+      if (ws) workspaceName = ws.name;
+    }
+
+    let theme = 'ocean-breeze';
+    try {
+      if (page.layoutJson) {
+        const layout = JSON.parse(page.layoutJson as string);
+        if (layout.theme) {
+          theme = layout.theme;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    const products = await prisma.product.findMany({
+      where: { workspaceId: page.workspaceId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const isFallbackMode = products.length === 0;
+    const displayProducts = isFallbackMode
+      ? getDynamicFallbackProducts(page.title, theme)
+      : products;
+
+    const productCards = displayProducts.map((p: any) => {
+      let img = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=650&auto=format&fit=crop&q=80';
+      const idVal = typeof p.id === 'number' ? p.id : (p.idNum || 9901);
+      
+      const lowerName = p.name.toLowerCase();
+      if (lowerName.includes('mật ong') || lowerName.includes('honey') || lowerName.includes('ong')) {
+        const honeyImgs = [
+          'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=650&auto=format&fit=crop&q=80'
+        ];
+        img = honeyImgs[idVal % honeyImgs.length];
+      } else if (theme === 'sale-theme') {
+        const foodImgs = [
+          'https://images.unsplash.com/photo-1534080391025-09795d197360?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1534482421-64566f976cfa?w=650&auto=format&fit=crop&q=80'
+        ];
+        img = foodImgs[idVal % foodImgs.length];
+      } else if (theme === 'education-theme') {
+        const eduImgs = [
+          'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=650&auto=format&fit=crop&q=80'
+        ];
+        img = eduImgs[idVal % eduImgs.length];
+      } else if (theme === 'saleticket-theme') {
+        const travelImgs = [
+          'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=650&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?w=650&auto=format&fit=crop&q=80'
+        ];
+        img = travelImgs[idVal % travelImgs.length];
+      }
+
+      let btnBg = 'bg-[#f25c22] hover:bg-[#d94d1a]';
+      let textAccent = 'text-[#f25c22]';
+      if (theme === 'saleticket-theme') {
+        btnBg = 'bg-sky-600 hover:bg-sky-700';
+        textAccent = 'text-sky-600';
+      } else if (theme === 'education-theme') {
+        btnBg = 'bg-[#f05123] hover:bg-[#d94416]';
+        textAccent = 'text-[#f05123]';
+      }
+
+      return `
+      <div class="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-1 transition duration-300">
+        <img src="${img}" alt="${p.name}" class="h-48 w-full object-cover border-b border-slate-100" />
+        <div class="p-6 flex-1 flex flex-col justify-between">
+          <div class="space-y-2">
+            <h3 class="font-extrabold text-slate-900 text-lg line-clamp-1">${p.name}</h3>
+            <p class="text-slate-500 text-xs line-clamp-2">${p.description || 'Không có mô tả chi tiết cho sản phẩm này.'}</p>
+          </div>
+          <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
+            <span class="${textAccent} font-black text-base">${p.price.toLocaleString('vi-VN')} ${p.currency}</span>
+            <a href="/api/public/pages/${slug}/html/products/${p.id}" class="px-4 py-2 ${btnBg} text-white rounded-lg text-xs font-bold transition shadow-sm">Xem chi tiết</a>
+          </div>
+        </div>
+      </div>
+      `;
+    }).join('');
+
+    const contentHtml = `
+      <div class="max-w-6xl mx-auto px-6">
+        <div class="text-center max-w-xl mx-auto mb-10">
+          <h2 class="text-3xl font-black text-slate-900">Danh Mục Sản Phẩm</h2>
+          <p class="text-sm text-slate-500 mt-2">Khám phá các sản phẩm và dịch vụ nổi bật hàng đầu được tuyển chọn.</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          ${productCards}
+        </div>
+      </div>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderPage(slug, workspaceName, 'Sản phẩm', contentHtml, 'products', theme));
+  } catch (error: any) {
+    res.status(500).send('<h1>Lỗi hệ thống</h1>');
+  }
+});
+
+router.get('/pages/:slug/html/products/:id', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const slug = req.params.slug as string;
+    const productIdStr = req.params.id as string;
+    const isFallback = productIdStr.startsWith('fallback-');
+    
+    const page = await prisma.landingPage.findFirst({
+      where: { slug }
+    });
+    if (!page) {
+      res.status(404).send('<h1>404 - Không tìm thấy trang</h1>');
+      return;
+    }
+
+    let theme = 'ocean-breeze';
+    try {
+      if (page.layoutJson) {
+        const layout = JSON.parse(page.layoutJson as string);
+        if (layout.theme) {
+          theme = layout.theme;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    let product: any = null;
+    if (isFallback) {
+      const fallbackList = getDynamicFallbackProducts(page.title, theme);
+      product = fallbackList.find(p => p.id === productIdStr);
+    } else {
+      const productId = parseInt(productIdStr);
+      if (!isNaN(productId)) {
+        product = await prisma.product.findFirst({
+          where: { id: productId, workspaceId: page.workspaceId }
+        });
+      }
+    }
+
+    if (!product) {
+      res.status(404).send('<h1>404 - Không tìm thấy sản phẩm</h1>');
+      return;
+    }
+
+    let workspaceName = 'Trang chủ';
+    if (page.workspaceId) {
+      const ws = await prisma.workspace.findUnique({ where: { id: page.workspaceId } });
+      if (ws) workspaceName = ws.name;
+    }
+
+    const placeholders = [
+      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=800&auto=format&fit=crop&q=80'
+    ];
+    
+    const idVal = typeof product.id === 'number' ? product.id : (product.idNum || 9901);
+    let img = placeholders[idVal % placeholders.length];
+    
+    const lowerName = product.name.toLowerCase();
+    if (lowerName.includes('mật ong') || lowerName.includes('honey') || lowerName.includes('ong')) {
+      const honeyImgs = [
+        'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=800&auto=format&fit=crop&q=80'
+      ];
+      img = honeyImgs[idVal % honeyImgs.length];
+    } else if (theme === 'sale-theme') {
+      const foodImgs = [
+        'https://images.unsplash.com/photo-1534080391025-09795d197360?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1534482421-64566f976cfa?w=800&auto=format&fit=crop&q=80'
+      ];
+      img = foodImgs[idVal % foodImgs.length];
+    } else if (theme === 'education-theme') {
+      const eduImgs = [
+        'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=800&auto=format&fit=crop&q=80'
+      ];
+      img = eduImgs[idVal % eduImgs.length];
+    } else if (theme === 'saleticket-theme') {
+      const travelImgs = [
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?w=800&auto=format&fit=crop&q=80'
+      ];
+      img = travelImgs[idVal % travelImgs.length];
+    }
+
+    let btnBg = 'bg-[#f25c22] hover:bg-[#d94d1a] focus:border-[#f25c22]';
+    let textAccent = 'text-[#f25c22]';
+    let inputFocus = 'focus:border-[#f25c22]';
+    if (theme === 'saleticket-theme') {
+      btnBg = 'bg-sky-600 hover:bg-sky-700 focus:border-sky-500';
+      textAccent = 'text-sky-600';
+      inputFocus = 'focus:border-sky-500';
+    } else if (theme === 'education-theme') {
+      btnBg = 'bg-[#f05123] hover:bg-[#d94416] focus:border-[#f05123]';
+      textAccent = 'text-[#f05123]';
+      inputFocus = 'focus:border-[#f05123]';
+    }
+
+    const contentHtml = `
+      <div class="max-w-5xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-12">
+        <div>
+          <img src="${img}" alt="${product.name}" class="rounded-2xl border border-slate-200/60 shadow-sm w-full h-[350px] object-cover" />
+          <div class="mt-6 space-y-4">
+            <h2 class="text-2xl font-black text-slate-900">${product.name}</h2>
+            <p class="text-slate-600 text-sm leading-relaxed">${product.description || 'Không có mô tả chi tiết cho sản phẩm này.'}</p>
+            <div class="text-2xl font-black ${textAccent} pt-2">${product.price.toLocaleString('vi-VN')} ${product.currency}</div>
+          </div>
+        </div>
+        
+        <div class="bg-white border border-slate-200/60 rounded-2xl p-8 shadow-sm">
+          <h3 class="text-lg font-bold text-slate-900 mb-2">Thanh toán đặt mua</h3>
+          <p class="text-slate-400 text-xs mb-6">Nhập thông tin thanh toán để tiếp nhận đơn hàng nhanh.</p>
+          
+          <form id="public-checkout-form" class="space-y-4">
+            <input type="hidden" id="checkout-product-id" value="${product.id}" />
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Họ và Tên</label>
+              <input type="text" id="checkout-name" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="Nguyễn Văn A" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Địa chỉ Email</label>
+              <input type="email" id="checkout-email" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="name@email.com" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Số điện thoại</label>
+              <input type="tel" id="checkout-phone" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="0987654321" />
+            </div>
+            
+            <div class="space-y-2 pt-2">
+              <label class="block text-xs font-semibold text-slate-500">Phương thức thanh toán</label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-350">
+                  <input type="radio" name="paymentGateway" value="PAYOS" checked class="${textAccent} focus:ring-0" />
+                  <span class="text-xs font-bold text-slate-700">Chuyển khoản QR</span>
+                </label>
+                <label class="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:border-slate-350">
+                  <input type="radio" name="paymentGateway" value="STRIPE" class="${textAccent} focus:ring-0" />
+                  <span class="text-xs font-bold text-slate-700">Thẻ Quốc Tế</span>
+                </label>
+              </div>
+            </div>
+            
+            <button type="submit" id="checkout-submit-btn" class="w-full py-3 ${btnBg} text-white font-bold rounded-lg transition duration-200 mt-4 shadow-md">
+              Tiến hành thanh toán
+            </button>
+          </form>
+          
+          <p id="checkout-error-msg" class="text-center mt-4 text-sm text-red-500 hidden"></p>
+        </div>
+      </div>
+
+      <script>
+        (function() {
+          const name = localStorage.getItem('customerName');
+          const email = localStorage.getItem('customerEmail');
+          if (name) document.getElementById('checkout-name').value = name;
+          if (email) document.getElementById('checkout-email').value = email;
+        })();
+
+        document.getElementById('public-checkout-form').addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const productId = document.getElementById('checkout-product-id').value;
+          const name = document.getElementById('checkout-name').value;
+          const email = document.getElementById('checkout-email').value;
+          const phone = document.getElementById('checkout-phone').value;
+          const gateway = document.querySelector('input[name="paymentGateway"]:checked').value;
+          const errorEl = document.getElementById('checkout-error-msg');
+          const submitBtn = document.getElementById('checkout-submit-btn');
+
+          submitBtn.disabled = true;
+          submitBtn.innerText = 'Đang xử lý...';
+          errorEl.classList.add('hidden');
+
+          try {
+            const res = await fetch('/api/public/checkout', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                productId: parseInt(productId),
+                customerName: name,
+                customerEmail: email,
+                customerPhone: phone,
+                paymentMethod: gateway,
+                returnUrl: window.location.origin + '/checkout/success',
+                cancelUrl: window.location.href
+              })
+            });
+            
+            const data = await res.json();
+            if (res.ok && data.checkoutUrl) {
+              window.location.href = data.checkoutUrl;
+            } else {
+              errorEl.innerText = data.error || 'Lỗi khi khởi tạo thanh toán.';
+              errorEl.classList.remove('hidden');
+            }
+          } catch (err) {
+            errorEl.innerText = 'Lỗi kết nối máy chủ.';
+            errorEl.classList.remove('hidden');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Tiến hành thanh toán';
+          }
+        });
+      </script>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderPage(slug, workspaceName, product.name, contentHtml, 'products', theme));
+  } catch (error: any) {
+    res.status(500).send('<h1>Lỗi hệ thống</h1>');
+  }
+});
+
+router.get('/pages/:slug/html/about', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const slug = req.params.slug as string;
+    const page = await prisma.landingPage.findFirst({
+      where: { slug }
+    });
+    if (!page) {
+      res.status(404).send('<h1>404 - Không tìm thấy trang</h1>');
+      return;
+    }
+
+    let workspaceName = 'Trang chủ';
+    if (page.workspaceId) {
+      const ws = await prisma.workspace.findUnique({ where: { id: page.workspaceId } });
+      if (ws) workspaceName = ws.name;
+    }
+
+    let theme = 'ocean-breeze';
+    try {
+      if (page.layoutJson) {
+        const layout = JSON.parse(page.layoutJson as string);
+        if (layout.theme) {
+          theme = layout.theme;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    let textAccent = 'text-[#f25c22]';
+    let bgAccent = 'bg-[#f25c22]/10';
+    if (theme === 'saleticket-theme') {
+      textAccent = 'text-sky-600';
+      bgAccent = 'bg-sky-600/10';
+    } else if (theme === 'education-theme') {
+      textAccent = 'text-[#f05123]';
+      bgAccent = 'bg-[#f05123]/10';
+    }
+
+    const contentHtml = `
+      <div class="max-w-3xl mx-auto bg-white border border-slate-200/60 rounded-2xl p-8 md:p-12 shadow-sm text-center space-y-6">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full ${bgAccent} ${textAccent} text-3xl font-bold">🏢</div>
+        <h2 class="text-3xl font-black text-slate-900">Về Chúng Tôi</h2>
+        <p class="text-slate-600 font-medium leading-relaxed">
+          Chào mừng bạn đến với <strong>${workspaceName}</strong>. Chúng tôi tự hào là đơn vị tiên phong cung cấp các giải pháp chất lượng vượt trội nhằm mang lại sự hài lòng tối đa cho khách hàng. Với đội ngũ chuyên gia tận tâm và không ngừng sáng tạo, chúng tôi cam kết đồng hành cùng sự phát triển bền vững của bạn.
+        </p>
+        <div class="grid grid-cols-3 gap-6 pt-6 border-t border-slate-100 text-center">
+          <div>
+            <h4 class="text-2xl font-black ${textAccent}">100%</h4>
+            <p class="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">Tận Tâm</p>
+          </div>
+          <div>
+            <h4 class="text-2xl font-black ${textAccent}">24/7</h4>
+            <p class="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">Hỗ Trợ</p>
+          </div>
+          <div>
+            <h4 class="text-2xl font-black ${textAccent}">Vượt Trội</h4>
+            <p class="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">Chất Lượng</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderPage(slug, workspaceName, 'Giới thiệu', contentHtml, 'about', theme));
+  } catch (error: any) {
+    res.status(500).send('<h1>Lỗi hệ thống</h1>');
+  }
+});
+
+router.get('/pages/:slug/html/login', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const slug = req.params.slug as string;
+    const page = await prisma.landingPage.findFirst({
+      where: { slug }
+    });
+    if (!page) {
+      res.status(404).send('<h1>404 - Không tìm thấy trang</h1>');
+      return;
+    }
+
+    let workspaceName = 'Trang chủ';
+    if (page.workspaceId) {
+      const ws = await prisma.workspace.findUnique({ where: { id: page.workspaceId } });
+      if (ws) workspaceName = ws.name;
+    }
+
+    let theme = 'ocean-breeze';
+    try {
+      if (page.layoutJson) {
+        const layout = JSON.parse(page.layoutJson as string);
+        if (layout.theme) {
+          theme = layout.theme;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    let btnBg = 'bg-[#f25c22] hover:bg-[#d94d1a]';
+    let textAccent = 'text-[#f25c22]';
+    let inputFocus = 'focus:border-[#f25c22] focus:ring-2 focus:ring-[#f25c22]/20';
+    if (theme === 'saleticket-theme') {
+      btnBg = 'bg-sky-600 hover:bg-sky-700';
+      textAccent = 'text-sky-600';
+      inputFocus = 'focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20';
+    } else if (theme === 'education-theme') {
+      btnBg = 'bg-[#f05123] hover:bg-[#d94416]';
+      textAccent = 'text-[#f05123]';
+      inputFocus = 'focus:border-[#f05123] focus:ring-2 focus:ring-[#f05123]/20';
+    }
+
+    const contentHtml = `
+      <div class="max-w-md mx-auto bg-white border border-slate-200/60 rounded-2xl p-8 shadow-sm">
+        <h3 class="text-2xl font-black text-slate-900 text-center mb-2">Đăng nhập cổng khách hàng</h3>
+        <p class="text-slate-400 text-xs text-center mb-6">Nhập email của bạn để đồng bộ tài khoản.</p>
+        
+        <form id="public-login-form" class="space-y-4">
+          <input type="hidden" id="login-ws-id" value="${page.workspaceId || 0}" />
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Địa chỉ Email</label>
+            <input type="email" id="login-email" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="name@email.com" />
+          </div>
+          <button type="submit" id="login-submit-btn" class="w-full py-3 ${btnBg} text-white font-bold rounded-lg transition duration-200 shadow-md">
+            Đăng nhập
+          </button>
+        </form>
+        <p id="login-error-msg" class="text-center mt-4 text-xs text-red-500 hidden"></p>
+        <div class="text-center mt-4 text-xs text-slate-500">
+          Chưa có tài khoản? <a href="/api/public/pages/${slug}/html/register" class="${textAccent} font-bold hover:underline">Đăng ký ngay</a>
+        </div>
+      </div>
+
+      <script>
+        document.getElementById('public-login-form').addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const email = document.getElementById('login-email').value;
+          const wsId = document.getElementById('login-ws-id').value;
+          const errorEl = document.getElementById('login-error-msg');
+          const submitBtn = document.getElementById('login-submit-btn');
+
+          submitBtn.disabled = true;
+          submitBtn.innerText = 'Đang đăng nhập...';
+          errorEl.classList.add('hidden');
+
+          try {
+            const res = await fetch('/api/public/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, workspaceId: parseInt(wsId) })
+            });
+            const result = await res.json();
+            if (res.ok && result.success) {
+              localStorage.setItem('customerName', result.customer.name);
+              localStorage.setItem('customerEmail', result.customer.email);
+              window.location.href = '/api/public/pages/${slug}/html';
+            } else {
+              errorEl.innerText = result.error || 'Đăng nhập thất bại.';
+              errorEl.classList.remove('hidden');
+            }
+          } catch (err) {
+            errorEl.innerText = 'Lỗi kết nối máy chủ.';
+            errorEl.classList.remove('hidden');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Đăng nhập';
+          }
+        });
+      </script>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderPage(slug, workspaceName, 'Đăng nhập', contentHtml, 'auth', theme));
+  } catch (error: any) {
+    res.status(500).send('<h1>Lỗi hệ thống</h1>');
+  }
+});
+
+router.get('/pages/:slug/html/register', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const slug = req.params.slug as string;
+    const page = await prisma.landingPage.findFirst({
+      where: { slug }
+    });
+    if (!page) {
+      res.status(404).send('<h1>404 - Không tìm thấy trang</h1>');
+      return;
+    }
+
+    let workspaceName = 'Trang chủ';
+    if (page.workspaceId) {
+      const ws = await prisma.workspace.findUnique({ where: { id: page.workspaceId } });
+      if (ws) workspaceName = ws.name;
+    }
+
+    let theme = 'ocean-breeze';
+    try {
+      if (page.layoutJson) {
+        const layout = JSON.parse(page.layoutJson as string);
+        if (layout.theme) {
+          theme = layout.theme;
+        }
+      }
+    } catch (e) {
+      // Ignore
+    }
+
+    let btnBg = 'bg-[#f25c22] hover:bg-[#d94d1a]';
+    let textAccent = 'text-[#f25c22]';
+    let inputFocus = 'focus:border-[#f25c22] focus:ring-2 focus:ring-[#f25c22]/20';
+    if (theme === 'saleticket-theme') {
+      btnBg = 'bg-sky-600 hover:bg-sky-700';
+      textAccent = 'text-sky-600';
+      inputFocus = 'focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20';
+    } else if (theme === 'education-theme') {
+      btnBg = 'bg-[#f05123] hover:bg-[#d94416]';
+      textAccent = 'text-[#f05123]';
+      inputFocus = 'focus:border-[#f05123] focus:ring-2 focus:ring-[#f05123]/20';
+    }
+
+    const contentHtml = `
+      <div class="max-w-md mx-auto bg-white border border-slate-200/60 rounded-2xl p-8 shadow-sm">
+        <h3 class="text-2xl font-black text-slate-900 text-center mb-2">Đăng ký tài khoản</h3>
+        <p class="text-slate-400 text-xs text-center mb-6">Đăng ký để xem thông tin sản phẩm và quản lý đơn hàng.</p>
+        
+        <form id="public-register-form" class="space-y-4">
+          <input type="hidden" id="register-ws-id" value="${page.workspaceId || 0}" />
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Họ và Tên</label>
+            <input type="text" id="register-name" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="Nguyễn Văn A" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Địa chỉ Email</label>
+            <input type="email" id="register-email" required class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="name@email.com" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Số điện thoại</label>
+            <input type="tel" id="register-phone" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="0987654321" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Công ty / Tổ chức</label>
+            <input type="text" id="register-company" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5 text-slate-900 text-sm focus:outline-none ${inputFocus}" placeholder="Tên công ty của bạn" />
+          </div>
+          <button type="submit" id="register-submit-btn" class="w-full py-3 ${btnBg} text-white font-bold rounded-lg transition duration-200 shadow-md">
+            Tạo tài khoản
+          </button>
+        </form>
+        <p id="register-error-msg" class="text-center mt-4 text-xs text-red-500 hidden"></p>
+        <div class="text-center mt-4 text-xs text-slate-500">
+          Đã có tài khoản? <a href="/api/public/pages/${slug}/html/login" class="${textAccent} font-bold hover:underline">Đăng nhập</a>
+        </div>
+      </div>
+
+      <script>
+        document.getElementById('public-register-form').addEventListener('submit', async function(e) {
+          e.preventDefault();
+          const name = document.getElementById('register-name').value;
+          const email = document.getElementById('register-email').value;
+          const phone = document.getElementById('register-phone').value;
+          const company = document.getElementById('register-company').value;
+          const wsId = document.getElementById('register-ws-id').value;
+          const errorEl = document.getElementById('register-error-msg');
+          const submitBtn = document.getElementById('register-submit-btn');
+
+          submitBtn.disabled = true;
+          submitBtn.innerText = 'Đang đăng ký...';
+          errorEl.classList.add('hidden');
+
+          try {
+            const res = await fetch('/api/public/auth/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, email, phone, company, workspaceId: parseInt(wsId) })
+            });
+            const result = await res.json();
+            if (res.ok && result.success) {
+              localStorage.setItem('customerName', result.customer.name);
+              localStorage.setItem('customerEmail', result.customer.email);
+              window.location.href = '/api/public/pages/${slug}/html';
+            } else {
+              errorEl.innerText = result.error || 'Đăng ký thất bại.';
+              errorEl.classList.remove('hidden');
+            }
+          } catch (err) {
+            errorEl.innerText = 'Lỗi kết nối máy chủ.';
+            errorEl.classList.remove('hidden');
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = 'Tạo tài khoản';
+          }
+        });
+      </script>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderPage(slug, workspaceName, 'Đăng ký', contentHtml, 'auth', theme));
+  } catch (error: any) {
+    res.status(500).send('<h1>Lỗi hệ thống</h1>');
   }
 });
 

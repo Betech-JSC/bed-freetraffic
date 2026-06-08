@@ -256,4 +256,72 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
   });
 });
 
+// Import danh sách khách hàng hàng loạt (CSV/JSON)
+router.post('/import', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { customers } = req.body;
+  if (!Array.isArray(customers) || customers.length === 0) {
+    res.status(400).json({ error: 'Danh sách khách hàng không hợp lệ hoặc rỗng.' });
+    return;
+  }
+
+  let createdCount = 0;
+  let updatedCount = 0;
+  const errors: string[] = [];
+
+  for (const c of customers) {
+    const name = c.name?.trim();
+    const email = c.email?.trim()?.toLowerCase();
+    const phone = c.phone?.trim() || null;
+    const company = c.company?.trim() || null;
+    const status = c.status || 'NEW';
+
+    if (!name || !email) {
+      errors.push(`Bỏ qua dòng không hợp lệ: thiếu Tên hoặc Email`);
+      continue;
+    }
+
+    try {
+      const existing = await prisma.customer.findFirst({
+        where: { email, workspaceId: req.workspaceId }
+      });
+
+      if (existing) {
+        // Cập nhật thông tin mới
+        await prisma.customer.update({
+          where: { id: existing.id },
+          data: {
+            name,
+            phone: phone || existing.phone,
+            company: company || existing.company,
+            status
+          }
+        });
+        updatedCount++;
+      } else {
+        // Tạo mới
+        await prisma.customer.create({
+          data: {
+            name,
+            email,
+            phone,
+            company,
+            status,
+            workspaceId: req.workspaceId
+          }
+        });
+        createdCount++;
+      }
+    } catch (err: any) {
+      errors.push(`Lỗi xử lý ${email}: ${err.message}`);
+    }
+  }
+
+  res.json({
+    message: `Nhập thành công: tạo mới ${createdCount}, cập nhật ${updatedCount} khách hàng.`,
+    createdCount,
+    updatedCount,
+    errors: errors.length > 0 ? errors : undefined
+  });
+});
+
 export default router;

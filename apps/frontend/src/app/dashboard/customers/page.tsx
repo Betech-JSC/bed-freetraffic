@@ -45,7 +45,7 @@ type CustomerDetail = Omit<CustomerRow, 'notes'> & {
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
+  const [allCustomers, setAllCustomers] = useState<CustomerRow[]>([]);
   const { t, locale } = useLocale();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<CustomerDetail | null>(null);
@@ -53,6 +53,21 @@ export default function CustomersPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
+
+  // Client-side filtering
+  const customers = allCustomers.filter((c) => {
+    if (filterStatus && c.status !== filterStatus) return false;
+    if (searchDebounced) {
+      const q = searchDebounced.toLowerCase();
+      return (
+        c.name.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        (c.company && c.company.toLowerCase().includes(q))
+      );
+    }
+    return true;
+  });
+
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [success, setSuccess] = useState('');
@@ -67,6 +82,13 @@ export default function CustomersPage() {
   const [selectedMcListId, setSelectedMcListId] = useState('');
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncError, setSyncError] = useState('');
+
+  // Import states
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState('');
+  const [importSuccess, setImportSuccess] = useState('');
 
   const [newNote, setNewNote] = useState('');
   const [careSubject, setCareSubject] = useState('Chúng tôi luôn sẵn sàng hỗ trợ bạn');
@@ -84,14 +106,10 @@ export default function CustomersPage() {
   }, [search]);
 
   const loadList = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (filterStatus) params.set('status', filterStatus);
-    if (searchDebounced) params.set('q', searchDebounced);
-    const q = params.toString() ? `?${params}` : '';
-    const data = await apiJson<CustomerRow[]>(`/customers${q}`);
-    setCustomers(Array.isArray(data) ? data : []);
+    const data = await apiJson<CustomerRow[]>('/customers');
+    setAllCustomers(Array.isArray(data) ? data : []);
     setLoadError('');
-  }, [filterStatus, searchDebounced]);
+  }, []);
 
   const loadDetail = async (id: number) => {
     setDetail(await apiJson<CustomerDetail>(`/customers/${id}`));
@@ -102,7 +120,7 @@ export default function CustomersPage() {
     loadList()
       .catch((e: unknown) => {
         setLoadError(e instanceof Error ? e.message : 'Lỗi tải danh sách');
-        setCustomers([]);
+        setAllCustomers([]);
       })
       .finally(() => setLoading(false));
   }, [loadList]);
@@ -148,6 +166,42 @@ export default function CustomersPage() {
       await loadList();
     } catch (e: unknown) {
       setActionError(e instanceof Error ? e.message : 'Không thêm được');
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa khách hàng này không? Mọi thông tin ghi chú và nhật ký tương tác sẽ bị xóa vĩnh viễn.')) return;
+    setActionError('');
+    setSuccess('');
+    try {
+      await apiJson(`/customers/${id}`, { method: 'DELETE' });
+      setSuccess('Đã xóa khách hàng thành công');
+      setSelectedId(null);
+      setChecked((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      await loadList();
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Không thể xóa khách hàng');
+    }
+  };
+
+  const handleStatusChange = async (id: number, newStatus: string) => {
+    setActionError('');
+    setSuccess('');
+    try {
+      await apiJson(`/customers/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setSuccess('Đã cập nhật trạng thái khách hàng');
+      await loadDetail(id);
+      await loadList();
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Không thể cập nhật trạng thái');
     }
   };
 
@@ -250,6 +304,118 @@ export default function CustomersPage() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      setImportText(text);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImport = async () => {
+    setImportLoading(true);
+    setImportError('');
+    setImportSuccess('');
+
+    let parsedCustomers: any[] = [];
+    const text = importText.trim();
+
+    if (!text) {
+      setImportError('Vui lòng dán dữ liệu hoặc tải file CSV/JSON.');
+      setImportLoading(false);
+      return;
+    }
+
+    if (text.startsWith('[') && text.endsWith(']')) {
+      try {
+        parsedCustomers = JSON.parse(text);
+      } catch (err: any) {
+        setImportError('Định dạng JSON không hợp lệ: ' + err.message);
+        setImportLoading(false);
+        return;
+      }
+    } else {
+      const lines = text.split('\n');
+      if (lines.length === 0) {
+        setImportError('Dữ liệu rỗng.');
+        setImportLoading(false);
+        return;
+      }
+
+      const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+      const hasHeader = headers.includes('email') || headers.includes('name') || headers.includes('tên');
+
+      const startIdx = hasHeader ? 1 : 0;
+      
+      let nameIdx = 0;
+      let emailIdx = 1;
+      let phoneIdx = 2;
+      let companyIdx = 3;
+      let statusIdx = 4;
+
+      if (hasHeader) {
+        nameIdx = headers.findIndex((h) => h.includes('name') || h.includes('tên') || h.includes('họ tên'));
+        emailIdx = headers.findIndex((h) => h.includes('email') || h.includes('thư'));
+        phoneIdx = headers.findIndex((h) => h.includes('phone') || h.includes('sđt') || h.includes('điện thoại'));
+        companyIdx = headers.findIndex((h) => h.includes('company') || h.includes('công ty'));
+        statusIdx = headers.findIndex((h) => h.includes('status') || h.includes('trạng thái'));
+      }
+
+      for (let i = startIdx; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        const cols = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((c) => {
+          let val = c.trim();
+          if (val.startsWith('"') && val.endsWith('"')) {
+            val = val.slice(1, -1).trim();
+          }
+          return val;
+        });
+
+        const name = cols[nameIdx] || '';
+        const email = cols[emailIdx] || '';
+        const phone = phoneIdx !== -1 ? cols[phoneIdx] || null : null;
+        const company = companyIdx !== -1 ? cols[companyIdx] || null : null;
+        const status = statusIdx !== -1 && cols[statusIdx] ? cols[statusIdx].toUpperCase() : 'NEW';
+
+        if (name && email) {
+          parsedCustomers.push({ name, email, phone, company, status });
+        }
+      }
+    }
+
+    if (parsedCustomers.length === 0) {
+      setImportError('Không tìm thấy bản ghi khách hàng nào hợp lệ (cần ít nhất cột Tên và Email).');
+      setImportLoading(false);
+      return;
+    }
+
+    try {
+      const res = await apiJson<{ message: string }>('/customers/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customers: parsedCustomers }),
+      });
+
+      setImportSuccess(res.message);
+      setImportText('');
+      setTimeout(() => {
+        setShowImport(false);
+        setImportSuccess('');
+      }, 2000);
+      await loadList();
+    } catch (err: any) {
+      setImportError(err.message || 'Lỗi khi gửi dữ liệu lên server.');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
   const getStatusBadgeClass = (status: string) => {
     switch (status.toUpperCase()) {
       case 'NEW':
@@ -268,9 +434,9 @@ export default function CustomersPage() {
   const needsBackendRestart = loadError.includes('404') || loadError.includes('Không kết nối');
 
   // Compute metrics
-  const totalCustomers = customers.length;
-  const vipCustomers = customers.filter((c) => c.status === 'VIP').length;
-  const needFollowUpCustomers = customers.filter((c) => c.status === 'NEED_FOLLOWUP').length;
+  const totalCustomers = allCustomers.length;
+  const vipCustomers = allCustomers.filter((c) => c.status === 'VIP').length;
+  const needFollowUpCustomers = allCustomers.filter((c) => c.status === 'NEED_FOLLOWUP').length;
 
   return (
     <div className="page-container">
@@ -279,6 +445,9 @@ export default function CustomersPage() {
         description={t('customerDesc')}
         actions={
           <div className="flex gap-2">
+            <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={() => setShowImport(true)}>
+              📥 Import Khách Hàng
+            </button>
             <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={openSyncModal} disabled={syncLoading}>
               {syncLoading ? t('Đang tải...') : t('Đồng bộ Mailchimp')}
             </button>
@@ -470,9 +639,26 @@ export default function CustomersPage() {
                       <h3 className="text-lg font-black text-slate-800">{detail.name}</h3>
                       <p className="text-xs text-slate-500 font-medium mt-0.5">{detail.email}</p>
                     </div>
-                    <span className={`px-2.5 py-0.5 border rounded-full text-xs font-bold ${getStatusBadgeClass(detail.status)}`}>
-                      {STATUS_LABELS[detail.status]}
-                    </span>
+                    <div className="flex flex-col items-end gap-2">
+                      <select
+                        value={detail.status}
+                        onChange={(e) => handleStatusChange(detail.id, e.target.value)}
+                        className={`text-xs font-bold px-2 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 cursor-pointer transition-all ${getStatusBadgeClass(detail.status)}`}
+                      >
+                        {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                          <option key={k} value={k} className="bg-white text-slate-800 font-medium">
+                            {v}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(detail.id)}
+                        className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm"
+                      >
+                        🗑️ Xóa khách hàng
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-4 text-xs pt-2 border-t text-slate-600">
@@ -730,6 +916,60 @@ export default function CustomersPage() {
                 onClick={handleMailchimpSync}
               >
                 {syncLoading ? t('Đang đồng bộ...') : t('Đồng bộ ngay')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImport && (
+        <div className="modal-overlay animate-fade-in" onClick={() => setShowImport(false)}>
+          <div className="modal-panel max-w-lg space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center pb-2 border-b">
+              <h3 className="text-base font-black text-brand uppercase tracking-wider">📥 Nhập khách hàng hàng loạt</h3>
+              <button type="button" onClick={() => setShowImport(false)} className="text-slate-400 hover:text-slate-650 font-bold cursor-pointer">Đóng</button>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Bạn có thể dán trực tiếp dữ liệu danh sách khách hàng dưới dạng **CSV** (dòng đầu chứa tiêu đề: <code className="font-mono text-brand">name, email, phone, company, status</code>) hoặc định dạng **JSON Array** của các đối tượng khách hàng. Hoặc bấm chọn file để tải lên.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Tải file từ máy tính (CSV/JSON)</label>
+                <input 
+                  type="file" 
+                  accept=".csv,.json"
+                  onChange={handleFileChange}
+                  className="w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-brand/10 file:text-brand hover:file:bg-brand/20 cursor-pointer"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Dán dữ liệu trực tiếp *</label>
+                <textarea
+                  className="input font-mono text-xs w-full min-h-[160px] p-2 bg-slate-50 focus:bg-white"
+                  placeholder="name,email,phone,company,status&#10;Nguyen Van A,a@gmail.com,0901234567,ABC Corp,NEW&#10;Nguyen Van B,b@gmail.com,0987654321,XYZ Co,VIP"
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {importError && <p className="alert-error text-xs whitespace-pre-wrap">{importError}</p>}
+            {importSuccess && <p className="alert-info text-xs">{importSuccess}</p>}
+
+            <div className="flex gap-2 pt-2">
+              <button type="button" className="btn-secondary flex-1" onClick={() => setShowImport(false)}>
+                Hủy
+              </button>
+              <button 
+                type="button" 
+                className="btn-primary flex-1 font-bold" 
+                disabled={importLoading || !importText.trim()}
+                onClick={handleImport}
+              >
+                {importLoading ? 'Đang import...' : 'Bắt đầu Import'}
               </button>
             </div>
           </div>

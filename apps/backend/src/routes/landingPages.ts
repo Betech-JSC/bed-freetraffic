@@ -184,10 +184,46 @@ router.delete('/:id', authenticate, requireWrite, async (req: AuthRequest, res: 
   }
 });
 
+const getThemedUnsplashImage = (theme: string, prompt: string): string => {
+  const query = ((prompt || '') + ' ' + (theme || '')).toLowerCase();
+  
+  if (query.includes('mật ong') || query.includes('honey') || query.includes('ong')) {
+    return 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&auto=format&fit=crop&q=80';
+  }
+  if (query.includes('hải sản') || query.includes('seafood') || query.includes('cá') || query.includes('tôm') || query.includes('cua')) {
+    return 'https://images.unsplash.com/photo-1534080391025-09795d197360?w=800&auto=format&fit=crop&q=80';
+  }
+  if (query.includes('ăn') || query.includes('food') || query.includes('bếp') || query.includes('nhà hàng') || query.includes('ẩm thực')) {
+    return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80';
+  }
+  if (query.includes('code') || query.includes('lập trình') || query.includes('developer') || query.includes('javascript') || query.includes('react')) {
+    return 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80';
+  }
+  if (query.includes('học') || query.includes('course') || query.includes('giáo dục') || query.includes('education') || query.includes('sách')) {
+    return 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&auto=format&fit=crop&q=80';
+  }
+  if (query.includes('vé') || query.includes('bay') || query.includes('flight') || query.includes('plane') || query.includes('vé máy bay')) {
+    return 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&auto=format&fit=crop&q=80';
+  }
+  if (query.includes('du lịch') || query.includes('travel') || query.includes('tour') || query.includes('khách sạn') || query.includes('hotel')) {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80';
+  }
+  if (theme === 'sale-theme') {
+    return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80';
+  }
+  if (theme === 'education-theme') {
+    return 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&auto=format&fit=crop&q=80';
+  }
+  if (theme === 'saleticket-theme') {
+    return 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80';
+  }
+  return 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=80';
+};
+
 // AI Page generator
 router.post('/generate-ai', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { prompt } = req.body;
+    const { prompt, theme, useCase } = req.body;
     if (!prompt) {
       res.status(400).json({ error: 'Mô tả (prompt) là bắt buộc.' });
       return;
@@ -199,6 +235,50 @@ router.post('/generate-ai', authenticate, async (req: AuthRequest, res: Response
       return;
     }
 
+    const THEME_COLORS: Record<string, {
+      heroBg: string;
+      heroText: string;
+      featuresBg: string;
+      featuresText: string;
+      pricingBg: string;
+      pricingText: string;
+      formBg: string;
+      formText: string;
+    }> = {
+      'ocean-breeze': { heroBg: '#f0f9ff', heroText: '#1e3a8a', featuresBg: '#ffffff', featuresText: '#0369a1', pricingBg: '#e0f2fe', pricingText: '#0369a1', formBg: '#f0f9ff', formText: '#1e3a8a' },
+      'sunny-meadow': { heroBg: '#f0fdf4', heroText: '#064e3b', featuresBg: '#ffffff', featuresText: '#15803d', pricingBg: '#dcfce7', pricingText: '#15803d', formBg: '#f0fdf4', formText: '#064e3b' },
+      'sunset-glow': { heroBg: '#fff7ed', heroText: '#7c2d12', featuresBg: '#ffffff', featuresText: '#c2410c', pricingBg: '#ffedd5', pricingText: '#c2410c', formBg: '#fff7ed', formText: '#7c2d12' },
+      'vibrant-orchid': { heroBg: '#faf5ff', heroText: '#581c87', featuresBg: '#ffffff', featuresText: '#7e22ce', pricingBg: '#f3e8ff', pricingText: '#7e22ce', formBg: '#faf5ff', formText: '#581c87' },
+      'minimalist-light': { heroBg: '#f8fafc', heroText: '#0f172a', featuresBg: '#ffffff', featuresText: '#334155', pricingBg: '#f1f5f9', pricingText: '#334155', formBg: '#f8fafc', formText: '#0f172a' },
+      'sale-theme': { heroBg: '#fffdf9', heroText: '#2d1a03', featuresBg: '#ffffff', featuresText: '#451a03', pricingBg: '#fff7ed', pricingText: '#c2410c', formBg: '#fffdf9', formText: '#2d1a03' },
+      'education-theme': { heroBg: '#ffffff', heroText: '#1e293b', featuresBg: '#f8fafc', featuresText: '#0f172a', pricingBg: '#fff7ed', pricingText: '#f05123', formBg: '#ffffff', formText: '#1e293b' },
+      'saleticket-theme': { heroBg: '#f0f9ff', heroText: '#0f172a', featuresBg: '#ffffff', featuresText: '#1e3a8a', pricingBg: '#e0f2fe', pricingText: '#0284c7', formBg: '#f0f9ff', formText: '#0f172a' }
+    };
+
+    const selectedTheme = theme && THEME_COLORS[theme] ? theme : 'ocean-breeze';
+    const themeInfo = THEME_COLORS[selectedTheme];
+
+    let layoutInstructions = '';
+    if (useCase === 'saas') {
+      layoutInstructions = 'Thiết kế bố cục kiểu SaaS/Phần mềm. Thứ tự các khối nên là: hero -> features -> testimonials -> form (đăng ký dùng thử) -> faq -> footer.';
+    } else if (useCase === 'course') {
+      layoutInstructions = 'Thiết kế bố cục kiểu Khoá học/E-book. Thứ tự các khối nên là: hero -> features -> testimonials -> countdown (giới hạn ưu đãi học phí) -> pricing (đăng ký khoá học) -> faq -> footer.';
+    } else if (useCase === 'ecommerce') {
+      layoutInstructions = 'Thiết kế bố cục kiểu Bán sản phẩm/E-commerce. Thứ tự các khối nên là: hero -> features -> testimonials -> pricing (gói sản phẩm, hỗ trợ direct checkout bằng cách điền productId nếu có) -> faq -> footer.';
+    } else if (useCase === 'service') {
+      layoutInstructions = 'Thiết kế bố cục kiểu Dịch vụ (Yoga, Spa, Agency). Thứ tự các khối nên là: hero -> features -> testimonials -> form (để lại yêu cầu tư vấn) -> faq -> footer.';
+    } else if (useCase === 'event') {
+      layoutInstructions = 'Thiết kế bố cục kiểu Sự kiện/Webinar. Thứ tự các khối nên là: hero -> countdown (thời gian đếm ngược đến sự kiện) -> features -> form (đăng ký vé tham gia) -> footer.';
+    } else if (useCase === 'sale-theme') {
+      layoutInstructions = 'Học theo thiết kế cothaotomca.vn (Bố cục & màu sắc ấm cúng): Tông màu chủ đạo ấm cúng, đậm vị quê hương (cam đỏ, nâu gỗ, vàng nhạt). Bố cục: hero (Slogan nhấn mạnh tính nguyên chất, tự nhiên của sản phẩm người dùng) -> features (Các điểm nổi bật như chất lượng hàng đầu, nguồn gốc tự nhiên, chế biến mẻ mới mỗi ngày) -> pricing (Hiển thị các gói sản phẩm của người dùng với giá bắt đầu bằng "chỉ từ ... VNĐ") -> testimonials (Nhận xét của thực khách/khách hàng) -> footer. LƯU Ý: Nội dung các khối và tên sản phẩm phải hoàn toàn trùng khớp với chủ đề mà người dùng yêu cầu ở prompt (ví dụ nếu bán mật ong thì sinh sản phẩm mật ong, tuyệt đối KHÔNG sinh hải sản ngâm tương của Cô Thảo).';
+    } else if (useCase === 'education-theme') {
+      layoutInstructions = 'Học theo thiết kế f8.edu.vn (Khóa học/Đào tạo): Thiết kế trẻ trung, hiện đại, màu cam nhấn đặc trưng. Bố cục: hero (Banner giới thiệu định hướng/lộ trình học từ số 0 theo chủ đề người dùng yêu cầu) -> features (Lộ trình chi tiết chia thành các chặng/bước học bài bản) -> testimonials (Đánh giá học viên đi trước) -> pricing (Đăng ký gói học/combo ưu đãi) -> faq (Hỏi đáp thắc mắc liên quan) -> footer. LƯU Ý: Nội dung các khối và tên sản phẩm phải hoàn toàn trùng khớp với chủ đề mà người dùng yêu cầu ở prompt (ví dụ nếu bán mật ong thì sinh khóa học/gói học về nuôi ong hoặc kinh doanh nông sản, tuyệt đối KHÔNG sinh các khóa học lập trình Javascript/React của F8).';
+    } else if (useCase === 'saleticket-theme') {
+      layoutInstructions = 'Học theo thiết kế happybooktravel.com (Đặt vé/Du lịch/Combo): Tone màu xanh biển, trời tươi sáng. Bố cục: hero (Banner giới thiệu kèm một đoạn text widget tìm kiếm/đặt trước sản phẩm của người dùng) -> features (Các tiện ích đi kèm chất lượng cao, dịch vụ hỗ trợ chu đáo) -> pricing (Bảng giá các gói sản phẩm/combo dịch vụ theo yêu cầu người dùng) -> form (Form đăng ký tư vấn nhận ưu đãi nhanh) -> footer. LƯU Ý: Nội dung các khối và tên sản phẩm phải hoàn toàn trùng khớp với chủ đề mà người dùng yêu cầu ở prompt (ví dụ nếu bán mật ong thì sinh gói combo mật ong đặc sản, tuyệt đối KHÔNG sinh chặng bay hay tour du lịch của HappyBook).';
+    } else {
+      layoutInstructions = 'Thiết kế bố cục cơ bản: hero -> features -> testimonials -> form -> faq -> footer.';
+    }
+
     const systemInstructions = `Bạn là một kỹ sư thiết kế Landing Page AI chuyên nghiệp.
 Nhiệm vụ của bạn là tạo ra cấu trúc trang web Landing Page tuyệt đẹp dưới dạng một mảng JSON các khối PageBlock theo đúng định dạng được yêu cầu.
 
@@ -206,34 +286,24 @@ Các loại khối (block.type) được hỗ trợ:
 1. "hero": Banner chính (title, subtitle, buttonText, buttonLink, imageUrl, imageAlignment: "left"|"right"|"center", backgroundColor, textColor).
 2. "features": Các lợi ích nổi bật (title, items: string[], backgroundColor, textColor).
 3. "form": Biểu mẫu đăng ký (title, subtitle, formId: "", backgroundColor, textColor).
-4. "pricing": Bảng giá sản phẩm (title, subtitle, priceVal: "499.000đ", buttonText: "Mua ngay", buttonLink: "#register-form", backgroundColor, textColor).
+4. "pricing": Bảng giá sản phẩm (title, subtitle, priceVal: "499.000đ", buttonText: "Mua ngay", buttonLink: "#register-form", backgroundColor, textColor, productId: "").
 5. "footer": Chân trang (title, subtitle, backgroundColor, textColor).
 6. "countdown": Đồng hồ đếm ngược (title, subtitle, countdownEnd: "2026-06-30T23:59:00", backgroundColor, textColor).
 7. "testimonials": Đánh giá khách hàng (title, reviews: [{name, role, rating: 5, quote, avatar: ""}], backgroundColor, textColor).
 8. "faq": Câu hỏi thường gặp (title, faqs: [{question, answer}], backgroundColor, textColor).
 
-Quy tắc:
-1. Luôn thiết kế Landing Page có thứ tự khối hợp lý (Ví dụ: hero -> features -> testimonials -> countdown -> pricing -> faq -> footer).
+Quy tắc thiết kế quan trọng:
+1. Thứ tự và bố cục khối: ${layoutInstructions}
 2. Tạo ra tối thiểu 4 khối và tối đa 7 khối. Hãy viết tiêu đề, nội dung và các câu hỏi/lợi ích bằng tiếng Việt thật tự nhiên, thu hút khách mua hàng.
-3. Luôn chọn màu sắc phối hợp hài hòa, đẹp mắt (ví dụ: backgroundColor tối như #0f172a, #0b0f19, #030712 và chữ sáng như #ffffff, #94a3b8).
-4. Chỉ trả về MẢNG JSON HỢP LỆ dạng PageBlock[].
-5. KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô để có thể chạy JSON.parse() trực tiếp.
-
-Ví dụ trả về:
-[
-  {
-    "id": "block-hero",
-    "type": "hero",
-    "title": "Tăng Trưởng Bứt Phá Doanh Số",
-    "subtitle": "Giải pháp marketing tối ưu",
-    "buttonText": "Đăng ký ngay",
-    "buttonLink": "#register-form",
-    "imageUrl": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60",
-    "imageAlignment": "right",
-    "backgroundColor": "#0f172a",
-    "textColor": "#ffffff"
-  }
-]`;
+3. Luôn sử dụng tông màu tươi sáng dựa trên cấu hình theme được chọn sau đây:
+   - Màu nền Hero: ${themeInfo.heroBg}, màu chữ Hero: ${themeInfo.heroText}
+   - Màu nền Features: ${themeInfo.featuresBg}, màu chữ Features: ${themeInfo.featuresText}
+   - Màu nền Pricing: ${themeInfo.pricingBg}, màu chữ Pricing: ${themeInfo.pricingText}
+   - Màu nền Form: ${themeInfo.formBg}, màu chữ Form: ${themeInfo.formText}
+   - Màu nền Testimonials/Faq/Footer nên dùng màu nền sáng dịu như #ffffff, #f8fafc hoặc màu nền đồng tông nhẹ nhàng khác.
+4. Đối với ảnh (imageUrl) trong Hero: Hãy chọn hình ảnh chất lượng từ Unsplash tương thích với chủ đề. Ví dụ ảnh công nghệ/lập trình: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop", ảnh hải sản/món ăn: "https://images.unsplash.com/photo-1534080391025-09795d197360?w=800&auto=format&fit=crop", ảnh máy bay/du lịch: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&auto=format&fit=crop", vv.
+5. Chỉ trả về MẢNG JSON HỢP LỆ dạng PageBlock[].
+6. KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô để có thể chạy JSON.parse() trực tiếp.`;
 
     const response = await fetch(ai.url, {
       method: 'POST',
@@ -262,11 +332,20 @@ Ví dụ trả về:
     try {
       const parsed = JSON.parse(contentText);
       if (Array.isArray(parsed)) {
-        // Add random ID if not present
-        const processed = parsed.map((b: any, idx: number) => ({
-          ...b,
-          id: b.id || `block-ai-${Date.now()}-${idx}`
-        }));
+        // Add random ID if not present and ensure high-quality themed images
+        const processed = parsed.map((b: any, idx: number) => {
+          let imageUrl = b.imageUrl;
+          if (b.type === 'hero') {
+            if (!imageUrl || imageUrl.startsWith('/') || !imageUrl.startsWith('http')) {
+              imageUrl = getThemedUnsplashImage(theme || '', prompt || '');
+            }
+          }
+          return {
+            ...b,
+            imageUrl,
+            id: b.id || `block-ai-${Date.now()}-${idx}`
+          };
+        });
         res.json(processed);
       } else {
         throw new Error('AI không trả về mảng.');

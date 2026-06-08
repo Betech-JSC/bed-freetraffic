@@ -1,0 +1,311 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.sendTelegramAlert = sendTelegramAlert;
+exports.handleVisitorMessage = handleVisitorMessage;
+const prisma_1 = __importDefault(require("../lib/prisma"));
+const ai_1 = require("../lib/ai");
+async function sendTelegramAlert(workspaceId, text) {
+    try {
+        const conn = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'telegram', workspaceId }
+        });
+        const token = conn?.accessToken || process.env.TELEGRAM_BOT_TOKEN;
+        const chatId = conn?.pageId || process.env.TELEGRAM_CHAT_ID;
+        if (!token || !chatId) {
+            return;
+        }
+        const url = `https://api.telegram.org/bot${token}/sendMessage`;
+        await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: chatId,
+                text: text,
+                parse_mode: 'HTML',
+            }),
+            signal: AbortSignal.timeout(10000),
+        });
+    }
+    catch (e) {
+        console.error('Lỗi gửi Telegram alert:', e);
+    }
+}
+async function extractNameFromMessage(message, email, apiKey, url, model, headers) {
+    const defaultName = email.split('@')[0];
+    try {
+        let response = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model,
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'Bạn là trợ lý AI chuyên trích xuất họ và tên (hoặc tên gọi) của khách hàng từ nội dung tin nhắn trò chuyện bằng tiếng Việt. Chỉ trả về chuỗi tên sạch được viết hoa chữ cái đầu (Ví dụ: "Lê Duy Khanh", "Nguyễn Văn A"), không trả về thêm bất kỳ từ giải thích hay ký tự thừa nào. Nếu không tìm thấy tên trong tin nhắn, chỉ trả về chuỗi rỗng "".'
+                    },
+                    { role: 'user', content: `Nội dung tin nhắn: "${message}"` }
+                ],
+                temperature: 0.1,
+                max_tokens: 50,
+            }),
+            signal: AbortSignal.timeout(5000),
+        });
+        // Fallback model if primary failed (e.g. rate limit 429)
+        if (!response.ok && apiKey.startsWith('sk-or-')) {
+            console.warn(`[extractName] Primary model failed (${response.status}). Trying fallback Qwen...`);
+            response = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    model: 'qwen/qwen-2.5-72b-instruct:free',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Bạn là trợ lý AI chuyên trích xuất họ và tên (hoặc tên gọi) của khách hàng từ nội dung tin nhắn trò chuyện bằng tiếng Việt. Chỉ trả về chuỗi tên sạch được viết hoa chữ cái đầu (Ví dụ: "Lê Duy Khanh", "Nguyễn Văn A"), không trả về thêm bất kỳ từ giải thích hay ký tự thừa nào. Nếu không tìm thấy tên trong tin nhắn, chỉ trả về chuỗi rỗng "".'
+                        },
+                        { role: 'user', content: `Nội dung tin nhắn: "${message}"` }
+                    ],
+                    temperature: 0.1,
+                    max_tokens: 50,
+                }),
+                signal: AbortSignal.timeout(5000),
+            });
+        }
+        if (response.ok) {
+            const data = await response.json();
+            const extracted = data.choices?.[0]?.message?.content?.trim();
+            if (extracted) {
+                const cleanName = extracted.replace(/^["']|["']$/g, '').trim();
+                if (cleanName && cleanName.length < 50 && cleanName !== "") {
+                    return cleanName;
+                }
+            }
+        }
+    }
+    catch (err) {
+        console.error('Lỗi khi gọi AI trích xuất tên khách hàng:', err);
+    }
+    return defaultName;
+}
+async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, userAgent) {
+    // 1. Get or create session
+    let session;
+    if (sessionId) {
+        session = await prisma_1.default.chatSession.findFirst({
+            where: { id: sessionId, workspaceId }
+        });
+    }
+    if (!session) {
+        session = await prisma_1.default.chatSession.create({
+            data: {
+                workspaceId,
+                ipAddress: ipAddress || null,
+                userAgent: userAgent || null,
+            }
+        });
+    }
+    // 2. Save visitor message
+    await prisma_1.default.chatMessage.create({
+        data: {
+            sessionId: session.id,
+            sender: 'visitor',
+            content: message,
+        }
+    });
+    // Check if agent takeover is active (any agent message in the last 30 minutes)
+    const lastAgentMsg = await prisma_1.default.chatMessage.findFirst({
+        where: { sessionId: session.id, sender: 'agent' },
+        orderBy: { createdAt: 'desc' },
+    });
+    const hasAgentTakeover = lastAgentMsg && (Date.now() - new Date(lastAgentMsg.createdAt).getTime() < 30 * 60 * 1000);
+    if (hasAgentTakeover) {
+        return {
+            sessionId: session.id,
+            reply: '',
+            customerId: session.customerId,
+        };
+    }
+    // 3. Load CSKH Configuration
+    const config = await prisma_1.default.cskhConfig.findUnique({
+        where: { workspaceId }
+    });
+    const aiEnabled = config?.aiChatbotEnabled ?? false;
+    const kbText = config?.knowledgeBaseText ?? '';
+    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    let replyText = 'Cảm ơn bạn đã liên hệ. Hiện tại chatbot AI đang bận. Vui lòng để lại số điện thoại hoặc email để chúng tôi liên hệ hỗ trợ sớm nhất!';
+    if (aiEnabled && ai.apiKey) {
+        try {
+            // Load recent message history for context (last 8 messages, sorted descending then reversed)
+            const history = await prisma_1.default.chatMessage.findMany({
+                where: { sessionId: session.id },
+                orderBy: { createdAt: 'desc' },
+                take: 8,
+            });
+            history.reverse();
+            const messagesForAi = history.map(msg => ({
+                role: msg.sender === 'visitor' ? 'user' : 'assistant',
+                content: msg.content,
+            }));
+            const defaultKb = `Be Traffic (Growth OS) là một nền tảng tối ưu hóa traffic và bán hàng tự động All-in-One.
+Các tính năng và dịch vụ chính:
+1. Đăng bài đa kênh tự động: Lên lịch và xuất bản bài đăng lên Facebook, Zalo, YouTube.
+2. SEO Tools: Quét và chấm điểm SEO website (SEO Onpage Auditor), quét và kiểm tra chất lượng backlink.
+3. Landing Page & Visual Builder: Thiết kế kéo thả trang đích trực quan không cần code, chèn tracking pixel.
+4. Custom Forms & CRM: Thiết kế biểu mẫu thu thập Leads đăng ký, lưu trữ và chăm sóc khách hàng tập trung.
+5. Email Drip Campaign: Thiết lập chuỗi email tự động gửi bám đuổi chăm sóc khách hàng.
+6. CSKH AI & Chatbot: Hỗ trợ live chat trực tuyến, tự động ghi nhận lead (Email, SĐT) và cảnh báo về Telegram, tự động follow-up sau khi chat kết thúc.
+7. Thanh toán đối soát tự động: Tích hợp cổng PayOS VietQR và Stripe quốc tế để nâng hạng khách hàng khi thanh toán thành công.`;
+            const effectiveKb = kbText
+                ? `${kbText}\n\nThông tin thêm về hệ thống:\n${defaultKb}`
+                : defaultKb;
+            const systemPrompt = `Bạn là chatbot chăm sóc khách hàng tự động thông minh bằng tiếng Việt của chúng tôi.
+Dưới đây là tri thức của hệ thống (Knowledge Base):
+---
+${effectiveKb}
+---
+Nhiệm vụ của bạn:
+1. Trả lời câu hỏi của khách hàng dựa trên thông tin Tri thức trên một cách lịch sự, thân thiện và chuyên nghiệp.
+2. Hãy tư vấn linh hoạt và trả lời trực tiếp câu hỏi của khách dựa trên Tri thức. Tránh việc chào hỏi lặp lại nhiều lần nếu khách đã ở trong cuộc hội thoại.
+3. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
+4. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
+5. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
+            let response = await fetch(ai.url, {
+                method: 'POST',
+                headers: ai.headers,
+                body: JSON.stringify({
+                    model: ai.model,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        ...messagesForAi
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 500,
+                }),
+                signal: AbortSignal.timeout(15000),
+            });
+            // Fallback model if primary failed (e.g. rate limit 429 or 502)
+            if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
+                console.warn(`[cskhChat] Primary model ${ai.model} failed (${response.status}). Trying fallback Qwen...`);
+                response = await fetch(ai.url, {
+                    method: 'POST',
+                    headers: ai.headers,
+                    body: JSON.stringify({
+                        model: 'qwen/qwen-2.5-72b-instruct:free',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            ...messagesForAi
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 500,
+                    }),
+                    signal: AbortSignal.timeout(15000),
+                });
+            }
+            if (response.ok) {
+                const data = await response.json();
+                const generated = data.choices?.[0]?.message?.content?.trim();
+                if (generated) {
+                    replyText = generated;
+                }
+            }
+            else {
+                const errorText = await response.text();
+                console.error('OpenAI API error in CSKH:', response.status, errorText);
+            }
+        }
+        catch (err) {
+            console.error('Lỗi khi gọi OpenAI Chatbot CSKH:', err);
+        }
+    }
+    // Save bot response
+    await prisma_1.default.chatMessage.create({
+        data: {
+            sessionId: session.id,
+            sender: 'bot',
+            content: replyText,
+        }
+    });
+    // 4. Extract Email & Phone from message
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+    const phoneRegex = /(?:\+84|0)\d{9,10}/g;
+    const emailsFound = message.match(emailRegex);
+    const phonesFound = message.match(phoneRegex);
+    let customerId = session.customerId;
+    if (emailsFound && emailsFound.length > 0) {
+        const email = emailsFound[0].toLowerCase();
+        const phone = phonesFound && phonesFound.length > 0 ? phonesFound[0] : null;
+        // Check if customer exists in the workspace
+        let customer = await prisma_1.default.customer.findFirst({
+            where: { email, workspaceId }
+        });
+        if (customer) {
+            // Update phone if provided
+            const updatedData = {};
+            if (phone && !customer.phone) {
+                updatedData.phone = phone;
+            }
+            // If the current name is default (equals email prefix) and we extracted a better name
+            const defaultName = email.split('@')[0];
+            if (customer.name === defaultName && ai.apiKey) {
+                const extractedName = await extractNameFromMessage(message, email, ai.apiKey, ai.url, ai.model, ai.headers);
+                if (extractedName && extractedName !== defaultName) {
+                    updatedData.name = extractedName;
+                }
+            }
+            updatedData.lastContactAt = new Date();
+            customer = await prisma_1.default.customer.update({
+                where: { id: customer.id },
+                data: updatedData,
+            });
+        }
+        else {
+            // Create new customer
+            let name = email.split('@')[0];
+            if (ai.apiKey) {
+                name = await extractNameFromMessage(message, email, ai.apiKey, ai.url, ai.model, ai.headers);
+            }
+            customer = await prisma_1.default.customer.create({
+                data: {
+                    name,
+                    email,
+                    phone,
+                    status: 'NEW',
+                    workspaceId,
+                    lastContactAt: new Date(),
+                }
+            });
+            // Send Telegram alert for new lead
+            const alertMsg = `🔔 <b>Lead mới từ Live Chat Chatbot!</b>\n\n` +
+                `• <b>Email:</b> ${email}\n` +
+                `• <b>SĐT:</b> ${phone || 'Chưa cung cấp'}\n` +
+                `• <b>Tin nhắn cuối:</b> <i>"${message}"</i>\n\n` +
+                `<i>Hệ thống đã tự động lưu khách hàng này vào CRM.</i>`;
+            await sendTelegramAlert(workspaceId, alertMsg);
+        }
+        customerId = customer.id;
+        // Link customer to the chat session
+        await prisma_1.default.chatSession.update({
+            where: { id: session.id },
+            data: { customerId }
+        });
+    }
+    // 5. Schedule AI Follow-up if Delay configured and customer linked
+    if (customerId && config && config.followUpDelayHours && config.followUpDelayHours > 0) {
+        const scheduledTime = new Date(Date.now() + config.followUpDelayHours * 60 * 60 * 1000);
+        await prisma_1.default.chatSession.update({
+            where: { id: session.id },
+            data: {
+                followUpScheduledAt: scheduledTime,
+                followUpSent: false, // Reset followUpSent to allow follow-up if they resume chat
+            }
+        });
+    }
+    return {
+        sessionId: session.id,
+        reply: replyText,
+        customerId,
+    };
+}

@@ -1,0 +1,616 @@
+diff --git a/apps/frontend/src/app/dashboard/customers/page.tsx b/apps/frontend/src/app/dashboard/customers/page.tsx
+index d7e8ced..e263511 100644
+--- a/apps/frontend/src/app/dashboard/customers/page.tsx
++++ b/apps/frontend/src/app/dashboard/customers/page.tsx
+@@ -45,7 +45,7 @@ type CustomerDetail = Omit<CustomerRow, 'notes'> & {
+ };
+ 
+ export default function CustomersPage() {
+-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
++  const [allCustomers, setAllCustomers] = useState<CustomerRow[]>([]);
+   const { t, locale } = useLocale();
+   const [selectedId, setSelectedId] = useState<number | null>(null);
+   const [detail, setDetail] = useState<CustomerDetail | null>(null);
+@@ -53,6 +53,21 @@ export default function CustomersPage() {
+   const [filterStatus, setFilterStatus] = useState('');
+   const [search, setSearch] = useState('');
+   const [searchDebounced, setSearchDebounced] = useState('');
++
++  // Client-side filtering
++  const customers = allCustomers.filter((c) => {
++    if (filterStatus && c.status !== filterStatus) return false;
++    if (searchDebounced) {
++      const q = searchDebounced.toLowerCase();
++      return (
++        c.name.toLowerCase().includes(q) ||
++        c.email.toLowerCase().includes(q) ||
++        (c.company && c.company.toLowerCase().includes(q))
++      );
++    }
++    return true;
++  });
++
+   const [loadError, setLoadError] = useState('');
+   const [actionError, setActionError] = useState('');
+   const [success, setSuccess] = useState('');
+@@ -84,14 +99,10 @@ export default function CustomersPage() {
+   }, [search]);
+ 
+   const loadList = useCallback(async () => {
+-    const params = new URLSearchParams();
+-    if (filterStatus) params.set('status', filterStatus);
+-    if (searchDebounced) params.set('q', searchDebounced);
+-    const q = params.toString() ? `?${params}` : '';
+-    const data = await apiJson<CustomerRow[]>(`/customers${q}`);
+-    setCustomers(Array.isArray(data) ? data : []);
++    const data = await apiJson<CustomerRow[]>('/customers');
++    setAllCustomers(Array.isArray(data) ? data : []);
+     setLoadError('');
+-  }, [filterStatus, searchDebounced]);
++  }, []);
+ 
+   const loadDetail = async (id: number) => {
+     setDetail(await apiJson<CustomerDetail>(`/customers/${id}`));
+@@ -102,7 +113,7 @@ export default function CustomersPage() {
+     loadList()
+       .catch((e: unknown) => {
+         setLoadError(e instanceof Error ? e.message : 'Lỗi tải danh sách');
+-        setCustomers([]);
++        setAllCustomers([]);
+       })
+       .finally(() => setLoading(false));
+   }, [loadList]);
+@@ -151,6 +162,42 @@ export default function CustomersPage() {
+     }
+   };
+ 
++  const handleDelete = async (id: number) => {
++    if (!confirm('Bạn có chắc chắn muốn xóa khách hàng này không? Mọi thông tin ghi chú và nhật ký tương tác sẽ bị xóa vĩnh viễn.')) return;
++    setActionError('');
++    setSuccess('');
++    try {
++      await apiJson(`/customers/${id}`, { method: 'DELETE' });
++      setSuccess('Đã xóa khách hàng thành công');
++      setSelectedId(null);
++      setChecked((prev) => {
++        const next = new Set(prev);
++        next.delete(id);
++        return next;
++      });
++      await loadList();
++    } catch (e: unknown) {
++      setActionError(e instanceof Error ? e.message : 'Không thể xóa khách hàng');
++    }
++  };
++
++  const handleStatusChange = async (id: number, newStatus: string) => {
++    setActionError('');
++    setSuccess('');
++    try {
++      await apiJson(`/customers/${id}`, {
++        method: 'PATCH',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({ status: newStatus }),
++      });
++      setSuccess('Đã cập nhật trạng thái khách hàng');
++      await loadDetail(id);
++      await loadList();
++    } catch (e: unknown) {
++      setActionError(e instanceof Error ? e.message : 'Không thể cập nhật trạng thái');
++    }
++  };
++
+   const addNote = async () => {
+     if (!selectedId || !newNote.trim()) return;
+     setActionError('');
+@@ -268,9 +315,9 @@ export default function CustomersPage() {
+   const needsBackendRestart = loadError.includes('404') || loadError.includes('Không kết nối');
+ 
+   // Compute metrics
+-  const totalCustomers = customers.length;
+-  const vipCustomers = customers.filter((c) => c.status === 'VIP').length;
+-  const needFollowUpCustomers = customers.filter((c) => c.status === 'NEED_FOLLOWUP').length;
++  const totalCustomers = allCustomers.length;
++  const vipCustomers = allCustomers.filter((c) => c.status === 'VIP').length;
++  const needFollowUpCustomers = allCustomers.filter((c) => c.status === 'NEED_FOLLOWUP').length;
+ 
+   return (
+     <div className="page-container">
+@@ -470,9 +517,26 @@ export default function CustomersPage() {
+                       <h3 className="text-lg font-black text-slate-800">{detail.name}</h3>
+                       <p className="text-xs text-slate-500 font-medium mt-0.5">{detail.email}</p>
+                     </div>
+-                    <span className={`px-2.5 py-0.5 border rounded-full text-xs font-bold ${getStatusBadgeClass(detail.status)}`}>
+-                      {STATUS_LABELS[detail.status]}
+-                    </span>
++                    <div className="flex flex-col items-end gap-2">
++                      <select
++                        value={detail.status}
++                        onChange={(e) => handleStatusChange(detail.id, e.target.value)}
++                        className={`text-xs font-bold px-2 py-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 cursor-pointer transition-all ${getStatusBadgeClass(detail.status)}`}
++                      >
++                        {Object.entries(STATUS_LABELS).map(([k, v]) => (
++                          <option key={k} value={k} className="bg-white text-slate-800 font-medium">
++                            {v}
++                          </option>
++                        ))}
++                      </select>
++                      <button
++                        type="button"
++                        onClick={() => handleDelete(detail.id)}
++                        className="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2.5 py-1 rounded-lg font-bold transition-all shadow-sm"
++                      >
++                        🗑️ Xóa khách hàng
++                      </button>
++                    </div>
+                   </div>
+                   
+                   <div className="grid grid-cols-2 gap-4 text-xs pt-2 border-t text-slate-600">
+diff --git a/apps/frontend/src/app/dashboard/landing/[id]/builder/page.tsx b/apps/frontend/src/app/dashboard/landing/[id]/builder/page.tsx
+index e559276..58d1064 100644
+--- a/apps/frontend/src/app/dashboard/landing/[id]/builder/page.tsx
++++ b/apps/frontend/src/app/dashboard/landing/[id]/builder/page.tsx
+@@ -171,7 +171,7 @@ export default function LandingPageBuilder() {
+   }, [loadData]);
+ 
+   // Generate public HTML code based on layout blocks
+-  const compileHtml = (blocksList: PageBlock[], seoData: typeof seo): string => {
++  const compileHtml = (blocksList: PageBlock[], seoData: typeof seo, productsList: any[]): string => {
+     let html = `<!DOCTYPE html>
+ <html lang="vi">
+ <head>
+@@ -336,33 +336,223 @@ export default function LandingPageBuilder() {
+           ? `onclick="openCheckout('${block.productId}', '${block.title}', '${block.priceVal || ''}')"` 
+           : `href="${block.buttonLink || '#register-form'}"`;
+ 
+-        html += `
+-  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${block.backgroundColor || '#0b0f19'}; color: ${block.textColor || '#ffffff'};">
++        let btnBgCol = '#f25c22';
++        let btnHoverBgCol = '#d94d1a';
++        if (aiTheme === 'saleticket-theme') {
++          btnBgCol = '#0284c7';
++          btnHoverBgCol = '#0369a1';
++        } else if (aiTheme === 'education-theme') {
++          btnBgCol = '#f05123';
++          btnHoverBgCol = '#d94416';
++        }
++
++        const displayProducts = productsList && productsList.length > 0
++          ? productsList.slice(0, 3)
++          : [
++              { id: 1, name: `${page?.title || 'Sản phẩm'} Loại A`, description: 'Mô tả chi tiết sản phẩm chất lượng cao.', price: 150000, currency: 'VND' },
++              { id: 2, name: `${page?.title || 'Sản phẩm'} Loại B`, description: 'Sản phẩm tuyển chọn loại thượng hạng.', price: 250000, currency: 'VND' },
++              { id: 3, name: `${page?.title || 'Sản phẩm'} Đặc Biệt`, description: 'Món đặc sản độc quyền giới hạn từ cửa hàng.', price: 350000, currency: 'VND' }
++            ];
++
++        const getProductImage = (pName: string, index: number): string => {
++          const lowerName = pName.toLowerCase();
++          if (lowerName.includes('mật ong') || lowerName.includes('honey') || lowerName.includes('ong')) {
++            const honeyImgs = [
++              'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=600&auto=format&fit=crop&q=80'
++            ];
++            return honeyImgs[index % honeyImgs.length];
++          }
++          if (aiTheme === 'sale-theme') {
++            const foodImgs = [
++              'https://images.unsplash.com/photo-1534080391025-09795d197360?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1534482421-64566f976cfa?w=600&auto=format&fit=crop&q=80'
++            ];
++            return foodImgs[index % foodImgs.length];
++          }
++          if (aiTheme === 'education-theme') {
++            const eduImgs = [
++              'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=600&auto=format&fit=crop&q=80'
++            ];
++            return eduImgs[index % eduImgs.length];
++          }
++          if (aiTheme === 'saleticket-theme') {
++            const travelImgs = [
++              'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=600&auto=format&fit=crop&q=80',
++              'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?w=600&auto=format&fit=crop&q=80'
++            ];
++            return travelImgs[index % travelImgs.length];
++          }
++          return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80';
++        };
++
++        if (aiTheme === 'sale-theme') {
++          html += `
++  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
++    <div class="max-w-6xl mx-auto space-y-6">
++      <div class="text-center max-w-xl mx-auto mb-12">
++        <span class="px-3 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full uppercase tracking-wider">Đặc Sản</span>
++        <h2 class="text-3xl md:text-4xl font-extrabold mt-2 ${sectionHeading}">${block.title}</h2>
++        <p class="text-sm mt-2 opacity-90">${block.subtitle || 'Chọn những sản phẩm đặc sản chất lượng được giao trong ngày.'}</p>
++      </div>
++      
++      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
++        ${displayProducts.map((p, index) => {
++          const img = getProductImage(p.name, index);
++          const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
++          const pCurrency = p.currency || 'VND';
++          const buttonAction = isDirectCheckout 
++            ? `onclick="openCheckout('${p.id}', '${p.name}', '${pPrice} ${pCurrency}')"`
++            : `href="${block.buttonLink || '#register-form'}"`;
++
++          const badges = ['Bán Chạy Nhất', 'Đặc Sản Cửa Hàng', 'Gợi Ý Đứng Đầu'];
++          const badgeBg = ['bg-orange-100 text-orange-850', 'bg-amber-100 text-amber-800', 'bg-green-100 text-green-800'];
++          const badge = badges[index % badges.length];
++          const badgeClass = badgeBg[index % badgeBg.length];
++
++          return `
++          <div class="rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transform hover:-translate-y-1 transition duration-350 ${cardBg}">
++            <img src="${img}" alt="${p.name}" class="h-48 w-full object-cover" />
++            <div class="p-6 flex-1 flex flex-col justify-between text-left">
++              <div class="space-y-2">
++                <span class="inline-block px-2 py-0.5 ${badgeClass} text-[10px] font-bold rounded">${badge}</span>
++                <h3 class="text-lg font-bold ${cardTextPrimary}">${p.name}</h3>
++                <p class="text-xs ${cardTextSecondary}">${p.description || 'Sản phẩm chất lượng cao được tuyển chọn kỹ lưỡng, đảm bảo an toàn vệ sinh thực phẩm.'}</p>
++              </div>
++              <div class="mt-6 pt-4 border-t ${isLight ? 'border-slate-100' : 'border-gray-800'} flex justify-between items-center">
++                <span class="text-orange-600 font-extrabold text-base">chỉ từ ${pPrice}đ</span>
++                <${isDirectCheckout ? 'button' : 'a'} ${buttonAction} style="background-color: #f25c22;" class="px-4 py-2 hover:bg-orange-700 text-white rounded-lg text-xs font-bold transition">Đặt Mua</${isDirectCheckout ? 'button' : 'a'}>
++              </div>
++            </div>
++          </div>`;
++        }).join('')}
++      </div>
++    </div>
++  </section>`;
++        } else if (aiTheme === 'education-theme') {
++          html += `
++  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
++    <div class="max-w-6xl mx-auto space-y-6">
++      <div class="text-center max-w-xl mx-auto mb-12">
++        <span class="px-3 py-1 bg-orange-100 text-orange-850 text-[10px] font-bold rounded-full uppercase tracking-wider">Lộ Trình Bài Bản</span>
++        <h2 class="text-3xl md:text-4xl font-extrabold mt-2 ${sectionHeading}">${block.title}</h2>
++        <p class="text-sm mt-2 opacity-90">${block.subtitle || 'Khóa học lập trình chất lượng cao học trực tuyến hiệu quả cao cùng Mentor.'}</p>
++      </div>
++
++      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
++        ${displayProducts.map((p, index) => {
++          const img = getProductImage(p.name, index);
++          const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
++          const pCurrency = p.currency || 'VND';
++          const buttonAction = isDirectCheckout 
++            ? `onclick="openCheckout('${p.id}', '${p.name}', '${pPrice} ${pCurrency}')"`
++            : `href="${block.buttonLink || '#register-form'}"`;
++
++          const badges = ['Pro Course', 'Web Backend', 'Foundation'];
++          const badgeBg = ['bg-sky-100 text-sky-800', 'bg-purple-100 text-purple-800', 'bg-green-100 text-green-800'];
++          const badge = badges[index % badges.length];
++          const badgeClass = badgeBg[index % badgeBg.length];
++
++          return `
++          <div class="rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transform hover:-translate-y-1 transition duration-350 ${cardBg}">
++            <img src="${img}" alt="${p.name}" class="h-48 w-full object-cover" />
++            <div class="p-6 flex-1 flex flex-col justify-between text-left">
++              <div class="space-y-2">
++                <span class="inline-block px-2 py-0.5 ${badgeClass} text-[10px] font-bold rounded">${badge}</span>
++                <h3 class="text-lg font-bold ${cardTextPrimary}">${p.name}</h3>
++                <p class="text-xs ${cardTextSecondary}">${p.description || 'Khóa học chất lượng cao với lộ trình bài bản học từ số 0 giúp tự tin đi làm.'}</p>
++              </div>
++              <div class="mt-6 pt-4 border-t ${isLight ? 'border-slate-100' : 'border-gray-800'} flex justify-between items-center">
++                <span class="text-[#f05123] font-extrabold text-base">${pPrice}đ</span>
++                <${isDirectCheckout ? 'button' : 'a'} ${buttonAction} style="background-color: #f05123;" class="px-4 py-2 hover:bg-[#d94416] text-white rounded-lg text-xs font-bold transition">Đăng Ký Học</${isDirectCheckout ? 'button' : 'a'}>
++              </div>
++            </div>
++          </div>`;
++        }).join('')}
++      </div>
++    </div>
++  </section>`;
++        } else if (aiTheme === 'saleticket-theme') {
++          html += `
++  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
++    <div class="max-w-6xl mx-auto space-y-6">
++      <div class="text-center max-w-xl mx-auto mb-12">
++        <span class="px-3 py-1 bg-sky-100 text-sky-850 text-[10px] font-bold rounded-full uppercase tracking-wider">Hành Trình Mơ Ước</span>
++        <h2 class="text-3xl md:text-4xl font-extrabold mt-2 ${sectionHeading}">${block.title}</h2>
++        <p class="text-sm mt-2 opacity-90">${block.subtitle || 'Đặt combo giá tốt nhất, an tâm hỗ trợ 24/7.'}</p>
++      </div>
++
++      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
++        ${displayProducts.map((p, index) => {
++          const img = getProductImage(p.name, index);
++          const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
++          const pCurrency = p.currency || 'VND';
++          const buttonAction = isDirectCheckout 
++            ? `onclick="openCheckout('${p.id}', '${p.name}', '${pPrice} ${pCurrency}')"`
++            : `href="${block.buttonLink || '#register-form'}"`;
++
++          const badges = ['Combo Bay + Ở', 'Tour Trọn Gói', 'Vé Máy Bay Hot'];
++          const badgeBg = ['bg-sky-100 text-sky-850', 'bg-blue-100 text-blue-800', 'bg-green-100 text-green-800'];
++          const badge = badges[index % badges.length];
++          const badgeClass = badgeBg[index % badgeBg.length];
++          const btnLabel = index === 0 ? 'Đặt Combo' : index === 1 ? 'Đặt Tour' : 'Đặt Vé';
++
++          return `
++          <div class="rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transform hover:-translate-y-1 transition duration-350 ${cardBg}">
++            <img src="${img}" alt="${p.name}" class="h-48 w-full object-cover" />
++            <div class="p-6 flex-1 flex flex-col justify-between text-left">
++              <div class="space-y-2">
++                <span class="inline-block px-2 py-0.5 ${badgeClass} text-[10px] font-bold rounded">${badge}</span>
++                <h3 class="text-lg font-bold ${cardTextPrimary}">${p.name}</h3>
++                <p class="text-xs ${cardTextSecondary}">${p.description || 'Dịch vụ du lịch lữ hành, vé máy bay giá tốt, tư vấn chăm sóc khách hàng 24/7.'}</p>
++              </div>
++              <div class="mt-6 pt-4 border-t ${isLight ? 'border-slate-100' : 'border-gray-800'} flex justify-between items-center">
++                <span class="text-sky-655 font-extrabold text-base">chỉ từ ${pPrice}đ</span>
++                <${isDirectCheckout ? 'button' : 'a'} ${buttonAction} style="background-color: #0284c7;" class="px-4 py-2 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition">${btnLabel}</${isDirectCheckout ? 'button' : 'a'}>
++              </div>
++            </div>
++          </div>`;
++        }).join('')}
++      </div>
++    </div>
++  </section>`;
++        } else {
++          html += `
++  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
+     <div class="max-w-4xl mx-auto space-y-6">
+       <h2 class="text-3xl md:text-4xl font-bold">${block.title}</h2>
+-      <p class="text-gray-400 text-sm max-w-2xl mx-auto">${block.subtitle || ''}</p>
++      <p class="opacity-90 text-sm max-w-2xl mx-auto">${block.subtitle || ''}</p>
+       
+-      <div class="max-w-sm mx-auto bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-xl mt-8 relative overflow-hidden">
++      <div class="max-w-sm mx-auto rounded-2xl p-8 shadow-xl mt-8 relative overflow-hidden ${cardBg}">
+         <div class="absolute top-0 right-0 px-3 py-1 bg-[#f25c22] text-xs font-bold text-white uppercase rounded-bl-lg">Phổ biến</div>
+-        <h3 class="text-xl font-bold text-white">Gói Ưu Đãi</h3>
+-        <p class="text-4xl font-extrabold text-white mt-4 my-2">${block.priceVal || '499.000đ'}<span class="text-sm font-normal text-gray-500">/tháng</span></p>
+-        <p class="text-gray-400 text-xs mt-2">Truy cập toàn bộ tính năng tăng trưởng.</p>
++        <h3 class="text-xl font-bold ${cardTextPrimary}">Gói Ưu Đãi</h3>
++        <p class="text-4xl font-extrabold mt-4 my-2 ${cardTextPrimary}">${block.priceVal || '499.000đ'}<span class="text-sm font-normal text-gray-500">/tháng</span></p>
++        <p class="text-xs mt-2 ${cardTextMuted}">Truy cập toàn bộ tính năng tăng trưởng.</p>
+         
+-        <ul class="text-left space-y-3 mt-6 text-sm text-gray-300">
+-          <li class="flex items-center gap-2">✓ Viết bài chuẩn SEO bằng AI</li>
+-          <li class="flex items-center gap-2">✓ Quản lý bài đăng đa kênh</li>
+-          <li class="flex items-center gap-2">✓ Hệ thống Drip Email tự động</li>
+-          <li class="flex items-center gap-2">✓ Báo cáo Analytics nâng cao</li>
++        <ul class="text-left space-y-3 mt-6 text-sm ${cardTextSecondary}">
++          <li class="flex items-center gap-2"><span class="${iconCheck}">✓</span> Viết bài chuẩn SEO bằng AI</li>
++          <li class="flex items-center gap-2"><span class="${iconCheck}">✓</span> Quản lý bài đăng đa kênh</li>
++          <li class="flex items-center gap-2"><span class="${iconCheck}">✓</span> Hệ thống Drip Email tự động</li>
++          <li class="flex items-center gap-2"><span class="${iconCheck}">✓</span> Báo cáo Analytics nâng cao</li>
+         </ul>
+         
+         <div class="pt-6">
+-          <${isDirectCheckout ? 'button' : 'a'} ${buttonActionHtml} class="block w-full py-3 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg text-center cursor-pointer transition duration-200">
++          <${isDirectCheckout ? 'button' : 'a'} ${buttonActionHtml} style="background-color: ${btnBgCol};" class="block w-full py-3 hover:bg-[#d94d1a] text-white font-bold rounded-lg text-center cursor-pointer transition duration-200">
+             ${block.buttonText || 'Mua ngay'}
+           </${isDirectCheckout ? 'button' : 'a'}>
+         </div>
+       </div>
+     </div>
+   </section>`;
++        }
+       } else if (block.type === 'countdown') {
+         html += `
+   <section class="py-12 px-6 text-center${isMobileHidden}" style="background-color: ${block.backgroundColor || '#0f172a'}; color: ${block.textColor || '#ffffff'};">
+@@ -582,7 +772,7 @@ export default function LandingPageBuilder() {
+   const handleSave = async () => {
+     try {
+       setSaving(true);
+-      const compiledHtml = compileHtml(blocks, seo);
++      const compiledHtml = compileHtml(blocks, seo, products);
+       
+       // Update Landing Page
+       await apiJson(`/landing-pages/${id}`, {
+@@ -1584,20 +1774,182 @@ export default function LandingPageBuilder() {
+                       </div>
+                     )}
+ 
+-                    {block.type === 'pricing' && (
+-                      <div className="text-center space-y-4">
+-                        <h2 className="text-md md:text-lg font-bold text-white">{block.title}</h2>
+-                        <p className="text-xs text-slate-400">{block.subtitle}</p>
+-                        <div className="max-w-xs mx-auto bg-slate-950/80 border border-slate-850 rounded-lg p-6 space-y-3 mt-4 relative">
+-                          <span className="absolute top-0 right-0 bg-[#f25c22] text-[9px] font-bold text-white px-2 py-0.5 rounded-bl">Phổ biến</span>
+-                          <h4 className="text-xs font-bold text-white">Gói Ưu Đãi</h4>
+-                          <p className="text-2xl font-extrabold text-white">{block.priceVal || '499.000đ'}<span className="text-[10px] font-normal text-slate-500">/tháng</span></p>
+-                          <button disabled className="w-full py-2 bg-[#f25c22] text-white font-bold text-xs rounded cursor-not-allowed">
+-                            {block.productId ? `Thanh toán (${block.paymentMethod || 'PAYOS'})` : (block.buttonText || 'Mua ngay')}
+-                          </button>
++                    {block.type === 'pricing' && (() => {
++                      const displayProducts = products && products.length > 0
++                        ? products.slice(0, 3)
++                        : [
++                            { id: 1, name: `${page?.title || 'Sản phẩm'} Loại A`, description: 'Mô tả chi tiết sản phẩm chất lượng cao.', price: 150000, currency: 'VND' },
++                            { id: 2, name: `${page?.title || 'Sản phẩm'} Loại B`, description: 'Sản phẩm tuyển chọn loại thượng hạng.', price: 250000, currency: 'VND' },
++                            { id: 3, name: `${page?.title || 'Sản phẩm'} Đặc Biệt`, description: 'Món đặc sản độc quyền giới hạn từ cửa hàng.', price: 350000, currency: 'VND' }
++                          ];
++
++                      const getProductImage = (pName: string, index: number): string => {
++                        const lowerName = pName.toLowerCase();
++                        if (lowerName.includes('mật ong') || lowerName.includes('honey') || lowerName.includes('ong')) {
++                          const honeyImgs = [
++                            'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1471193945509-9ad0617afabf?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1558642452-9d2a7deb7f62?w=300&auto=format&fit=crop'
++                          ];
++                          return honeyImgs[index % honeyImgs.length];
++                        }
++                        if (aiTheme === 'sale-theme') {
++                          const foodImgs = [
++                            'https://images.unsplash.com/photo-1534080391025-09795d197360?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1534482421-64566f976cfa?w=300&auto=format&fit=crop'
++                          ];
++                          return foodImgs[index % foodImgs.length];
++                        }
++                        if (aiTheme === 'education-theme') {
++                          const eduImgs = [
++                            'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=300&auto=format&fit=crop'
++                          ];
++                          return eduImgs[index % eduImgs.length];
++                        }
++                        if (aiTheme === 'saleticket-theme') {
++                          const travelImgs = [
++                            'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=300&auto=format&fit=crop',
++                            'https://images.unsplash.com/photo-1540959733332-eab4deceeaf7?w=300&auto=format&fit=crop'
++                          ];
++                          return travelImgs[index % travelImgs.length];
++                        }
++                        return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&auto=format&fit=crop';
++                      };
++
++                      if (aiTheme === 'sale-theme') {
++                        return (
++                          <div className="space-y-6">
++                            <div className="text-center max-w-xl mx-auto mb-4">
++                              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-bold rounded-full uppercase tracking-wider">Đặc Sản</span>
++                              <h2 className="text-md md:text-lg font-bold text-white mt-1">{block.title}</h2>
++                              <p className="text-xs text-slate-400 mt-1">{block.subtitle || 'Chọn những sản phẩm đặc sản chất lượng được giao trong ngày.'}</p>
++                            </div>
++                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
++                              {displayProducts.map((p, index) => {
++                                const img = getProductImage(p.name, index);
++                                const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
++                                const badges = ['Bán Chạy', 'Đặc Sản', 'Gợi Ý'];
++                                const badgeClass = ['bg-orange-900/40 text-orange-400', 'bg-amber-900/40 text-amber-400', 'bg-green-900/40 text-green-400'][index % 3];
++
++                                return (
++                                  <div key={p.id || index} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow flex flex-col justify-between">
++                                    <img src={img} alt="preview" className="h-28 w-full object-cover" />
++                                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
++                                      <div className="space-y-1">
++                                        <span className={`px-1.5 py-0.5 ${badgeClass} text-[8px] font-bold rounded`}>{badges[index % 3]}</span>
++                                        <h4 className="text-xs font-bold text-white line-clamp-1">{p.name}</h4>
++                                        <p className="text-[10px] text-slate-400 line-clamp-2">{p.description || 'Sản phẩm chất lượng cao được tuyển chọn kỹ lưỡng.'}</p>
++                                      </div>
++                                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
++                                        <span className="text-orange-400 text-xs font-bold">chỉ từ {pPrice}đ</span>
++                                        <button disabled style={{ backgroundColor: '#f25c22' }} className="px-3 py-1 text-white rounded text-[10px] font-bold cursor-not-allowed">Đặt Mua</button>
++                                      </div>
++                                    </div>
++                                  </div>
++                                );
++                              })}
++                            </div>
++                          </div>
++                        );
++                      }
++
++                      if (aiTheme === 'education-theme') {
++                        return (
++                          <div className="space-y-6">
++                            <div className="text-center max-w-xl mx-auto mb-4">
++                              <span className="px-2 py-0.5 bg-orange-100 text-orange-850 text-[9px] font-bold rounded-full uppercase tracking-wider">Lộ Trình Bài Bản</span>
++                              <h2 className="text-md md:text-lg font-bold text-white mt-1">{block.title}</h2>
++                              <p className="text-xs text-slate-400 mt-1">{block.subtitle || 'Khóa học chất lượng cao học trực tuyến hiệu quả cao.'}</p>
++                            </div>
++                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
++                              {displayProducts.map((p, index) => {
++                                const img = getProductImage(p.name, index);
++                                const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
++                                const badges = ['Pro Course', 'Web Backend', 'Foundation'];
++                                const badgeClass = ['bg-sky-900/40 text-sky-400', 'bg-purple-900/40 text-purple-400', 'bg-green-900/40 text-green-400'][index % 3];
++
++                                return (
++                                  <div key={p.id || index} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow flex flex-col justify-between">
++                                    <img src={img} alt="preview" className="h-28 w-full object-cover" />
++                                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
++                                      <div className="space-y-1">
++                                        <span className={`px-1.5 py-0.5 ${badgeClass} text-[8px] font-bold rounded`}>{badges[index % 3]}</span>
++                                        <h4 className="text-xs font-bold text-white line-clamp-1">{p.name}</h4>
++                                        <p className="text-[10px] text-slate-400 line-clamp-2">{p.description || 'Khóa học chất lượng cao học trực tuyến hiệu quả cao.'}</p>
++                                      </div>
++                                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
++                                        <span className="text-orange-400 text-xs font-bold">{pPrice}đ</span>
++                                        <button disabled style={{ backgroundColor: '#f05123' }} className="px-3 py-1 text-white rounded text-[10px] font-bold cursor-not-allowed">Đăng Ký</button>
++                                      </div>
++                                    </div>
++                                  </div>
++                                );
++                              })}
++                            </div>
++                          </div>
++                        );
++                      }
++
++                      if (aiTheme === 'saleticket-theme') {
++                        return (
++                          <div className="space-y-6">
++                            <div className="text-center max-w-xl mx-auto mb-4">
++                              <span className="px-2 py-0.5 bg-sky-100 text-sky-800 text-[9px] font-bold rounded-full uppercase tracking-wider">Hành Trình Mơ Ước</span>
++                              <h2 className="text-md md:text-lg font-bold text-white mt-1">{block.title}</h2>
++                              <p className="text-xs text-slate-400 mt-1">{block.subtitle || 'Đặt hàng giá tốt nhất, an tâm hỗ trợ 24/7.'}</p>
++                            </div>
++                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
++                              {displayProducts.map((p, index) => {
++                                const img = getProductImage(p.name, index);
++                                const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
++                                const badges = ['Combo', 'Trọn Gói', 'Ưu Đãi Hot'];
++                                const badgeClass = ['bg-sky-900/40 text-sky-400', 'bg-blue-900/40 text-blue-400', 'bg-green-900/40 text-green-400'][index % 3];
++                                const btnLabel = index === 0 ? 'Đặt Combo' : index === 1 ? 'Đặt Tour' : 'Đặt Vé';
++
++                                return (
++                                  <div key={p.id || index} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow flex flex-col justify-between">
++                                    <img src={img} alt="preview" className="h-28 w-full object-cover" />
++                                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
++                                      <div className="space-y-1">
++                                        <span className={`px-1.5 py-0.5 ${badgeClass} text-[8px] font-bold rounded`}>{badges[index % 3]}</span>
++                                        <h4 className="text-xs font-bold text-white line-clamp-1">{p.name}</h4>
++                                        <p className="text-[10px] text-slate-400 line-clamp-2">{p.description || 'Dịch vụ chất lượng cao, hỗ trợ nhiệt tình chu đáo.'}</p>
++                                      </div>
++                                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
++                                        <span className="text-sky-400 text-xs font-bold">từ {pPrice}đ</span>
++                                        <button disabled style={{ backgroundColor: '#0284c7' }} className="px-3 py-1 text-white rounded text-[10px] font-bold cursor-not-allowed">{btnLabel}</button>
++                                      </div>
++                                    </div>
++                                  </div>
++                                );
++                              })}
++                            </div>
++                          </div>
++                        );
++                      }
++
++                      return (
++                        <div className="text-center space-y-4">
++                          <h2 className="text-md md:text-lg font-bold text-white">{block.title}</h2>
++                          <p className="text-xs text-slate-400">{block.subtitle}</p>
++                          <div className="max-w-xs mx-auto bg-slate-950/80 border border-slate-850 rounded-lg p-6 space-y-3 mt-4 relative">
++                            <span className="absolute top-0 right-0 bg-[#f25c22] text-[9px] font-bold text-white px-2 py-0.5 rounded-bl">Phổ biến</span>
++                            <h4 className="text-xs font-bold text-white">Gói Ưu Đãi</h4>
++                            <p className="text-2xl font-extrabold text-white">{block.priceVal || '499.000đ'}<span className="text-[10px] font-normal text-slate-500">/tháng</span></p>
++                            <button disabled className="w-full py-2 bg-[#f25c22] text-white font-bold text-xs rounded cursor-not-allowed">
++                              {block.productId ? `Thanh toán (${block.paymentMethod || 'PAYOS'})` : (block.buttonText || 'Mua ngay')}
++                            </button>
++                          </div>
+                         </div>
+-                      </div>
+-                    )}
++                      );
++                    })()}
+ 
+                     {block.type === 'countdown' && (
+                       <div className="text-center space-y-3">
+diff --git a/apps/frontend/src/app/dashboard/landing/page.tsx b/apps/frontend/src/app/dashboard/landing/page.tsx
+index 467696a..64df12d 100644
+--- a/apps/frontend/src/app/dashboard/landing/page.tsx
++++ b/apps/frontend/src/app/dashboard/landing/page.tsx
+@@ -341,7 +341,7 @@ export default function LandingPagesDashboard() {
+                     Thiết kế
+                   </a>
+                   <a
+-                    href={`/api/public/pages/${page.slug}/html`}
++                    href={`/api/public/pages/${page.slug}/html${page.status !== 'PUBLISHED' ? '?preview=true' : ''}`}
+                     target="_blank"
+                     rel="noreferrer"
+                     className="text-xs border border-slate-800 hover:bg-slate-900 text-slate-400 px-2.5 py-1.5 rounded transition"

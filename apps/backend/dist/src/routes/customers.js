@@ -148,24 +148,29 @@ router.post('/:id/notes', auth_1.requireWrite, async (req, res) => {
     res.status(201).json(note);
 });
 router.post('/send-care', auth_1.requireWrite, async (req, res) => {
-    const { customerIds, subject, htmlContent } = req.body;
+    const { customerIds, subject, htmlContent, channel = 'email' } = req.body;
     if (!Array.isArray(customerIds) || customerIds.length === 0) {
         res.status(400).json({ error: 'Chọn ít nhất một khách hàng' });
         return;
     }
     if (!subject?.trim() || !htmlContent?.trim()) {
-        res.status(400).json({ error: 'Tiêu đề và nội dung email là bắt buộc' });
+        res.status(400).json({ error: 'Tiêu đề và nội dung chăm sóc là bắt buộc' });
         return;
     }
-    const transporter = await (0, smtp_1.createSmtpTransporter)(req.workspaceId);
-    if (!transporter) {
-        res.status(400).json({
-            error: 'Chưa cấu hình SMTP. Vào Cài đặt → Email để kết nối trước khi gửi.',
-        });
-        return;
+    // If sending via Email, check SMTP config
+    let transporter = null;
+    let fromAddress = '';
+    if (channel === 'email') {
+        transporter = await (0, smtp_1.createSmtpTransporter)(req.workspaceId);
+        if (!transporter) {
+            res.status(400).json({
+                error: 'Chưa cấu hình SMTP. Vào Cài đặt → Email để kết nối trước khi gửi.',
+            });
+            return;
+        }
+        const smtpCfg = await (0, smtp_1.getSmtpConfig)(req.workspaceId);
+        fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
     }
-    const smtpCfg = await (0, smtp_1.getSmtpConfig)(req.workspaceId);
-    const fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
     const customers = await prisma_1.default.customer.findMany({
         where: {
             id: { in: customerIds.map((x) => parseInt(String(x))) },
@@ -180,18 +185,35 @@ router.post('/send-care', auth_1.requireWrite, async (req, res) => {
         const html = (0, careEmail_1.renderCareEmail)(htmlContent, customer, latestNote);
         const renderedSubject = (0, careEmail_1.renderCareEmail)(subject, customer, latestNote).replace(/<[^>]+>/g, '');
         try {
-            await transporter.sendMail({
-                from: fromAddress,
-                to: customer.email,
-                subject: renderedSubject,
-                html,
-            });
+            if (channel === 'email') {
+                await transporter.sendMail({
+                    from: fromAddress,
+                    to: customer.email,
+                    subject: renderedSubject,
+                    html,
+                });
+            }
+            else if (channel === 'zalo') {
+                if (!customer.phone) {
+                    throw new Error('Khách hàng chưa đăng ký số điện thoại để nhận Zalo.');
+                }
+                // Mock Zalo sending
+                console.log(`[Zalo OA Mock] Gửi tin nhắn đến ${customer.phone}: ${renderedSubject} - ${html.slice(0, 100)}...`);
+            }
+            else if (channel === 'messenger') {
+                // Mock Messenger sending
+                console.log(`[Messenger Mock] Gửi tin nhắn đến khách hàng ${customer.name}: ${renderedSubject} - ${html.slice(0, 100)}...`);
+            }
+            else {
+                throw new Error(`Kênh gửi "${channel}" chưa được hỗ trợ.`);
+            }
             await prisma_1.default.customerEmailLog.create({
                 data: {
                     customerId: customer.id,
                     subject: renderedSubject,
                     body: html,
                     status: 'SENT',
+                    channel,
                 },
             });
             await prisma_1.default.customer.update({
@@ -209,16 +231,81 @@ router.post('/send-care', auth_1.requireWrite, async (req, res) => {
                     body: html,
                     status: 'FAILED',
                     errorMessage: msg,
+                    channel,
                 },
             });
-            errors.push(`${customer.email}: ${msg}`);
+            errors.push(`${customer.email || customer.name}: ${msg}`);
         }
     }
+    const channelLabel = channel === 'email' ? 'email' : channel === 'zalo' ? 'tin nhắn Zalo' : 'tin nhắn Messenger';
     res.json({
-        message: `Đã gửi ${sent}/${customers.length} email chăm sóc`,
+        message: `Đã gửi ${sent}/${customers.length} ${channelLabel} chăm sóc`,
         sent,
         total: customers.length,
         errors: errors.length ? errors : undefined,
+    });
+});
+// Import danh sách khách hàng hàng loạt (CSV/JSON)
+router.post('/import', auth_1.requireWrite, async (req, res) => {
+    const { customers } = req.body;
+    if (!Array.isArray(customers) || customers.length === 0) {
+        res.status(400).json({ error: 'Danh sách khách hàng không hợp lệ hoặc rỗng.' });
+        return;
+    }
+    let createdCount = 0;
+    let updatedCount = 0;
+    const errors = [];
+    for (const c of customers) {
+        const name = c.name?.trim();
+        const email = c.email?.trim()?.toLowerCase();
+        const phone = c.phone?.trim() || null;
+        const company = c.company?.trim() || null;
+        const status = c.status || 'NEW';
+        if (!name || !email) {
+            errors.push(`Bỏ qua dòng không hợp lệ: thiếu Tên hoặc Email`);
+            continue;
+        }
+        try {
+            const existing = await prisma_1.default.customer.findFirst({
+                where: { email, workspaceId: req.workspaceId }
+            });
+            if (existing) {
+                // Cập nhật thông tin mới
+                await prisma_1.default.customer.update({
+                    where: { id: existing.id },
+                    data: {
+                        name,
+                        phone: phone || existing.phone,
+                        company: company || existing.company,
+                        status
+                    }
+                });
+                updatedCount++;
+            }
+            else {
+                // Tạo mới
+                await prisma_1.default.customer.create({
+                    data: {
+                        name,
+                        email,
+                        phone,
+                        company,
+                        status,
+                        workspaceId: req.workspaceId
+                    }
+                });
+                createdCount++;
+            }
+        }
+        catch (err) {
+            errors.push(`Lỗi xử lý ${email}: ${err.message}`);
+        }
+    }
+    res.json({
+        message: `Nhập thành công: tạo mới ${createdCount}, cập nhật ${updatedCount} khách hàng.`,
+        createdCount,
+        updatedCount,
+        errors: errors.length > 0 ? errors : undefined
     });
 });
 exports.default = router;

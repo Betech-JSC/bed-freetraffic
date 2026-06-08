@@ -6,6 +6,7 @@ import {
 } from '../lib/dispatch';
 import { resolveAbTestContent } from './abTestPublish';
 import { scheduleNextOccurrence } from './scheduleRecurrence';
+import { applyImageOverlay } from '../lib/dispatch/overlay';
 
 export type ScheduleRow = {
   id: number;
@@ -19,6 +20,10 @@ export type ScheduleRow = {
   repeatRule?: string | null;
   repeatUntil?: Date | null;
   abTestId?: number | null;
+  overlayText?: string | null;
+  overlayWatermark?: string | null;
+  overlayPosition?: string | null;
+  overlayFontSize?: number | null;
 };
 
 export async function executeContentSchedule(
@@ -42,10 +47,24 @@ export async function executeContentSchedule(
     abTestId: row.abTestId,
   });
 
+  let finalImageUrl = resolved.imageUrl;
+  if (finalImageUrl && (row.overlayText || row.overlayWatermark)) {
+    try {
+      finalImageUrl = await applyImageOverlay(finalImageUrl, {
+        overlayText: row.overlayText,
+        overlayWatermark: row.overlayWatermark,
+        overlayPosition: row.overlayPosition,
+        overlayFontSize: row.overlayFontSize,
+      });
+    } catch (err) {
+      console.error('Failed to apply image overlay:', err);
+    }
+  }
+
   const channelResults = await dispatchToAllPlatforms(row.platforms, {
     title: resolved.title,
     content: resolved.content,
-    imageUrl: resolved.imageUrl,
+    imageUrl: finalImageUrl,
     urlTarget: resolved.urlTarget || undefined,
     emailRecipients: row.recipients?.trim() || undefined,
     workspaceId: row.workspaceId || undefined,

@@ -8,6 +8,7 @@ const prisma_1 = __importDefault(require("../lib/prisma"));
 const seoAuditService_1 = require("../services/seoAuditService");
 const pagespeedAuditService_1 = require("../services/pagespeedAuditService");
 const auth_1 = require("../middleware/auth");
+const seoFixer_1 = require("../services/seoFixer");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/audits', async (req, res) => {
@@ -103,5 +104,15 @@ router.get('/audits/:id', async (req, res) => {
         return;
     }
     res.json(audit);
+});
+router.post('/fix-issues', auth_1.requireWrite, async (req, res) => {
+    const { title, description, keywords, issues } = req.body;
+    try {
+        const recommendations = await (0, seoFixer_1.generateSeoRecommendations)(title || '', description || '', keywords || '', Array.isArray(issues) ? issues : []);
+        res.json(recommendations);
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi xử lý tối ưu SEO bằng AI' });
+    }
 });
 exports.default = router;

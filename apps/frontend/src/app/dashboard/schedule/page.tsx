@@ -25,6 +25,10 @@ type Schedule = {
   recipients?: string | null;
   errorMessage?: string | null;
   channelResults?: string | null;
+  overlayText?: string | null;
+  overlayWatermark?: string | null;
+  overlayPosition?: string | null;
+  overlayFontSize?: number | null;
 };
 
 type AbTestOption = { id: number; name: string };
@@ -72,9 +76,14 @@ export default function ScheduleBotPage() {
   const [repeatUntil, setRepeatUntil] = useState('');
   const [abTestId, setAbTestId] = useState('');
   const [abTests, setAbTests] = useState<AbTestOption[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [platforms, setPlatforms] = useState<string[]>(['facebook']);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [overlayText, setOverlayText] = useState('');
+  const [overlayWatermark, setOverlayWatermark] = useState('');
+  const [overlayPosition, setOverlayPosition] = useState('bottom-right');
+  const [overlayFontSize, setOverlayFontSize] = useState('32');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -142,14 +151,16 @@ export default function ScheduleBotPage() {
 
   const load = async () => {
     try {
-      const [list, ch, testsData] = await Promise.all([
+      const [list, ch, testsData, templatesData] = await Promise.all([
         apiJson<Schedule[]>('/schedules'),
         apiJson<ChannelStatus>('/schedules/channels-status'),
         apiJson<AbTestOption[]>('/abtests/running').catch(() => []),
+        apiJson<any[]>('/templates').catch(() => []),
       ]);
       setItems(list);
       setChannels(ch);
       setAbTests(testsData);
+      setTemplates(templatesData);
       setError('');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('Không tải được dữ liệu'));
@@ -180,6 +191,10 @@ export default function ScheduleBotPage() {
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
     setSmartGoldenHour(false);
+    setOverlayText('');
+    setOverlayWatermark('');
+    setOverlayPosition('bottom-right');
+    setOverlayFontSize('32');
   };
 
   const startEdit = (item: Schedule) => {
@@ -203,6 +218,10 @@ export default function ScheduleBotPage() {
     setImageFile(null);
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(item.imageUrl || null);
+    setOverlayText(item.overlayText || '');
+    setOverlayWatermark(item.overlayWatermark || '');
+    setOverlayPosition(item.overlayPosition || 'bottom-right');
+    setOverlayFontSize(item.overlayFontSize ? String(item.overlayFontSize) : '32');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -240,7 +259,7 @@ export default function ScheduleBotPage() {
 
     setSubmitting(true);
     try {
-      const payload = {
+      const payload: any = {
         title,
         content,
         platforms: platforms.join(','),
@@ -252,7 +271,15 @@ export default function ScheduleBotPage() {
         repeatUntil: repeatUntil || null,
         abTestId: abTestId ? parseInt(abTestId, 10) : null,
         status: asDraft ? 'DRAFT' : 'PENDING',
+        overlayText: overlayText.trim() || undefined,
+        overlayWatermark: overlayWatermark.trim() || undefined,
+        overlayPosition: overlayPosition || undefined,
+        overlayFontSize: overlayFontSize ? parseInt(overlayFontSize, 10) : undefined,
       };
+
+      if (!imageFile && imagePreview) {
+        payload.imageUrl = imagePreview;
+      }
 
       if (editingId) {
         if (imageFile) {
@@ -278,6 +305,10 @@ export default function ScheduleBotPage() {
         if (payload.cronExpression) fd.append('cronExpression', payload.cronExpression);
         if (payload.repeatUntil) fd.append('repeatUntil', payload.repeatUntil);
         if (payload.abTestId) fd.append('abTestId', String(payload.abTestId));
+        if (payload.overlayText) fd.append('overlayText', payload.overlayText);
+        if (payload.overlayWatermark) fd.append('overlayWatermark', payload.overlayWatermark);
+        if (payload.overlayPosition) fd.append('overlayPosition', payload.overlayPosition);
+        if (payload.overlayFontSize) fd.append('overlayFontSize', String(payload.overlayFontSize));
         fd.append('image', imageFile);
 
         const res = await apiFetch('/schedules', { method: 'POST', body: fd });
@@ -362,14 +393,19 @@ export default function ScheduleBotPage() {
         <div className="flex flex-wrap gap-2">
           {PLATFORM_OPTIONS.map((p) => {
             const c = channels[p.id];
+            const isManual = p.id === 'youtube' || p.id === 'community';
             return (
               <span
                 key={p.id}
                 className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                  c?.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                  isManual
+                    ? 'bg-blue-50 text-blue-700'
+                    : c?.connected
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-slate-100 text-slate-500'
                 }`}
               >
-                {t(p.label)}: {c?.connected ? t('Đã kết nối') : t('Chưa kết nối')}
+                {t(p.label)}: {isManual ? t('Đăng tay') : c?.connected ? t('Đã kết nối') : t('Chưa kết nối')}
               </span>
             );
           })}
@@ -384,7 +420,43 @@ export default function ScheduleBotPage() {
 
       <form onSubmit={submit} className="card p-6 lg:p-8 space-y-8">
         <section className="space-y-4">
-          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">{t('1. Nội dung')}</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">{t('1. Nội dung')}</h3>
+            {templates.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-semibold">{t('Import từ Content Editor:')}</span>
+                <select
+                  className="input py-1.5 px-3 text-xs bg-slate-50 border-slate-200 focus:border-brand font-semibold max-w-[240px] cursor-pointer"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (!id) return;
+                    const selected = templates.find((t) => String(t.id) === id);
+                    if (selected) {
+                      setTitle(selected.title);
+                      setContent(selected.content);
+                      if (selected.imageUrl) {
+                        setImagePreview(selected.imageUrl);
+                        setImageFile(null);
+                      } else {
+                        setImagePreview(null);
+                        setImageFile(null);
+                      }
+                      setSuccess(t('Đã import bài viết mẫu thành công.'));
+                    }
+                    e.target.value = ""; // Reset
+                  }}
+                >
+                  <option value="">-- {t('Chọn bài viết mẫu')} --</option>
+                  {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>
+                      {tpl.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
           <input
             className="input w-full"
             value={title}
@@ -433,6 +505,74 @@ export default function ScheduleBotPage() {
               </label>
             )}
           </div>
+
+          {imagePreview && (
+            <div className="mt-4 p-5 bg-slate-50/50 rounded-xl border border-slate-100 space-y-4">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                ✨ {t('Cấu hình đóng dấu ảnh (Watermark / Text Overlay)')}
+              </h4>
+              
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {t('Chữ đóng dấu')}
+                  </label>
+                  <input
+                    className="input w-full text-sm bg-white"
+                    value={overlayText}
+                    onChange={(e) => setOverlayText(e.target.value)}
+                    placeholder={t('Ví dụ: © Betech JSC')}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {t('Đường dẫn logo đóng dấu')}
+                  </label>
+                  <input
+                    className="input w-full text-sm bg-white"
+                    value={overlayWatermark}
+                    onChange={(e) => setOverlayWatermark(e.target.value)}
+                    placeholder={t('Ví dụ: /uploads/logo.png')}
+                  />
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {t('Vị trí đóng dấu')}
+                  </label>
+                  <select
+                    className="input w-full text-sm bg-white"
+                    value={overlayPosition}
+                    onChange={(e) => setOverlayPosition(e.target.value)}
+                  >
+                    <option value="bottom-right">{t('Góc dưới bên phải')}</option>
+                    <option value="bottom-left">{t('Góc dưới bên trái')}</option>
+                    <option value="top-right">{t('Góc trên bên phải')}</option>
+                    <option value="top-left">{t('Góc trên bên trái')}</option>
+                    <option value="center">{t('Chính giữa')}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {t('Kích thước chữ')}
+                  </label>
+                  <select
+                    className="input w-full text-sm bg-white"
+                    value={overlayFontSize}
+                    onChange={(e) => setOverlayFontSize(e.target.value)}
+                  >
+                    <option value="16">{t('Nhỏ (16px)')}</option>
+                    <option value="32">{t('Trung bình (32px)')}</option>
+                    <option value="64">{t('Lớn (64px)')}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="space-y-4">
@@ -544,6 +684,7 @@ export default function ScheduleBotPage() {
             {PLATFORM_OPTIONS.map((p) => {
               const on = platforms.includes(p.id);
               const connected = channels?.[p.id]?.connected;
+              const isManual = p.id === 'youtube' || p.id === 'community';
               return (
                 <button
                   key={p.id}
@@ -555,7 +696,13 @@ export default function ScheduleBotPage() {
                 >
                   <span className={`text-sm font-bold ${on ? 'text-brand' : 'text-slate-800'}`}>{t(p.label)}</span>
                   <p className="text-xs text-slate-500 mt-1">{t(p.desc)}</p>
-                  {!connected && <p className="text-xs text-amber-600 mt-1">{t('Chưa kết nối')}</p>}
+                  {isManual ? (
+                    <p className="text-xs text-blue-600 mt-1">{t('Đăng tay')}</p>
+                  ) : !connected ? (
+                    <p className="text-xs text-amber-600 mt-1">{t('Chưa kết nối')}</p>
+                  ) : (
+                    <p className="text-xs text-emerald-600 mt-1">{t('Đã kết nối')}</p>
+                  )}
                 </button>
               );
             })}
@@ -652,7 +799,16 @@ export default function ScheduleBotPage() {
                 const chResults = parseChannelResults(i.channelResults);
                 return (
                   <tr key={i.id}>
-                    <td className="font-medium">{i.title}</td>
+                    <td className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{i.title}</span>
+                        {(i.overlayText || i.overlayWatermark) && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100" title={`${i.overlayText || ''} ${i.overlayWatermark || ''}`}>
+                            ✨ Overlay
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="text-sm">{platformLabel(i.platforms)}</td>
                     <td className="whitespace-nowrap text-sm">
                       {new Date(i.scheduledAt).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-US')}

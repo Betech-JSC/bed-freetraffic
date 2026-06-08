@@ -63,6 +63,13 @@ const insights_1 = __importDefault(require("./routes/insights"));
 const integrations_1 = __importDefault(require("./routes/integrations"));
 const mailchimp_1 = __importDefault(require("./routes/mailchimp"));
 const workspaces_1 = __importDefault(require("./routes/workspaces"));
+const blog_1 = __importDefault(require("./routes/blog"));
+const landingPages_1 = __importDefault(require("./routes/landingPages"));
+const public_1 = __importDefault(require("./routes/public"));
+const forms_1 = __importDefault(require("./routes/forms"));
+const payments_1 = __importDefault(require("./routes/payments"));
+const orders_1 = __importDefault(require("./routes/orders"));
+const cskh_1 = __importDefault(require("./routes/cskh"));
 const workspace_1 = require("./middleware/workspace");
 const auth_3 = require("./middleware/auth");
 const apiMeta_1 = require("./lib/apiMeta");
@@ -73,6 +80,8 @@ const syncEngine_1 = require("./workers/syncEngine");
 const schedulerEngine_1 = require("./workers/schedulerEngine");
 const alertEngine_1 = require("./workers/alertEngine");
 const emailCampaignEngine_1 = require("./workers/emailCampaignEngine");
+const emailWorkflowEngine_1 = require("./workers/emailWorkflowEngine");
+const cskhFollowupWorker_1 = require("./workers/cskhFollowupWorker");
 const pagespeedAuditorEngine_1 = require("./workers/pagespeedAuditorEngine");
 const errorHandler_1 = require("./middleware/errorHandler");
 dotenv_1.default.config();
@@ -136,6 +145,13 @@ app.use('/api/customers', auth_3.authenticate, workspace_1.workspaceMiddleware, 
 app.use('/api/insights', insights_1.default);
 app.use('/api/integrations', auth_3.authenticate, workspace_1.workspaceMiddleware, integrations_1.default);
 app.use('/api/integrations/mailchimp', auth_3.authenticate, workspace_1.workspaceMiddleware, mailchimp_1.default);
+app.use('/api/blog', auth_3.authenticate, workspace_1.workspaceMiddleware, blog_1.default);
+app.use('/api/landing-pages', auth_3.authenticate, workspace_1.workspaceMiddleware, landingPages_1.default);
+app.use('/api/forms', auth_3.authenticate, workspace_1.workspaceMiddleware, forms_1.default);
+app.use('/api/public', public_1.default);
+app.use('/api/payments', payments_1.default);
+app.use('/api/orders', auth_3.authenticate, workspace_1.workspaceMiddleware, orders_1.default);
+app.use('/api/cskh', auth_3.authenticate, workspace_1.workspaceMiddleware, cskh_1.default);
 // Fallback 404 for any unregistered /api routes
 app.use('/api', errorHandler_1.notFoundHandler);
 // Global Error Handler (must be registered last)
@@ -150,5 +166,7 @@ app.listen(port, () => {
     (0, schedulerEngine_1.startSchedulerEngine)();
     (0, alertEngine_1.startAlertEngine)();
     (0, emailCampaignEngine_1.startEmailCampaignEngine)();
+    (0, emailWorkflowEngine_1.startEmailWorkflowEngine)();
+    (0, cskhFollowupWorker_1.startCskhFollowupWorker)();
     (0, pagespeedAuditorEngine_1.startPageSpeedAuditorEngine)();
 });

@@ -471,15 +471,24 @@ export async function generateAiContentPlan(
     return plan;
   }
 
-  const systemInstructions = `Bạn là một Giám đốc Marketing AI chuyên nghiệp. Hãy tạo một kế hoạch nội dung mạng xã hội đa kênh gồm ${postCount} ngày dựa trên chủ đề, ngành nghề và giọng điệu được cung cấp.
+  const systemInstructions = `Bạn là một Giám đốc Marketing AI chuyên nghiệp, chuyên viết bài quảng cáo mạng xã hội (Facebook, Zalo, Email) bằng tiếng Việt với mục tiêu tối ưu tỷ lệ nhấp chuột (CTR) và tỷ lệ chuyển đổi.
+Hãy tạo một kế hoạch nội dung đa kênh gồm ${postCount} ngày dựa trên chủ đề, ngành nghề và giọng điệu "${tone}" được cung cấp.
 
 Mỗi ngày, hãy tạo một bài viết chất lượng cao phù hợp với kênh được đề xuất (facebook, email, zalo).
 Quy tắc viết bài:
-1. Nội dung phải đa dạng góc nhìn:
+1. Nội dung phải đa dạng góc nhìn qua từng ngày:
    - Ngày giáo dục/chia sẻ kiến thức có giá trị.
    - Ngày vạch trần sai lầm hoặc phân tích case study thực tế.
    - Ngày khuyến mãi/ưu đãi giới hạn thời gian để chuyển đổi.
-2. Viết cực kỳ thu hút, sử dụng cấu trúc rõ ràng, có emoji, hashtag và chèn placeholder '{url}' ở nơi phù hợp nhất để chuyển đổi khách hàng.
+2. Bài viết phải cực kỳ lôi cuốn, viết theo công thức AIDA (Attention - Gây chú ý, Interest - Tạo hứng thú, Desire - Khơi gợi khao khát, Action - Kêu gọi hành động):
+   - Tiêu đề (title): Phải thật giật gân, khơi gợi tò mò hoặc giải quyết trực tiếp vấn đề/nỗi đau của khách hàng, có sử dụng emoji phù hợp.
+   - Nội dung (content):
+     * Bắt đầu bằng một câu mở đầu gây chú ý mạnh mẽ (câu hỏi nhức nhối hoặc một thực tế gây sốc).
+     * Trình bày các điểm nổi bật/giá trị dưới dạng danh sách gạch đầu dòng rõ ràng, trực quan để người đọc dễ quét thông tin, tránh viết một khối văn bản dài tẻ nhạt.
+     * Luôn chèn placeholder '{url}' ở vị trí tự nhiên nhất để hướng người đọc click vào liên kết.
+     * Luôn có lời kêu gọi hành động (CTA) rõ ràng, thôi thúc ở cuối.
+     * Thêm 3-5 hashtag liên quan ở dưới cùng.
+   - Tránh dùng các từ ngữ sáo rỗng, quá tâng bốc ("cách mạng", "tuyệt vời nhất", "hoàn hảo") để nội dung tự nhiên, chân thực và không bị "giả trân".
 3. Trả về kết quả dưới dạng một MẢNG JSON HỢP LỆ (Array of Objects), mỗi đối tượng có định dạng:
    {
      "day": "Ngày X",

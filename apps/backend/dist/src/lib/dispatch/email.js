@@ -27,16 +27,34 @@ async function dispatchEmail(payload) {
         urlTarget: payload.urlTarget,
         name: payload.title,
     });
-    const imagePath = (0, render_1.resolveUploadPath)(payload.imageUrl);
+    let html = `<h2>${payload.title}</h2><p>${postContent.replace(/\n/g, '<br>')}</p>`;
+    const attachments = [];
+    const imageUrl = payload.imageUrl;
+    if (imageUrl) {
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+            html += `<div style="margin-top:16px;"><img src="${imageUrl}" style="max-width:100%;height:auto;border-radius:8px;display:block;" /></div>`;
+        }
+        else {
+            const imagePath = (0, render_1.resolveUploadPath)(imageUrl);
+            if (imagePath) {
+                html += `<div style="margin-top:16px;"><img src="cid:post_image" style="max-width:100%;height:auto;border-radius:8px;display:block;" /></div>`;
+                attachments.push({
+                    filename: path_1.default.basename(imagePath),
+                    path: imagePath,
+                    cid: 'post_image'
+                });
+            }
+        }
+    }
     try {
         const mailOptions = {
             from: smtp.email,
             to: recipients.join(', '),
             subject: payload.title,
-            html: `<h2>${payload.title}</h2><p>${postContent.replace(/\n/g, '<br>')}</p>`,
+            html,
         };
-        if (imagePath) {
-            mailOptions.attachments = [{ filename: path_1.default.basename(imagePath), path: imagePath }];
+        if (attachments.length > 0) {
+            mailOptions.attachments = attachments;
         }
         await transporter.sendMail(mailOptions);
         return { success: true, message: `Đã gửi email tới ${recipients.length} người nhận` };

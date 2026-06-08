@@ -13,6 +13,12 @@ router.use(auth_1.authenticate);
 router.get('/', async (req, res) => {
     try {
         const userId = req.user.userId;
+        // Check if user exists in the database
+        const userExists = await prisma_1.default.user.findUnique({ where: { id: userId } });
+        if (!userExists) {
+            res.status(401).json({ error: 'Tài khoản không tồn tại. Vui lòng đăng nhập lại.' });
+            return;
+        }
         const userWorkspaces = await prisma_1.default.userWorkspace.findMany({
             where: { userId },
             include: {

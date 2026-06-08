@@ -90,8 +90,22 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
   try {
     const body = req.body ?? {};
-    const { title, content, platforms, urlTarget, recipients, scheduledAt, repeatRule, repeatUntil, abTestId, cronExpression } =
-      body;
+    const {
+      title,
+      content,
+      platforms,
+      urlTarget,
+      recipients,
+      scheduledAt,
+      repeatRule,
+      repeatUntil,
+      abTestId,
+      cronExpression,
+      overlayText,
+      overlayWatermark,
+      overlayPosition,
+      overlayFontSize,
+    } = body;
 
     if (!title?.trim() || !content?.trim() || !platforms || !scheduledAt) {
       res.status(400).json({ error: 'Tiêu đề, nội dung, kênh gửi và thời gian là bắt buộc' });
@@ -148,6 +162,10 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
         cronExpression: rule === 'cron' ? (cronExpression ? String(cronExpression).trim() : null) : null,
         repeatUntil: repeatUntilDate,
         abTestId: abTestId ? parseInt(String(abTestId), 10) : null,
+        overlayText: overlayText ? String(overlayText).trim() : null,
+        overlayWatermark: overlayWatermark ? String(overlayWatermark).trim() : null,
+        overlayPosition: overlayPosition ? String(overlayPosition).trim() : 'bottom-right',
+        overlayFontSize: overlayFontSize ? parseInt(String(overlayFontSize), 10) : 32,
         status: body.status === 'DRAFT' ? 'DRAFT' : 'PENDING',
         workspaceId: req.workspaceId,
       },
@@ -261,6 +279,12 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
   }
   if (body.urlTarget !== undefined) data.urlTarget = body.urlTarget?.trim() || null;
   if (body.recipients !== undefined) data.recipients = body.recipients?.trim() || null;
+  if (body.overlayText !== undefined) data.overlayText = body.overlayText ? String(body.overlayText).trim() : null;
+  if (body.overlayWatermark !== undefined) data.overlayWatermark = body.overlayWatermark ? String(body.overlayWatermark).trim() : null;
+  if (body.overlayPosition !== undefined) data.overlayPosition = body.overlayPosition ? String(body.overlayPosition).trim() : 'bottom-right';
+  if (body.overlayFontSize !== undefined) {
+    data.overlayFontSize = body.overlayFontSize ? parseInt(String(body.overlayFontSize), 10) : 32;
+  }
   if (body.scheduledAt != null) {
     const scheduledDate = new Date(body.scheduledAt);
     if (Number.isNaN(scheduledDate.getTime())) {

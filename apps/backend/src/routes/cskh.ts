@@ -155,6 +155,44 @@ router.get('/sessions/:id/messages', authenticate, async (req: WorkspaceRequest,
   }
 });
 
+// Send Agent Reply (Human Takeover)
+router.post('/sessions/:id/send-agent', authenticate, requireWrite, async (req: WorkspaceRequest, res: Response): Promise<void> => {
+  try {
+    const sessionId = req.params.id as string;
+    const { content } = req.body;
+    if (!content?.trim()) {
+      res.status(400).json({ error: 'Nội dung tin nhắn không được trống' });
+      return;
+    }
+
+    const session = await prisma.chatSession.findFirst({
+      where: { id: sessionId, workspaceId: req.workspaceId },
+    });
+
+    if (!session) {
+      res.status(404).json({ error: 'Không tìm thấy phiên hội thoại này' });
+      return;
+    }
+
+    const message = await prisma.chatMessage.create({
+      data: {
+        sessionId,
+        sender: 'agent',
+        content: content.trim(),
+      },
+    });
+
+    await prisma.chatSession.update({
+      where: { id: sessionId },
+      data: { updatedAt: new Date() },
+    });
+
+    res.json({ success: true, message });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi gửi tin nhắn agent' });
+  }
+});
+
 // Delete a Chat Session
 router.delete('/sessions/:id', authenticate, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {

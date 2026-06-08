@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { AuthRequest } from '../middleware/auth';
+import { executeAutomationTask } from '../workers/botEngine';
 
 const router = Router();
 
@@ -47,6 +48,49 @@ router.post('/tasks', async (req: AuthRequest, res: Response): Promise<void> => 
     res.status(201).json(newTask);
   } catch (error) {
     res.status(500).json({ error: 'Lỗi máy chủ' });
+  }
+});
+
+// Cập nhật cấu hình chiến dịch Bot
+router.put('/tasks/:id', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (Number.isNaN(id)) {
+      res.status(400).json({ error: 'ID không hợp lệ' });
+      return;
+    }
+
+    const { name, urlTarget, platforms, interval, emailRecipients, abTestId, useAi, aiPrompt, aiGenerateImage, rssUrl } = req.body;
+
+    const existing = await prisma.automationTask.findFirst({
+      where: { id, workspaceId: req.workspaceId }
+    });
+
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy chiến dịch Bot' });
+      return;
+    }
+
+    const updatedTask = await prisma.automationTask.update({
+      where: { id },
+      data: {
+        name: name !== undefined ? name : existing.name,
+        urlTarget: urlTarget !== undefined ? urlTarget : existing.urlTarget,
+        platforms: platforms !== undefined ? JSON.stringify(platforms) : existing.platforms,
+        emailRecipients: emailRecipients !== undefined ? (emailRecipients || null) : existing.emailRecipients,
+        abTestId: abTestId !== undefined ? (abTestId ? parseInt(String(abTestId), 10) : null) : existing.abTestId,
+        interval: interval !== undefined ? (parseInt(String(interval), 10) || 60) : existing.interval,
+        useAi: useAi !== undefined ? !!useAi : existing.useAi,
+        aiPrompt: aiPrompt !== undefined ? (aiPrompt || null) : existing.aiPrompt,
+        aiGenerateImage: aiGenerateImage !== undefined ? !!aiGenerateImage : existing.aiGenerateImage,
+        rssUrl: rssUrl !== undefined ? (rssUrl || null) : existing.rssUrl,
+      }
+    });
+
+    res.json(updatedTask);
+  } catch (error: any) {
+    console.error('[automation/tasks/:id PUT]', error);
+    res.status(500).json({ error: error.message || 'Lỗi máy chủ khi cập nhật bot' });
   }
 });
 
@@ -278,6 +322,34 @@ router.put('/workflows/:id/steps', async (req: AuthRequest, res: Response): Prom
     res.json({ success: true, message: 'Đã lưu các bước của kịch bản thành công.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi lưu các bước của kịch bản' });
+  }
+});
+
+// Kích hoạt chạy chiến dịch Bot ngay lập tức (thủ công)
+router.post('/tasks/:id/trigger', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    if (Number.isNaN(id)) {
+      res.status(400).json({ error: 'ID không hợp lệ' });
+      return;
+    }
+
+    const task = await prisma.automationTask.findFirst({
+      where: { id, workspaceId: req.workspaceId }
+    });
+
+    if (!task) {
+      res.status(404).json({ error: 'Không tìm thấy chiến dịch Bot' });
+      return;
+    }
+
+    // Thực thi chạy bot ngay lập tức
+    await executeAutomationTask(task);
+
+    res.json({ success: true, message: 'Đã kích hoạt chạy bot thành công!' });
+  } catch (error: any) {
+    console.error('[automation/tasks/:id/trigger]', error);
+    res.status(500).json({ error: error.message || 'Lỗi máy chủ khi chạy bot' });
   }
 });
 

@@ -10,6 +10,7 @@ const prisma_1 = __importDefault(require("../lib/prisma"));
 const dispatch_1 = require("../lib/dispatch");
 const abTestPublish_1 = require("./abTestPublish");
 const scheduleRecurrence_1 = require("./scheduleRecurrence");
+const overlay_1 = require("../lib/dispatch/overlay");
 async function executeContentSchedule(item) {
     const row = await prisma_1.default.contentSchedule.findUnique({ where: { id: item.id } });
     if (!row) {
@@ -26,10 +27,24 @@ async function executeContentSchedule(item) {
         urlTarget: row.urlTarget,
         abTestId: row.abTestId,
     });
+    let finalImageUrl = resolved.imageUrl;
+    if (finalImageUrl && (row.overlayText || row.overlayWatermark)) {
+        try {
+            finalImageUrl = await (0, overlay_1.applyImageOverlay)(finalImageUrl, {
+                overlayText: row.overlayText,
+                overlayWatermark: row.overlayWatermark,
+                overlayPosition: row.overlayPosition,
+                overlayFontSize: row.overlayFontSize,
+            });
+        }
+        catch (err) {
+            console.error('Failed to apply image overlay:', err);
+        }
+    }
     const channelResults = await (0, dispatch_1.dispatchToAllPlatforms)(row.platforms, {
         title: resolved.title,
         content: resolved.content,
-        imageUrl: resolved.imageUrl,
+        imageUrl: finalImageUrl,
         urlTarget: resolved.urlTarget || undefined,
         emailRecipients: row.recipients?.trim() || undefined,
         workspaceId: row.workspaceId || undefined,

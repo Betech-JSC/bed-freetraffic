@@ -1,5 +1,8 @@
-export function getChatWidgetHtml(workspaceId: number): string {
-  return `
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getChatWidgetHtml = getChatWidgetHtml;
+function getChatWidgetHtml(workspaceId) {
+    return `
 <!-- AI Chat Widget Code -->
 <div id="ai-chat-widget-root">
   <!-- Chat Bubble Button -->

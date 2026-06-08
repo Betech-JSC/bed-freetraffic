@@ -43,6 +43,14 @@ export default function AutomationPage() {
   const [fbBotStatus, setFbBotStatus] = useState<FacebookBotStatus | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [triggeringId, setTriggeringId] = useState<number | null>(null);
+
+  // CRM selection states
+  const [crmCustomers, setCrmCustomers] = useState<any[]>([]);
+  const [showCustomerSelect, setShowCustomerSelect] = useState(false);
+
+  // Edit bot states
+  const [editingTask, setEditingTask] = useState<any | null>(null);
 
   // Console local states
   const [clearedLogIds, setClearedLogIds] = useState<number[]>([]);
@@ -51,16 +59,18 @@ export default function AutomationPage() {
   const fetchData = async (silent = false) => {
     if (!silent) setError('');
     try {
-      const [taskData, logData, testsData, fbStatus] = await Promise.all([
+      const [taskData, logData, testsData, fbStatus, customersData] = await Promise.all([
         apiJson<any[]>('/automation/tasks'),
         apiJson<any[]>('/automation/logs'),
         apiJson<{ id: number; name: string }[]>('/abtests/running').catch(() => []),
         apiJson<FacebookBotStatus>('/social/facebook/status').catch(() => null),
+        apiJson<any[]>('/customers').catch(() => []),
       ]);
       setFbBotStatus(fbStatus);
       setAbTests(testsData);
       setTasks(Array.isArray(taskData) ? taskData : []);
       setLogs(Array.isArray(logData) ? logData : []);
+      setCrmCustomers(Array.isArray(customersData) ? customersData : []);
     } catch (e: unknown) {
       if (!silent) {
         setError(e instanceof Error ? e.message : t('Không tải được dữ liệu Bot'));
@@ -92,6 +102,63 @@ export default function AutomationPage() {
     }
   };
 
+  const handleTrigger = async (id: number) => {
+    setTriggeringId(id);
+    setError('');
+    try {
+      await apiJson(`/automation/tasks/${id}/trigger`, { method: 'POST' });
+      await fetchData(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t('Không chạy được bot'));
+    } finally {
+      setTriggeringId(null);
+    }
+  };
+
+  const toggleCustomerEmail = (email: string) => {
+    const currentEmails = emailRecipients
+      .split(',')
+      .map((e) => e.trim())
+      .filter(Boolean);
+    if (currentEmails.includes(email)) {
+      const filtered = currentEmails.filter((e) => e !== email);
+      setEmailRecipients(filtered.join(', '));
+    } else {
+      currentEmails.push(email);
+      setEmailRecipients(currentEmails.join(', '));
+    }
+  };
+
+  const handleOpenCreate = () => {
+    setEditingTask(null);
+    setName('');
+    setUrlTarget('');
+    setRssUrl('');
+    setEmailRecipients('');
+    setAbTestId('');
+    setUseAi(false);
+    setAiPrompt('');
+    setAiGenerateImage(false);
+    setPlatforms(['facebook']);
+    setShowCustomerSelect(false);
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (task: any) => {
+    setEditingTask(task);
+    setName(task.name);
+    setUrlTarget(task.urlTarget);
+    setPlatforms(parsePlatforms(task.platforms));
+    setEmailRecipients(task.emailRecipients || '');
+    setAbTestId(task.abTestId?.toString() || '');
+    setUseAi(task.useAi);
+    setAiPrompt(task.aiPrompt || '');
+    setAiGenerateImage(task.aiGenerateImage);
+    setRssUrl(task.rssUrl || '');
+    setShowCustomerSelect(false);
+    setShowModal(true);
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -114,23 +181,36 @@ export default function AutomationPage() {
       setError(t('Facebook Bot cần URL đích đầy đủ (vd: https://website-cua-ban.com).'));
       return;
     }
+
+    const body = {
+      name,
+      urlTarget,
+      platforms,
+      emailRecipients: platforms.includes('email') ? emailRecipients : undefined,
+      abTestId: abTestId ? parseInt(abTestId, 10) : undefined,
+      useAi,
+      aiPrompt: useAi ? aiPrompt : undefined,
+      aiGenerateImage: useAi ? aiGenerateImage : undefined,
+      rssUrl: rssUrl.trim() || undefined,
+    };
+
     try {
-      await apiJson('/automation/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          urlTarget,
-          platforms,
-          emailRecipients: platforms.includes('email') ? emailRecipients : undefined,
-          abTestId: abTestId ? parseInt(abTestId, 10) : undefined,
-          interval: 60,
-          useAi,
-          aiPrompt: useAi ? aiPrompt : undefined,
-          aiGenerateImage: useAi ? aiGenerateImage : undefined,
-          rssUrl: rssUrl.trim() || undefined,
-        }),
-      });
+      if (editingTask) {
+        await apiJson(`/automation/tasks/${editingTask.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      } else {
+        await apiJson('/automation/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...body,
+            interval: 60,
+          }),
+        });
+      }
       setShowModal(false);
       setName('');
       setUrlTarget('');
@@ -141,9 +221,11 @@ export default function AutomationPage() {
       setAiPrompt('');
       setAiGenerateImage(false);
       setPlatforms(['facebook']);
+      setEditingTask(null);
+      setShowCustomerSelect(false);
       await fetchData(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : t('Không tạo được Bot'));
+      setError(e instanceof Error ? e.message : t('Không lưu được cấu hình Bot'));
     }
   };
 
@@ -187,7 +269,7 @@ export default function AutomationPage() {
         title="Automation Engine"
         description={t('FR-08 — Cấu hình Bot tự động quét bài đăng kéo traffic định kỳ (Facebook, Zalo, Email, YouTube).')}
         actions={
-          <button type="button" onClick={() => setShowModal(true)} className="btn-primary flex items-center gap-1">
+          <button type="button" onClick={handleOpenCreate} className="btn-primary flex items-center gap-1">
             {t('Tạo chiến dịch')}
           </button>
         }
@@ -321,6 +403,15 @@ export default function AutomationPage() {
                       <div className="flex items-center justify-end gap-2.5">
                         <button
                           type="button"
+                          onClick={() => handleTrigger(task.id)}
+                          disabled={triggeringId === task.id}
+                          className="p-1.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-600 hover:bg-orange-100 text-xs font-semibold px-2.5 py-1 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                          title={t('Kích hoạt chạy bot ngay lập tức')}
+                        >
+                          {triggeringId === task.id ? t('Đang chạy...') : t('Chạy ngay')}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleToggle(task.id)}
                           className={`p-1.5 rounded-lg border text-xs font-semibold px-2.5 py-1 transition-all active:scale-95 cursor-pointer ${
                             task.status === 'RUNNING'
@@ -330,6 +421,14 @@ export default function AutomationPage() {
                           title={task.status === 'RUNNING' ? t('Dừng Bot') : t('Kích hoạt Bot')}
                         >
                           {task.status === 'RUNNING' ? t('Dừng') : t('Chạy')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(task)}
+                          className="p-1.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-600 hover:bg-blue-100 text-xs font-semibold px-2.5 py-1 transition-all active:scale-95 cursor-pointer"
+                          title={t('Chỉnh sửa cấu hình chiến dịch')}
+                        >
+                          {t('Sửa')}
                         </button>
                         <button
                           type="button"
@@ -428,7 +527,9 @@ export default function AutomationPage() {
         <div className="modal-overlay animate-fade-in" onClick={() => setShowModal(false)}>
           <div className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center pb-2 border-b">
-              <h3 className="text-base font-black text-brand uppercase tracking-wider">{t('Cấu hình Bot mới')}</h3>
+              <h3 className="text-base font-black text-brand uppercase tracking-wider">
+                {editingTask ? t('Chỉnh sửa chiến dịch Bot') : t('Cấu hình Bot mới')}
+              </h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-650 font-bold cursor-pointer">Đóng</button>
             </div>
             
@@ -524,6 +625,40 @@ export default function AutomationPage() {
                     className="input text-xs w-full py-2"
                     placeholder="email1@gmail.com, email2@company.com"
                   />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowCustomerSelect(!showCustomerSelect)} 
+                    className="text-[10px] text-brand hover:underline font-bold mt-1 block cursor-pointer"
+                  >
+                    {showCustomerSelect ? 'Ẩn danh sách khách hàng CRM' : 'Chọn từ danh sách khách hàng CRM'}
+                  </button>
+
+                  {showCustomerSelect && (
+                    <div className="mt-2 max-h-36 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-slate-50 space-y-1.5 custom-scrollbar font-medium">
+                      {crmCustomers.length === 0 ? (
+                        <p className="text-[10px] text-slate-400 italic">Chưa có khách hàng nào trong CRM.</p>
+                      ) : (
+                        crmCustomers.map((cust) => {
+                          const isSelected = emailRecipients
+                            .split(',')
+                            .map((e) => e.trim())
+                            .filter(Boolean)
+                            .includes(cust.email);
+                          return (
+                            <label key={cust.id} className="flex items-center gap-2 cursor-pointer py-0.5 hover:bg-slate-100 px-1 rounded transition-colors text-[10px] text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleCustomerEmail(cust.email)}
+                                className="rounded border-slate-350 text-brand focus:ring-brand"
+                              />
+                              <span className="truncate">{cust.name} ({cust.email})</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -573,8 +708,8 @@ export default function AutomationPage() {
                 >
                   {t('Hủy')}
                 </button>
-                <button type="submit" className="btn-primary flex-1 py-2 text-xs">
-                  {t('Kích hoạt Bot')}
+                <button type="submit" className="btn-primary flex-1 py-2 text-xs font-bold">
+                  {editingTask ? t('Lưu thay đổi') : t('Kích hoạt Bot')}
                 </button>
               </div>
             </form>

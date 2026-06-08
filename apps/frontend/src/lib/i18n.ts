@@ -108,6 +108,10 @@ export const translations = {
     contentScore: 'Nội dung',
     uxScore: 'Trải nghiệm',
     seoIssues: 'Danh sách lỗi phát hiện',
+    'Đăng tay': 'Đăng tay',
+    'Import từ Content Editor:': 'Import từ Content Editor:',
+    'Chọn bài viết mẫu': 'Chọn bài viết mẫu',
+    'Đã import bài viết mẫu thành công.': 'Đã import bài viết mẫu thành công.',
   },
   en: {
     dashboard: 'Dashboard',
@@ -786,6 +790,10 @@ export const translations = {
     'thành viên': 'members',
     'Chưa cấu hình Mailchimp trong Cài đặt hoặc không thể kết nối.': 'Mailchimp not configured in Settings or failed to connect.',
     'Phân tích tốc độ load & trải nghiệm di động (Google PageSpeed Insights)': 'Analyze loading speed & mobile experience (Google PageSpeed Insights)',
+    'Đăng tay': 'Manual',
+    'Import từ Content Editor:': 'Import from Content Editor:',
+    'Chọn bài viết mẫu': 'Select content template',
+    'Đã import bài viết mẫu thành công.': 'Content template imported successfully.',
   }
 } as const;
 

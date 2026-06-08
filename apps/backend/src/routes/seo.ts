@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import { runSeoAudit } from '../services/seoAuditService';
 import { runPageSpeedAudit } from '../services/pagespeedAuditService';
 import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
+import { generateSeoRecommendations } from '../services/seoFixer';
 
 const router = Router();
 router.use(authenticate);
@@ -106,6 +107,21 @@ router.get('/audits/:id', async (req: AuthRequest, res: Response): Promise<void>
     return;
   }
   res.json(audit);
+});
+
+router.post('/fix-issues', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { title, description, keywords, issues } = req.body;
+  try {
+    const recommendations = await generateSeoRecommendations(
+      title || '',
+      description || '',
+      keywords || '',
+      Array.isArray(issues) ? issues : []
+    );
+    res.json(recommendations);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi xử lý tối ưu SEO bằng AI' });
+  }
 });
 
 export default router;

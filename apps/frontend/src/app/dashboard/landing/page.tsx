@@ -341,7 +341,7 @@ export default function LandingPagesDashboard() {
                     Thiết kế
                   </a>
                   <a
-                    href={`/api/public/pages/${page.slug}/html`}
+                    href={`/api/public/pages/${page.slug}/html${page.status !== 'PUBLISHED' ? '?preview=true' : ''}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs border border-slate-800 hover:bg-slate-900 text-slate-400 px-2.5 py-1.5 rounded transition"

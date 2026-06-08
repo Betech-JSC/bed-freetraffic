@@ -24,7 +24,7 @@ type CskhConfig = {
 
 type ChatMessage = {
   id: number;
-  sender: 'visitor' | 'bot';
+  sender: 'visitor' | 'bot' | 'agent';
   content: string;
   createdAt: string;
 };
@@ -92,6 +92,26 @@ export default function CskhSettingsPage() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Agent takeover states
+  const [agentReplyInput, setAgentReplyInput] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+
+  // Poll active session messages in real-time
+  useEffect(() => {
+    if (!activeSession || activeTab !== 'history') return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await apiJson<ChatMessage[]>(`/cskh/sessions/${activeSession.id}/messages`);
+        if (data) {
+          setSessionMessages(data);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [activeSession, activeTab]);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -189,6 +209,26 @@ export default function CskhSettingsPage() {
       setSuccess('Đã xóa phiên hội thoại thành công.');
     } catch (err: any) {
       setError(err.message || 'Lỗi khi xóa phiên hội thoại.');
+    }
+  };
+
+  const handleSendAgentReply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeSession || !agentReplyInput.trim() || sendingReply) return;
+    try {
+      setSendingReply(true);
+      const res = await apiJson<{ success: boolean; message: ChatMessage }>(`/cskh/sessions/${activeSession.id}/send-agent`, {
+        method: 'POST',
+        body: JSON.stringify({ content: agentReplyInput.trim() }),
+      });
+      if (res && res.message) {
+        setSessionMessages(prev => [...prev, res.message]);
+        setAgentReplyInput('');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Lỗi gửi tin nhắn của agent.');
+    } finally {
+      setSendingReply(false);
     }
   };
 
@@ -637,15 +677,32 @@ export default function CskhSettingsPage() {
                     <div className="text-center py-12 text-slate-400 text-xs">Không có tin nhắn nào trong hội thoại này.</div>
                   ) : (
                     sessionMessages.map((msg) => {
-                      const isBot = msg.sender === 'bot';
+                      const sender = msg.sender;
+                      let cardClass = '';
+                      let labelColor = 'text-slate-400';
+                      let labelName = 'Khách';
+                      if (sender === 'visitor') {
+                        cardClass = 'bg-slate-100 text-slate-800 self-start rounded-bl-none border border-slate-200/50';
+                        labelColor = 'text-slate-400';
+                        labelName = 'Khách';
+                      } else if (sender === 'bot') {
+                        cardClass = 'bg-orange-500 text-white self-end rounded-br-none shadow-md shadow-orange-500/10';
+                        labelColor = 'text-orange-100';
+                        labelName = 'AI';
+                      } else { // 'agent'
+                        cardClass = 'bg-indigo-600 text-white self-end rounded-br-none shadow-md shadow-indigo-500/10';
+                        labelColor = 'text-indigo-100';
+                        labelName = 'Bạn';
+                      }
+                      
                       return (
                         <div
                           key={msg.id}
-                          className={`max-w-[80%] p-3 rounded-2xl text-xs leading-relaxed shadow-sm ${isBot ? 'bg-slate-100 text-slate-800 self-start rounded-bl-none border border-slate-200/50' : 'bg-[#f25c22] text-white self-end rounded-br-none shadow-md shadow-orange-500/10'}`}
+                          className={`max-w-[80%] p-3 rounded-2xl text-xs leading-relaxed shadow-sm ${cardClass}`}
                         >
                           <p className="whitespace-pre-wrap">{msg.content}</p>
-                          <span className={`block text-[8px] text-right mt-1.5 ${isBot ? 'text-slate-400' : 'text-orange-100'}`}>
-                            {new Date(msg.createdAt).toLocaleTimeString('vi-VN')}
+                          <span className={`block text-[8px] text-right mt-1.5 ${labelColor}`}>
+                            {labelName} • {new Date(msg.createdAt).toLocaleTimeString('vi-VN')}
                           </span>
                         </div>
                       );
@@ -664,6 +721,27 @@ export default function CskhSettingsPage() {
                     </p>
                   )}
                 </div>
+
+                {/* Agent Reply Box */}
+                <form onSubmit={handleSendAgentReply} className="flex gap-2 border-t border-slate-100 pt-4 mt-2">
+                  <input
+                    type="text"
+                    value={agentReplyInput}
+                    onChange={(e) => setAgentReplyInput(e.target.value)}
+                    placeholder="Nhập câu trả lời trực tiếp (AI chatbot sẽ tạm dừng 30 phút)..."
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl py-2 px-4 text-slate-800 text-xs focus:outline-none focus:border-[#f25c22] focus:bg-white transition"
+                    disabled={sendingReply}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sendingReply || !agentReplyInput.trim()}
+                    className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center gap-1.5"
+                  >
+                    {sendingReply ? (
+                      <span className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></span>
+                    ) : 'Gửi'}
+                  </button>
+                </form>
               </div>
             ) : (
               <div className="flex flex-col justify-center items-center h-full text-slate-400 text-xs">
