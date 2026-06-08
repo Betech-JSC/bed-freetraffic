@@ -249,7 +249,7 @@ export async function dispatchDueCskhAutoCare(): Promise<void> {
           for (const channel of channels) {
             // Kiểm tra điều kiện từng kênh
             if (channel === 'email' && !customer.email) continue;
-            if (channel === 'zalo' && !customer.phone) continue;
+            if (channel === 'zalo' && !customer.zaloUserId && !customer.phone) continue;
 
             // 4. Tạo prompt cá nhân hóa dựa trên dữ liệu khách hàng
             const notesText = customer.notes.map((n: any) => `- Ghi chú lúc ${n.createdAt.toLocaleDateString('vi-VN')}: ${n.content}`).join('\n');
@@ -349,9 +349,72 @@ Quy tắc:
                 errorMsg = 'SMTP chưa được cấu hình cho Workspace';
               }
             } else if (channel === 'zalo') {
-              // Mock Zalo sending
-              console.log(`[CskhAutoCare Zalo] Gửi tin nhắn đến SĐT ${customer.phone}: ${messageBody.slice(0, 100)}...`);
-              success = true;
+              try {
+                const zaloConn = await prisma.socialConnection.findFirst({
+                  where: { platform: 'zalo', workspaceId }
+                });
+                if (!zaloConn || zaloConn.status !== 'CONNECTED' || !zaloConn.accessToken) {
+                  throw new Error('Chưa kết nối Zalo OA. Vui lòng kết nối Zalo OA trong Cài đặt trước.');
+                }
+
+                const plainText = messageBody.replace(/<[^>]+>/g, '');
+                const plainSubject = subject.replace(/<[^>]+>/g, '');
+
+                if (customer.zaloUserId) {
+                  const zaloRes = await fetch('https://openapi.zalo.me/v3.0/oa/message/cs', {
+                    method: 'POST',
+                    headers: {
+                      'access_token': zaloConn.accessToken,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      recipient: {
+                        user_id: customer.zaloUserId
+                      },
+                      message: {
+                        text: `${plainSubject}\n\n${plainText}`
+                      }
+                    })
+                  });
+                  const zaloData = await zaloRes.json() as { error?: number; message?: string };
+                  if (zaloData.error !== 0 && zaloData.error !== undefined) {
+                    throw new Error(zaloData.message || `Zalo OA API Error code ${zaloData.error}`);
+                  }
+                  success = true;
+                } else if (customer.phone) {
+                  let phoneFormatted = customer.phone.replace(/[^0-9]/g, '');
+                  if (phoneFormatted.startsWith('0')) {
+                    phoneFormatted = '84' + phoneFormatted.substring(1);
+                  }
+
+                  const znsTemplateId = process.env.ZALO_ZNS_TEMPLATE_ID || 'default';
+                  const znsRes = await fetch('https://business.openapi.zalo.me/message/template', {
+                    method: 'POST',
+                    headers: {
+                      'access_token': zaloConn.accessToken,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      phone: phoneFormatted,
+                      template_id: znsTemplateId,
+                      template_data: {
+                        name: customer.name,
+                        subject: plainSubject,
+                        content: plainText.substring(0, 100)
+                      }
+                    })
+                  });
+                  const znsData = await znsRes.json() as { error?: number; message?: string };
+                  if (znsData.error !== 0 && znsData.error !== undefined) {
+                    throw new Error(`Zalo API error: ${znsData.message || 'Không gửi được tin nhắn'}. Bạn cần liên kết Zalo User ID hoặc đăng ký ZNS Template.`);
+                  }
+                  success = true;
+                } else {
+                  throw new Error('Khách hàng này không có Zalo User ID hoặc Số điện thoại để gửi Zalo.');
+                }
+              } catch (zaloErr: any) {
+                errorMsg = zaloErr.message || 'Lỗi gửi tin nhắn Zalo';
+              }
             } else if (channel === 'messenger') {
               // Mock Messenger sending
               console.log(`[CskhAutoCare Messenger] Gửi tin nhắn đến khách hàng ${customer.name}: ${messageBody.slice(0, 100)}...`);
