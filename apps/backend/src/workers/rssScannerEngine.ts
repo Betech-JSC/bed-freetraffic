@@ -1,31 +1,14 @@
 import cron from 'node-cron';
 import prisma from '../lib/prisma';
-import { dispatchToAllPlatforms } from '../lib/dispatch';
+import { dispatchToAllPlatforms, parsePlatforms } from '../lib/dispatch';
+import { renderContent } from '../lib/dispatch/render';
 import { generateAiPostContent, generateAiImage } from '../services/aiGenerate';
+import { getRandomTemplate } from '../services/automationTemplate';
 
 function extractTag(xml: string, tag: string): string {
   const regex = new RegExp(`<${tag}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`, 'i');
   const m = regex.exec(xml);
   return m ? m[1].trim() : '';
-}
-
-async function getRandomTemplate(taskId: number) {
-  const templates = await prisma.postTemplate.findMany({
-    where: {
-      isActive: true,
-      OR: [{ taskId }, { taskId: null }],
-    },
-  });
-  if (templates.length === 0) return null;
-  return templates[Math.floor(Math.random() * templates.length)];
-}
-
-function renderContent(templateContent: string, article: { title: string; link: string; description: string; pubDate: string }) {
-  return templateContent
-    .replace(/\{url\}/g, article.link)
-    .replace(/\{name\}/g, article.title)
-    .replace(/\{description\}/g, article.description)
-    .replace(/\{date\}/g, new Date(article.pubDate).toLocaleDateString('vi-VN'));
 }
 
 export const startRssScannerEngine = () => {
@@ -107,15 +90,7 @@ export const startRssScannerEngine = () => {
             continue;
           }
 
-          let platformList: string[] = [];
-          try {
-            platformList = JSON.parse(task.platforms);
-            if (!Array.isArray(platformList)) {
-              platformList = [String(task.platforms)];
-            }
-          } catch {
-            platformList = String(task.platforms).split(',').map(p => p.trim());
-          }
+          const platformList = parsePlatforms(task.platforms);
           const platformsStr = platformList.join(',');
 
           for (const item of itemsToPublish) {
@@ -139,7 +114,12 @@ export const startRssScannerEngine = () => {
                 const template = await getRandomTemplate(task.id);
                 if (template) {
                   title = template.title;
-                  content = renderContent(template.content, item);
+                  content = renderContent(template.content, {
+                    urlTarget: item.link,
+                    name: item.title,
+                    description: item.description,
+                    date: item.pubDate,
+                  });
                   imageUrl = template.thumbnailUrl || template.imageUrl;
                 } else {
                   content = `${item.description || item.title}\n\nXem chi tiết tại: {url}`;
@@ -149,7 +129,12 @@ export const startRssScannerEngine = () => {
               const template = await getRandomTemplate(task.id);
               if (template) {
                 title = template.title;
-                content = renderContent(template.content, item);
+                content = renderContent(template.content, {
+                  urlTarget: item.link,
+                  name: item.title,
+                  description: item.description,
+                  date: item.pubDate,
+                });
                 imageUrl = template.thumbnailUrl || template.imageUrl;
               } else {
                 content = `${item.description || item.title}\n\nXem chi tiết tại: {url}`;
@@ -165,7 +150,8 @@ export const startRssScannerEngine = () => {
               content,
               imageUrl,
               urlTarget: item.link,
-              emailRecipients: task.emailRecipients || undefined
+              emailRecipients: task.emailRecipients || undefined,
+              workspaceId: task.workspaceId || undefined,
             });
 
             // Log results

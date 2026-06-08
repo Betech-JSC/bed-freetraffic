@@ -242,6 +242,21 @@ export async function dispatchDueCskhAutoCare(): Promise<void> {
 
       console.log(`[CskhAutoCare] Workspace ${workspaceId} tìm thấy ${dueCustomers.length} khách hàng cần gửi chăm sóc tự động.`);
 
+      // Hoist connection/config loading for the workspace before customer loop
+      let transporter: any = null;
+      let smtpConfig: any = null;
+      if (channels.includes('email')) {
+        transporter = await createSmtpTransporter(workspaceId);
+        smtpConfig = await getSmtpConfig(workspaceId);
+      }
+
+      let zaloConn: any = null;
+      if (channels.includes('zalo')) {
+        zaloConn = await prisma.socialConnection.findFirst({
+          where: { platform: 'zalo', workspaceId }
+        });
+      }
+
       // 3. Xử lý từng khách hàng
       for (const customer of dueCustomers) {
         try {
@@ -331,8 +346,6 @@ Quy tắc:
             let errorMsg = null;
 
             if (channel === 'email') {
-              const transporter = await createSmtpTransporter(workspaceId);
-              const smtpConfig = await getSmtpConfig(workspaceId);
               if (transporter && smtpConfig) {
                 try {
                   await transporter.sendMail({
@@ -350,9 +363,6 @@ Quy tắc:
               }
             } else if (channel === 'zalo') {
               try {
-                const zaloConn = await prisma.socialConnection.findFirst({
-                  where: { platform: 'zalo', workspaceId }
-                });
                 if (!zaloConn || zaloConn.status !== 'CONNECTED' || !zaloConn.accessToken) {
                   throw new Error('Chưa kết nối Zalo OA. Vui lòng kết nối Zalo OA trong Cài đặt trước.');
                 }

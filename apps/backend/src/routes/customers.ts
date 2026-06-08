@@ -182,6 +182,19 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
     fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
   }
 
+  let zaloConn: any = null;
+  if (channel === 'zalo') {
+    zaloConn = await prisma.socialConnection.findFirst({
+      where: { platform: 'zalo', workspaceId: req.workspaceId }
+    });
+    if (!zaloConn || zaloConn.status !== 'CONNECTED' || !zaloConn.accessToken) {
+      res.status(400).json({
+        error: 'Chưa kết nối Zalo OA. Vui lòng kết nối Zalo OA trong Cài đặt trước.',
+      });
+      return;
+    }
+  }
+
   const customers = await prisma.customer.findMany({
     where: {
       id: { in: customerIds.map((x) => parseInt(String(x))) },
@@ -207,12 +220,6 @@ router.post('/send-care', requireWrite, async (req: AuthRequest, res: Response):
           html,
         });
       } else if (channel === 'zalo') {
-        const zaloConn = await prisma.socialConnection.findFirst({
-          where: { platform: 'zalo', workspaceId: req.workspaceId }
-        });
-        if (!zaloConn || zaloConn.status !== 'CONNECTED' || !zaloConn.accessToken) {
-          throw new Error('Chưa kết nối Zalo OA. Vui lòng kết nối Zalo OA trong Cài đặt trước.');
-        }
 
         const plainText = html.replace(/<[^>]+>/g, '');
 

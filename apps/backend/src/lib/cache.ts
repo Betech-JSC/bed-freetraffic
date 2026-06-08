@@ -9,6 +9,27 @@ export interface ICache {
 
 class MemoryCache implements ICache {
   private store = new Map<string, { value: any; expiresAt: number }>();
+  private gcInterval: NodeJS.Timeout | null = null;
+
+  constructor() {
+    // Run GC every 5 minutes to clean up expired entries
+    this.gcInterval = setInterval(() => {
+      this.runGc();
+    }, 5 * 60 * 1000);
+
+    if (this.gcInterval && typeof this.gcInterval.unref === 'function') {
+      this.gcInterval.unref();
+    }
+  }
+
+  private runGc() {
+    const now = Date.now();
+    for (const [key, item] of this.store.entries()) {
+      if (now > item.expiresAt) {
+        this.store.delete(key);
+      }
+    }
+  }
 
   async get<T>(key: string): Promise<T | null> {
     const item = this.store.get(key);

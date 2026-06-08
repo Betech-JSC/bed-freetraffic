@@ -25,15 +25,27 @@ export async function dispatchToPlatform(
   return { success: false, message: `Kênh "${platform}" chưa hỗ trợ` };
 }
 
-export function parsePlatforms(platforms: string): string[] {
-  return platforms
+export function parsePlatforms(platforms: string | null | undefined): string[] {
+  if (!platforms) return [];
+  const trimmed = platforms.trim();
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map((p: any) => String(p).trim().toLowerCase()).filter(Boolean);
+      }
+    } catch {
+      // ignore and fall through
+    }
+  }
+  return trimmed
     .split(',')
     .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
 }
 
 export async function dispatchToAllPlatforms(
-  platforms: string,
+  platforms: string | null | undefined,
   payload: DispatchPayload
 ): Promise<ChannelResult[]> {
   const list = parsePlatforms(platforms);

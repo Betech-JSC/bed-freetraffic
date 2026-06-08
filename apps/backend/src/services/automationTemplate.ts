@@ -9,7 +9,7 @@ export type ResolvedPost = {
   urlTarget: string;
 };
 
-async function getRandomTemplate(taskId: number) {
+export async function getRandomTemplate(taskId: number) {
   const templates = await prisma.postTemplate.findMany({
     where: {
       isActive: true,

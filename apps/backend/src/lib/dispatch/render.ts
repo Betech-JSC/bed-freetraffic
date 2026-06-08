@@ -3,12 +3,16 @@ import path from 'path';
 
 export function renderContent(
   content: string,
-  vars: { urlTarget?: string; name?: string }
+  vars: { urlTarget?: string; name?: string; description?: string; date?: string | Date }
 ): string {
+  const dateStr = vars.date
+    ? new Date(vars.date).toLocaleDateString('vi-VN')
+    : new Date().toLocaleDateString('vi-VN');
   return content
     .replace(/\{url\}/g, vars.urlTarget || '')
     .replace(/\{name\}/g, vars.name || '')
-    .replace(/\{date\}/g, new Date().toLocaleDateString('vi-VN'));
+    .replace(/\{description\}/g, vars.description || '')
+    .replace(/\{date\}/g, dateStr);
 }
 
 export function resolveUploadPath(imageUrl: string | null | undefined): string | null {
