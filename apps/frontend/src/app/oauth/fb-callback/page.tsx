@@ -32,83 +32,85 @@ export default function FacebookCallbackPage() {
   const [selecting, setSelecting] = useState(false);
 
   useEffect(() => {
-    setMessage(t('Đang xác thực với Facebook...'));
-    const run = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
-      const error = params.get('error_description') || params.get('error');
+    setTimeout(() => {
+      setMessage(t('Đang xác thực với Facebook...'));
+      const run = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const error = params.get('error_description') || params.get('error');
 
-      if (error) {
-        setStatus('error');
-        setMessage(decodeURIComponent(error));
-        return;
-      }
+        if (error) {
+          setStatus('error');
+          setMessage(decodeURIComponent(error));
+          return;
+        }
 
-      if (!code) {
-        setStatus('error');
-        setMessage(t('Không nhận được mã xác thực từ Facebook.'));
-        return;
-      }
+        if (!code) {
+          setStatus('error');
+          setMessage(t('Không nhận được mã xác thực từ Facebook.'));
+          return;
+        }
 
-      const raw = localStorage.getItem('fb_oauth');
-      if (!raw) {
-        setStatus('error');
-        setMessage(t('Thiếu cấu hình OAuth. Hãy thử đăng nhập lại từ trang Settings.'));
-        return;
-      }
+        const raw = localStorage.getItem('fb_oauth');
+        if (!raw) {
+          setStatus('error');
+          setMessage(t('Thiếu cấu hình OAuth. Hãy thử đăng nhập lại từ trang Settings.'));
+          return;
+        }
 
-      const { appId, appSecret, redirectUri, preferredPageId } = JSON.parse(raw) as {
-        appId: string;
-        appSecret: string;
-        redirectUri: string;
-        preferredPageId?: string;
-      };
+        const { appId, appSecret, redirectUri, preferredPageId } = JSON.parse(raw) as {
+          appId: string;
+          appSecret: string;
+          redirectUri: string;
+          preferredPageId?: string;
+        };
 
-      try {
-        const res = await apiFetch('/social/facebook/callback', {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            code,
-            appId,
-            appSecret,
-            redirectUri,
-            preferredPageId: preferredPageId?.trim() || undefined,
-          }),
-        });
-        const data = await res.json();
+        try {
+          const res = await apiFetch('/social/facebook/callback', {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({
+              code,
+              appId,
+              appSecret,
+              redirectUri,
+              preferredPageId: preferredPageId?.trim() || undefined,
+            }),
+          });
+          const data = await res.json();
 
-        if (!res.ok || !data.success) {
-          if (Array.isArray(data.pages) && data.pages.length > 0) {
-            setPages(data.pages);
-            setStatus('select');
-            setMessage(data.error || t('Chọn Fanpage bạn muốn kết nối:'));
+          if (!res.ok || !data.success) {
+            if (Array.isArray(data.pages) && data.pages.length > 0) {
+              setPages(data.pages);
+              setStatus('select');
+              setMessage(data.error || t('Chọn Fanpage bạn muốn kết nối:'));
+              return;
+            }
+            setStatus('error');
+            setMessage(data.error || t('Không thể kết nối Facebook.'));
             return;
           }
+
+          localStorage.removeItem('fb_oauth');
+
+          if (data.needsPageSelection && data.pages?.length > 1) {
+            setPages(data.pages);
+            setStatus('select');
+            setMessage(t('Chọn Fanpage bạn muốn kết nối:'));
+            return;
+          }
+
+          setStatus('success');
+          setMessage(`${t('Đã kết nối:')} ${data.connectedPage?.name || 'Facebook Page'}`);
+          setTimeout(() => window.close(), 1500);
+        } catch {
           setStatus('error');
-          setMessage(data.error || t('Không thể kết nối Facebook.'));
-          return;
+          setMessage(t('Lỗi kết nối máy chủ.'));
         }
+      };
 
-        localStorage.removeItem('fb_oauth');
-
-        if (data.needsPageSelection && data.pages?.length > 1) {
-          setPages(data.pages);
-          setStatus('select');
-          setMessage(t('Chọn Fanpage bạn muốn kết nối:'));
-          return;
-        }
-
-        setStatus('success');
-        setMessage(`${t('Đã kết nối:')} ${data.connectedPage?.name || 'Facebook Page'}`);
-        setTimeout(() => window.close(), 1500);
-      } catch {
-        setStatus('error');
-        setMessage(t('Lỗi kết nối máy chủ.'));
-      }
-    };
-
-    run();
+      run();
+    }, 0);
   }, [t]);
 
   const handleSelectPage = async (page: FbPage) => {

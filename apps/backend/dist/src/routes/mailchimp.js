@@ -12,7 +12,7 @@ router.use(auth_1.authenticate);
 // 1. Get all lists (audiences)
 router.get('/lists', async (req, res) => {
     try {
-        const lists = await (0, mailchimpService_1.getMailchimpLists)(req.workspaceId);
+        const lists = await (0, mailchimpService_1.getMailchimpLists)(req.workspaceId ?? 0);
         res.json(lists);
     }
     catch (error) {
@@ -35,7 +35,7 @@ router.post('/sync', auth_1.requireWrite, async (req, res) => {
             res.status(400).json({ error: 'Không có khách hàng nào trong CRM để đồng bộ.' });
             return;
         }
-        const result = await (0, mailchimpService_1.syncCustomersToMailchimp)(listId, customers, req.workspaceId);
+        const result = await (0, mailchimpService_1.syncCustomersToMailchimp)(listId, customers, req.workspaceId ?? 0);
         res.json({
             message: `Đã hoàn tất đồng bộ: Thành công ${result.successCount} / ${result.total} khách hàng.`,
             ...result,
@@ -53,7 +53,7 @@ router.post('/campaign', auth_1.requireWrite, async (req, res) => {
         return;
     }
     try {
-        const result = await (0, mailchimpService_1.sendMailchimpCampaign)(listId, subject, htmlContent, req.workspaceId);
+        const result = await (0, mailchimpService_1.sendMailchimpCampaign)(listId, subject, htmlContent, req.workspaceId ?? 0);
         // Save to local EmailCampaign log for reporting
         await prisma_1.default.emailCampaign.create({
             data: {

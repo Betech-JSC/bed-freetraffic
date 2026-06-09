@@ -1,7 +1,7 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch, apiJson } from '@/lib/api';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { FacebookConnectCard } from '@/components/settings/FacebookConnectCard';
 import { useLocale } from '@/context/LocaleContext';
 
@@ -18,7 +18,6 @@ interface Connection {
 export default function SettingsPage() {
   const { t, locale } = useLocale();
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [loading, setLoading] = useState(true);
   const [fbBotStatus, setFbBotStatus] = useState<{ botReady: boolean } | null>(null);
 
   // Email state
@@ -83,41 +82,42 @@ export default function SettingsPage() {
   } | null>(null);
   const [googleSyncMsg, setGoogleSyncMsg] = useState('');
 
-  const fetchFbBotStatus = async () => {
+  const fetchFbBotStatus = useCallback(async () => {
     try {
       const s = await apiJson<{ botReady: boolean }>('/social/facebook/status');
       setFbBotStatus(s);
     } catch {
       setFbBotStatus(null);
     }
-  };
+  }, []);
 
-  const fetchConnections = async () => {
+  const fetchConnections = useCallback(async () => {
     try {
       const res = await apiFetch('/social');
       if (res.ok) setConnections(await res.json());
-      setLoading(false);
       void fetchFbBotStatus();
     } catch {
-      setLoading(false);
+      // Ignore
     }
-  };
+  }, [fetchFbBotStatus]);
 
-  const fetchGoogle = async () => {
+  const fetchGoogle = useCallback(async () => {
     try {
       setGoogleStatus(await apiJson('/google/status'));
     } catch {
       setGoogleStatus(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchConnections();
-    fetchGoogle();
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('google') === 'connected') {
+    setTimeout(() => {
+      fetchConnections();
       fetchGoogle();
-    }
-  }, []);
+      if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('google') === 'connected') {
+        fetchGoogle();
+      }
+    }, 0);
+  }, [fetchConnections, fetchGoogle]);
 
   const connectGoogle = async () => {
     const { url } = await apiJson<{ url: string }>('/google/auth-url');
@@ -248,8 +248,8 @@ export default function SettingsPage() {
         setZaloError(t('Không tạo được đường dẫn kết nối Zalo.'));
         setZaloLoading(false);
       }
-    } catch (e: any) {
-      setZaloError(e.message || t('Lỗi kết nối máy chủ.'));
+    } catch (e: unknown) {
+      setZaloError(e instanceof Error ? e.message : t('Lỗi kết nối máy chủ.'));
       setZaloLoading(false);
     }
   };
@@ -280,8 +280,8 @@ export default function SettingsPage() {
         setEmailError(t('Không tạo được đường dẫn kết nối Google.'));
         setEmailLoading(false);
       }
-    } catch (e: any) {
-      setEmailError(e.message || t('Lỗi kết nối máy chủ.'));
+    } catch (e: unknown) {
+      setEmailError(e instanceof Error ? e.message : t('Lỗi kết nối máy chủ.'));
       setEmailLoading(false);
     }
   };

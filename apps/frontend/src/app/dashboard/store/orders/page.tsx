@@ -41,20 +41,22 @@ export default function OrdersPage() {
       const data = await apiJson<Order[]>('/orders');
       setOrders(Array.isArray(data) ? data : []);
       setError('');
-    } catch (err: any) {
-      setError(err.message || 'Không thể tải danh sách đơn hàng.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể tải danh sách đơn hàng.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadOrders();
+    setTimeout(() => {
+      loadOrders();
+    }, 0);
   }, [loadOrders]);
 
   const loadConfig = async () => {
     try {
-      const data = await apiJson<any>('/payments/config');
+      const data = await apiJson<Record<string, string | null>>('/payments/config');
       if (data) {
         setConfigForm({
           payosClientId: data.payosClientId || '',
@@ -65,8 +67,8 @@ export default function OrdersPage() {
         });
       }
       setShowConfig(true);
-    } catch (err: any) {
-      setConfigError(err.message || 'Lỗi tải cấu hình cổng thanh toán.');
+    } catch (err: unknown) {
+      setConfigError(err instanceof Error ? err.message : 'Lỗi tải cấu hình cổng thanh toán.');
     }
   };
 
@@ -80,8 +82,8 @@ export default function OrdersPage() {
       setConfigSuccess('Đã lưu cấu hình cổng thanh toán thành công.');
       setConfigError('');
       setTimeout(() => setShowConfig(false), 1500);
-    } catch (err: any) {
-      setConfigError(err.message || 'Lỗi khi lưu cấu hình.');
+    } catch (err: unknown) {
+      setConfigError(err instanceof Error ? err.message : 'Lỗi khi lưu cấu hình.');
     }
   };
 

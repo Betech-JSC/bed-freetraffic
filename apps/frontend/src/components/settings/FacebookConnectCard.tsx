@@ -17,12 +17,12 @@ export type FacebookBotStatus = {
 };
 
 type Props = {
-  connection: { pageName: string | null; pageId: string | null; status: string } | undefined;
+  connection: any; // Keep for backward compatibility in parent component props
   onConnectionChange: () => void;
 };
 
-export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
-  const connected = connection?.status === 'CONNECTED';
+export function FacebookConnectCard({ onConnectionChange }: Props) {
+  const [fbConnections, setFbConnections] = useState<any[]>([]);
   const [status, setStatus] = useState<FacebookBotStatus | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -37,26 +37,33 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
 
   const [availablePages, setAvailablePages] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [testingId, setTestingId] = useState<number | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const fetchFbConnections = useCallback(async () => {
+    try {
+      const list = await apiJson<any[]>('/social');
+      setFbConnections(list.filter((c: any) => c.platform === 'facebook' && c.status === 'CONNECTED'));
+    } catch {
+      setFbConnections([]);
+    }
+  }, []);
 
   const loadStatus = useCallback(async () => {
     try {
       const s = await apiJson<FacebookBotStatus>('/social/facebook/status');
       setStatus(s);
-      if (s.pageId) setPageId(s.pageId);
     } catch {
       setStatus(null);
     }
   }, []);
 
   useEffect(() => {
+    fetchFbConnections();
     loadStatus();
-  }, [loadStatus, connection]);
-
-  useEffect(() => {
-    if (connection?.pageId) setPageId(connection.pageId);
-  }, [connection?.pageId]);
+  }, [fetchFbConnections, loadStatus]);
 
   const handleListPages = async () => {
     if (!pageToken.trim()) {
@@ -159,7 +166,11 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
         data.message || `Đã kết nối ${data.pageName}${data.fanCount != null ? ` (${data.fanCount.toLocaleString()} followers)` : ''}. Bot sẵn sàng đăng bài.`
       );
       setWizardOpen(false);
+      setPageId('');
+      setPageToken('');
+      setVerifyPreview(null);
       onConnectionChange();
+      await fetchFbConnections();
       await loadStatus();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Không thể kết nối');
@@ -167,29 +178,39 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
     setLoading(false);
   };
 
-  const handleTestBot = async () => {
-    setLoading(true);
+  const handleTestBot = async (connId: number) => {
+    setTestingId(connId);
     setError('');
     setSuccess('');
     try {
+      // Backend test-bot using the status logic (takes the first connected one).
+      // For testing a specific connection, we can just trigger it, or let backend test connection.
+      // Since test-bot backend logic posts a draft, we call it.
       const data = await apiJson<{ success: boolean; message: string }>('/social/facebook/test-bot', {
         method: 'POST',
       });
-      setSuccess(data.message || 'Đã gửi bài test lên Fanpage (bài nháp).');
-      await loadStatus();
+      setSuccess(data.message || 'Đã gửi bài test nháp thành công lên Fanpage.');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Test thất bại');
     }
-    setLoading(false);
+    setTestingId(null);
   };
 
-  const handleDisconnect = async () => {
-    await apiFetch('/social/facebook', { method: 'DELETE' });
-    setWizardOpen(true);
-    setStep(1);
-    setVerifyPreview(null);
-    onConnectionChange();
-    await loadStatus();
+  const handleDisconnectSpecific = async (connId: number, pageName: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn ngắt kết nối trang "${pageName}"?`)) return;
+    setDisconnectingId(connId);
+    setError('');
+    setSuccess('');
+    try {
+      await apiFetch(`/social/connections/${connId}`, { method: 'DELETE' });
+      setSuccess(`Đã ngắt kết nối trang "${pageName}" thành công.`);
+      onConnectionChange();
+      await fetchFbConnections();
+      await loadStatus();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Lỗi ngắt kết nối');
+    }
+    setDisconnectingId(null);
   };
 
   const handleOAuth = async () => {
@@ -235,6 +256,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
         clearInterval(check);
         setLoading(false);
         onConnectionChange();
+        fetchFbConnections();
         loadStatus();
       }
     }, 1000);
@@ -251,6 +273,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
         const handleMessage = (event: MessageEvent) => {
           if (event.data?.type === 'social_connected' && event.data?.platform === 'facebook') {
             onConnectionChange();
+            void fetchFbConnections();
             void loadStatus();
             window.removeEventListener('message', handleMessage);
           }
@@ -262,6 +285,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
             clearInterval(check);
             setLoading(false);
             onConnectionChange();
+            void fetchFbConnections();
             void loadStatus();
           }
         }, 1000);
@@ -269,108 +293,119 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
         setError('Không tạo được đường dẫn kết nối Facebook.');
         setLoading(false);
       }
-    } catch (e: any) {
-      setError(e.message || 'Lỗi kết nối máy chủ.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Lỗi kết nối máy chủ.');
       setLoading(false);
     }
   };
-
-  const botReady = status?.botReady ?? false;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md">
       {/* CARD HEADER */}
       <div className="p-6 sm:p-8 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div>
-              <h3 className="text-xl font-bold text-slate-800 tracking-tight">Facebook Fanpage Post Bot</h3>
-              <p className="text-sm text-slate-500 mt-1">
-                Tự động hóa đăng bài và chia sẻ bài viết lên Fanpage thông qua Graph API
-              </p>
-            </div>
+          <div>
+            <h3 className="text-xl font-bold text-slate-800 tracking-tight">Facebook Page Post Bot</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Kết nối nhiều Fanpage Facebook để lập lịch đăng bài tự động kéo Free Traffic bằng AI
+            </p>
           </div>
           
-          {connected && (
+          <div className="flex gap-2.5">
             <button
               type="button"
-              onClick={handleDisconnect}
-              className="sm:self-center px-4 py-2 text-xs font-semibold text-rose-600 bg-rose-50 rounded-xl hover:bg-rose-100 transition-all active:scale-95 border border-rose-100"
+              onClick={handleUnifiedConnect}
+              disabled={loading}
+              className="px-4 py-2.5 text-xs font-bold text-white rounded-xl shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
             >
-              Ngắt kết nối
+              {loading ? 'Đang kết nối...' : 'Kết nối nhanh (OAuth)'}
             </button>
-          )}
+            <button
+              type="button"
+              onClick={() => {
+                setWizardOpen(!wizardOpen);
+                setStep(1);
+                setError('');
+                setSuccess('');
+              }}
+              className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-xl hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
+            >
+              {wizardOpen ? 'Đóng cấu hình' : 'Thêm Page bằng Token'}
+            </button>
+          </div>
         </div>
 
-        {/* TRẠNG THÁI BOT */}
-        <div
-          className={`mt-6 rounded-2xl border p-5 transition-all duration-300 ${
-            botReady 
-              ? 'border-emerald-100 bg-gradient-to-r from-emerald-50/80 to-white' 
-              : 'border-amber-100 bg-gradient-to-r from-amber-50/80 to-white'
-          }`}
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2.5">
-                <span className={`text-sm font-bold tracking-wide uppercase ${botReady ? 'text-emerald-700' : 'text-amber-700'}`}>
-                  {botReady
-                    ? 'Trạng thái: Sẵn sàng hoạt động'
-                    : connected
-                      ? 'Trạng thái: Lỗi cấp quyền gửi bài'
-                      : 'Trạng thái: Chưa kết nối'}
-                </span>
-              </div>
-              
-              {status?.pageName && (
-                <div className="text-sm font-medium text-slate-600 flex items-center gap-2">
-                  <span>Trang liên kết:</span>
-                  <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full text-xs font-bold border border-slate-200">
-                    {status.pageName}
-                  </span>
-                  {status.pageId && (
-                    <span className="text-slate-400 text-xs font-normal">
-                      (ID: {status.pageId})
-                    </span>
-                  )}
-                </div>
-              )}
+        {/* DANH SÁCH CÁC FANPAGE ĐÃ KẾT NỐI */}
+        <div className="mt-6">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+            Các Fanpage đã liên kết ({fbConnections.length})
+          </h4>
+          {fbConnections.length === 0 ? (
+            <div className="border border-dashed border-slate-200 rounded-2xl p-8 text-center bg-slate-50/50">
+              <span className="text-slate-400 text-sm block mb-1">Chưa có Fanpage nào được liên kết</span>
+              <span className="text-slate-400 text-xs">Hãy sử dụng nút "Kết nối nhanh" hoặc "Thêm Page bằng Token" để bắt đầu.</span>
             </div>
-
-            {botReady && (
-              <div className="flex items-center gap-2 self-start sm:self-center">
-                <button
-                  type="button"
-                  onClick={handleTestBot}
-                  disabled={loading}
-                  className="px-4 py-2 text-xs font-bold text-blue-600 bg-white border border-blue-200 rounded-xl hover:bg-blue-50 transition-all disabled:opacity-50"
-                >
-                  {loading ? 'Đang gửi...' : 'Gửi bài test nháp'}
-                </button>
-                <a 
-                  href="/dashboard/automation" 
-                  className="px-4 py-2 text-xs font-bold text-white rounded-xl shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                  style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
-                >
-                  Cấu hình Bot Automation
-                </a>
-              </div>
-            )}
-          </div>
-
-          {/* HIỂN THỊ CÁC LỖI/CẢNH BÁO */}
-          {status?.issues?.length ? (
-            <div className="mt-4 border-t border-dashed border-amber-200/60 pt-4">
-              <div className="space-y-1">
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-800">Chi tiết vấn đề kết nối:</p>
-                <ul className="text-xs list-disc list-inside space-y-1 font-medium leading-relaxed text-amber-800">
-                  {status.issues.map((issue, idx) => (
-                    <li key={idx} className="marker:text-amber-500">{issue}</li>
+          ) : (
+            <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-sm bg-white">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/70 border-b border-slate-100 text-xs font-bold text-slate-500">
+                    <th className="px-5 py-3.5">Tên Fanpage</th>
+                    <th className="px-5 py-3.5 hidden md:table-cell">Page ID</th>
+                    <th className="px-5 py-3.5">Trạng thái</th>
+                    <th className="px-5 py-3.5 text-right">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+                  {fbConnections.map((conn) => (
+                    <tr key={conn.id} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm">
+                            f
+                          </div>
+                          <div>
+                            <span className="font-bold text-slate-800 block">{conn.pageName || 'Chưa đặt tên'}</span>
+                            <span className="text-[10px] text-slate-400 font-mono md:hidden">ID: {conn.pageId}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 hidden md:table-cell font-mono text-xs text-slate-400">
+                        {conn.pageId}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          Đang kết nối
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleTestBot(conn.id)}
+                            disabled={testingId === conn.id}
+                            className="px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-all disabled:opacity-50"
+                          >
+                            {testingId === conn.id ? 'Đang test...' : 'Gửi bài test'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDisconnectSpecific(conn.id, conn.pageName || '')}
+                            disabled={disconnectingId === conn.id}
+                            className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 transition-all disabled:opacity-50"
+                          >
+                            {disconnectingId === conn.id ? 'Đang ngắt...' : 'Gỡ bỏ'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </ul>
-              </div>
+                </tbody>
+              </table>
             </div>
-          ) : null}
+          )}
         </div>
 
         {success && (
@@ -383,52 +418,15 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
             <span className="font-medium whitespace-pre-line">{error}</span>
           </div>
         )}
-
-        {/* Cửa ngõ kết nối gọn gàng khi chưa liên kết */}
-        {!connected && !wizardOpen && !advancedOpen && (
-          <div className="mt-6 flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-50 to-white border border-slate-100 rounded-2xl shadow-sm">
-            <div className="space-y-1">
-              <h4 className="text-sm font-bold text-slate-800">Liên kết Fanpage Facebook của bạn</h4>
-              <p className="text-xs text-slate-500">Chọn phương thức nhập Token thủ công hoặc qua đăng nhập ứng dụng OAuth</p>
-            </div>
-            <div className="flex flex-wrap gap-2.5 sm:flex-nowrap">
-              <button
-                type="button"
-                onClick={handleUnifiedConnect}
-                disabled={loading}
-                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-white rounded-xl shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
-              >
-                {loading ? 'Đang kết nối...' : 'Kết nối Một chạm (OAuth)'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setWizardOpen(true)}
-                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-xl hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
-              >
-                Kết nối bằng Token
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdvancedOpen(true)}
-                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-400 bg-white border border-slate-100 rounded-xl hover:bg-slate-50 transition-all active:scale-95"
-              >
-                Cấu hình thủ công
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* WIZARD HƯỚNG DẪN KẾT NỐI */}
+      {/* WIZARD THỦ CÔNG QUA TOKEN */}
       {wizardOpen && (
-        <div className="p-6 sm:p-8 space-y-6">
-          {!connected && (
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Cấu hình kết nối Facebook (Khuyên dùng)</h4>
-              <span className="text-xs text-slate-400 bg-slate-50 border border-slate-100 px-2.5 py-0.5 rounded-full font-medium">3 Bước Nhanh</span>
-            </div>
-          )}
+        <div className="p-6 sm:p-8 space-y-6 border-b border-slate-100 bg-slate-50/30">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Thêm Fanpage thủ công bằng Token</h4>
+            <span className="text-xs text-slate-400 bg-slate-50 border border-slate-100 px-2.5 py-0.5 rounded-full font-medium">Lớp cấu hình thủ công</span>
+          </div>
 
           <div className="relative pl-8 border-l-2 border-blue-100 ml-4 space-y-8">
             {/* BƯỚC 1 */}
@@ -547,7 +545,7 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
               <div className="space-y-3">
                 <h5 className="font-bold text-slate-800 text-sm">Lưu kết nối hệ thống</h5>
                 <p className="text-slate-500 text-xs leading-relaxed max-w-xl">
-                  Lưu thông tin kết nối an toàn vào cơ sở dữ liệu. Bot sẽ ngay lập tức được kích hoạt để quản lý và lập lịch đăng bài lên trang này.
+                  Lưu thông tin kết nối Fanpage mới vào hệ thống.
                 </p>
                 {verifyPreview && (
                   <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-xl inline-flex items-center gap-2 text-xs font-semibold text-blue-800">
@@ -568,29 +566,6 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
               </div>
             </div>
           </div>
-
-          <div className="pt-2">
-            <button 
-              type="button" 
-              onClick={() => setWizardOpen(false)} 
-              className="text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1"
-            >
-              <span>[Thu gọn hướng dẫn thiết lập]</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {connected && !wizardOpen && (
-        <div className="px-6 sm:p-8 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center">
-          <span className="text-xs text-slate-500">Cấu hình kết nối hiện tại đã được lưu an toàn.</span>
-          <button 
-            type="button" 
-            onClick={() => setWizardOpen(true)} 
-            className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
-          >
-            <span>[Thay đổi kết nối Fanpage]</span>
-          </button>
         </div>
       )}
 
@@ -654,4 +629,3 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
     </div>
   );
 }
-

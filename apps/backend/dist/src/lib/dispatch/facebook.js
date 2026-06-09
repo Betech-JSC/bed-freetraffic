@@ -13,6 +13,7 @@ async function dispatchFacebook(payload) {
         link: payload.urlTarget,
         imagePath: (0, render_1.resolveUploadPath)(payload.imageUrl),
         workspaceId: payload.workspaceId,
+        connectionId: payload.connectionId,
     });
     if (!result.success)
         return { success: false, message: result.message };

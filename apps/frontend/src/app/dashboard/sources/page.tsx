@@ -1,23 +1,31 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { apiJson } from '@/lib/api';
 import { useLocale } from '@/context/LocaleContext';
 
+type Channel = {
+  id: number;
+  name: string;
+  type: string;
+  url?: string;
+  status: string;
+};
+
 export default function SourcesPage() {
   const { t } = useLocale();
-  const [channels, setChannels] = useState<any[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({ name: '', type: 'SEO', url: '', status: 'ACTIVE' });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [utmTargetChannel, setUtmTargetChannel] = useState<any | null>(null);
+  const [utmTargetChannel, setUtmTargetChannel] = useState<Channel | null>(null);
   const [utmUrl, setUtmUrl] = useState('');
-  const [generatedLink, setGeneratedLink] = useState('');
 
-  const generateUtmLink = (targetUrl: string, channel: any) => {
+  const generateUtmLink = (targetUrl: string, channel: Channel | null) => {
+    if (!targetUrl.trim() || !channel) return '';
     if (!targetUrl.trim()) return '';
     try {
       const urlObj = new URL(targetUrl.startsWith('http') ? targetUrl : `https://${targetUrl}`);
@@ -41,11 +49,7 @@ export default function SourcesPage() {
     }
   };
 
-  useEffect(() => {
-    if (utmTargetChannel) {
-      setGeneratedLink(generateUtmLink(utmUrl, utmTargetChannel));
-    }
-  }, [utmUrl, utmTargetChannel]);
+  const generatedLink = generateUtmLink(utmUrl, utmTargetChannel);
 
   const openCreate = () => {
     setEditingId(null);
@@ -53,7 +57,7 @@ export default function SourcesPage() {
     setIsModalOpen(true);
   };
 
-  const openEdit = (channel: { id: number; name: string; type: string; url?: string; status: string }) => {
+  const openEdit = (channel: Channel) => {
     setEditingId(channel.id);
     setFormData({
       name: channel.name,
@@ -64,10 +68,10 @@ export default function SourcesPage() {
     setIsModalOpen(true);
   };
 
-  const fetchChannels = async () => {
+  const fetchChannels = useCallback(async () => {
     setError('');
     try {
-      const data = await apiJson<any[]>('/channels');
+      const data = await apiJson<Channel[]>('/channels');
       setChannels(Array.isArray(data) ? data : []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('Không tải được danh sách kênh'));
@@ -75,11 +79,13 @@ export default function SourcesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
-    fetchChannels();
-  }, []);
+    setTimeout(() => {
+      fetchChannels();
+    }, 0);
+  }, [fetchChannels]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +155,7 @@ export default function SourcesPage() {
           <h4 className="font-bold text-slate-800 text-sm">{t('Nguồn Traffic là gì?')}</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
             {t('Đây là nơi bạn khai báo các kênh truyền thông của mình (như Fanpage, Group, Kênh Youtube, Blog SEO).')}{' '}
-            {t('Hãy dùng công cụ')} <strong>"{t('Tạo Link UTM')}"</strong> {t('trên mỗi kênh để tạo đường link có chứa mã theo dõi.')}{' '}
+            {t('Hãy dùng công cụ')} <strong>&ldquo;{t('Tạo Link UTM')}&rdquo;</strong> {t('trên mỗi kênh để tạo đường link có chứa mã theo dõi.')}{' '}
             {t('Khi chia sẻ link đó, hệ thống sẽ biết chính xác khách truy cập đến từ kênh nào để báo cáo hiệu quả chiến dịch!')}
           </p>
         </div>
@@ -225,7 +231,6 @@ export default function SourcesPage() {
                         onClick={() => {
                           setUtmTargetChannel(channel);
                           setUtmUrl('');
-                          setGeneratedLink('');
                         }}
                         className="text-brand hover:underline font-bold text-sm transition-colors"
                       >

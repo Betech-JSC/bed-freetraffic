@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma';
 import { createSmtpTransporter, getSmtpConfig } from '../lib/smtp';
-import { getAiConfig } from '../lib/ai';
+import { getAiConfig, fetchWithRetry } from '../lib/ai';
 
 
 const TICK_MS = 60_000; // Quét mỗi 60 giây
@@ -62,7 +62,7 @@ Quy tắc:
 4. Chỉ trả về NỘI DUNG EMAIL DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
 
     try {
-      const response = await fetch(ai.url, {
+      const response = await fetchWithRetry(ai.url, {
         method: 'POST',
         headers: ai.headers,
         body: JSON.stringify({
@@ -301,7 +301,7 @@ Quy tắc:
 3. Chỉ trả về NỘI DUNG DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br>, <ul>, <li> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
 
               try {
-                const response = await fetch(ai.url, {
+                const response = await fetchWithRetry(ai.url, {
                   method: 'POST',
                   headers: ai.headers,
                   body: JSON.stringify({

@@ -259,19 +259,19 @@ export default function CopilotPage() {
     switch (platform.toLowerCase()) {
       case 'facebook':
         return (
-          <span className="text-xs font-bold text-blue-600 uppercase">[FB]</span>
+          <span className="text-xs font-bold text-slate-600 bg-slate-100 px-1 rounded uppercase">[FB]</span>
         );
       case 'email':
         return (
-          <span className="text-xs font-bold text-purple-600 uppercase">[Email]</span>
+          <span className="text-xs font-bold text-slate-600 bg-slate-100 px-1 rounded uppercase">[Email]</span>
         );
       case 'zalo':
         return (
-          <span className="text-xs font-bold text-cyan-600 uppercase">[Zalo]</span>
+          <span className="text-xs font-bold text-slate-600 bg-slate-100 px-1 rounded uppercase">[Zalo]</span>
         );
       default:
         return (
-          <span className="text-xs font-bold text-slate-400 uppercase">[Platform]</span>
+          <span className="text-xs font-bold text-slate-400 bg-slate-50 px-1 rounded uppercase">[Platform]</span>
         );
     }
   };
@@ -312,8 +312,8 @@ export default function CopilotPage() {
         <div
           className={`p-4 rounded-2xl border text-sm flex items-start gap-3 shadow-md animate-in fade-in duration-200 ${
             message.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              : 'bg-red-50 border-red-200 text-red-800'
+              ? 'bg-orange-50 border-brand/20 text-brand'
+              : 'bg-slate-50 border-slate-200 text-red-600 font-semibold'
           }`}
         >
           <div className="font-semibold leading-relaxed">{message.text}</div>
@@ -777,7 +777,7 @@ export default function CopilotPage() {
                                         onClick={() => handleGenerateCardImage(index)}
                                         className="w-full py-1 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 text-[10px] font-bold text-brand transition-all cursor-pointer"
                                       >
-                                        🎨 Tạo ảnh
+                                        Tạo ảnh
                                       </button>
                                     </div>
                                   )}

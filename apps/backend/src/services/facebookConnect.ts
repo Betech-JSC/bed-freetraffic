@@ -166,27 +166,30 @@ export async function saveFacebookConnection(pageId: string, accessToken: string
 
   const tokenToStore = verified.pageAccessToken?.trim() || accessToken.trim();
 
-  await prisma.socialConnection.upsert({
-    where: {
-      platform_workspaceId: {
-        platform: 'facebook',
-        workspaceId
-      }
-    },
-    update: {
-      accessToken: tokenToStore,
-      pageName: verified.pageName,
-      pageId: verified.pageId!,
-      status: 'CONNECTED',
-    },
-    create: {
-      platform: 'facebook',
-      workspaceId,
-      accessToken: tokenToStore,
-      pageName: verified.pageName,
-      pageId: verified.pageId!,
-    },
+  const existing = await prisma.socialConnection.findFirst({
+    where: { platform: 'facebook', pageId: verified.pageId!, workspaceId }
   });
+  if (existing) {
+    await prisma.socialConnection.update({
+      where: { id: existing.id },
+      data: {
+        accessToken: tokenToStore,
+        pageName: verified.pageName,
+        status: 'CONNECTED',
+      }
+    });
+  } else {
+    await prisma.socialConnection.create({
+      data: {
+        platform: 'facebook',
+        workspaceId,
+        accessToken: tokenToStore,
+        pageName: verified.pageName,
+        pageId: verified.pageId!,
+        status: 'CONNECTED',
+      }
+    });
+  }
 
   return verified;
 }

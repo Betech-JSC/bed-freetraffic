@@ -268,14 +268,14 @@ export default function ContentEditorPage() {
         }
       />
             {/* Guide Banner */}
-      <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
+      <div className="bg-white border border-brand/20 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
         <div>
           <h4 className="font-bold text-slate-800 text-sm">{t('Hướng dẫn xoay vòng nội dung bài viết')}</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
             {t('Các mẫu bài viết bật **Active (Bật)** sẽ được Bot tự động lựa chọn ngẫu nhiên để đăng bài kéo traffic. Khi soạn thảo, bạn có thể bấm vào biến động để chèn nhanh:')}{' '}
             <button
               type="button"
-              className="mx-1 bg-brand/10 border border-brand/20 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              className="mx-1 bg-orange-50 border border-brand/15 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
               title={t('Click để chèn {url}')}
               onClick={() => insertPlaceholder('{url}')}
             >
@@ -284,7 +284,7 @@ export default function ContentEditorPage() {
             {t('(link trang đích kéo traffic),')}{' '}
             <button
               type="button"
-              className="mx-1 bg-brand/10 border border-brand/20 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              className="mx-1 bg-orange-50 border border-brand/15 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
               title={t('Click để chèn {name}')}
               onClick={() => insertPlaceholder('{name}')}
             >
@@ -293,7 +293,7 @@ export default function ContentEditorPage() {
             {t('(tên của Bot đang chạy), hoặc')}{' '}
             <button
               type="button"
-              className="mx-1 bg-brand/10 border border-brand/20 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              className="mx-1 bg-orange-50 border border-brand/15 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
               title={t('Click để chèn {date}')}
               onClick={() => insertPlaceholder('{date}')}
             >
@@ -360,8 +360,8 @@ export default function ContentEditorPage() {
                   <h3 className="font-bold text-slate-900 text-sm line-clamp-1" title={tpl.title}>
                     {tpl.title}
                   </h3>
-                  <span className={`shrink-0 px-2 py-0.5 border rounded text-[9px] font-extrabold uppercase tracking-wider ${
-                    tpl.isActive ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-450 border-slate-200'
+                  <span className={`shrink-0 px-2.5 py-0.5 border rounded-lg text-[9px] font-extrabold uppercase tracking-wider ${
+                    tpl.isActive ? 'bg-orange-50 text-brand border-brand/20' : 'bg-slate-50 text-slate-400 border-slate-200'
                   }`}>
                     {tpl.isActive ? t('Hoạt động') : t('Tạm tắt')}
                   </span>
@@ -375,25 +375,25 @@ export default function ContentEditorPage() {
               {tpl.task && (
                 <div className="text-[10px] text-slate-400 flex items-center gap-1">
                   <span>{t('Gắn riêng:')}</span>
-                  <span className="font-bold text-slate-650 bg-slate-50 border px-1.5 py-0.5 rounded">{tpl.task.name}</span>
+                  <span className="font-bold text-slate-500 bg-slate-50 border border-slate-150 px-1.5 py-0.5 rounded">{tpl.task.name}</span>
                 </div>
               )}
 
-              <div className="flex items-center gap-2 pt-2.5 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-1 pt-2.5 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => handleEdit(tpl)}
-                  className="flex-1 text-center py-1.5 text-xs font-bold text-brand bg-brand/5 border border-brand/10 rounded-lg hover:bg-brand/10 transition-colors cursor-pointer active:scale-95"
+                  className="flex-1 text-center py-1.5 text-xs font-bold text-brand hover:text-brand-hover transition-colors cursor-pointer active:scale-95"
                 >
                   {t('Sửa')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleToggleActive(tpl)}
-                  className={`flex-1 text-center py-1.5 text-xs font-bold rounded-lg border transition-colors cursor-pointer active:scale-95 ${
+                  className={`flex-1 text-center py-1.5 text-xs font-bold transition-colors cursor-pointer active:scale-95 ${
                     tpl.isActive 
-                      ? 'text-orange-600 bg-orange-50 border-orange-100 hover:bg-orange-100' 
-                      : 'text-green-600 bg-green-50 border-green-100 hover:bg-green-100'
+                      ? 'text-slate-500 hover:text-slate-700' 
+                      : 'text-brand hover:text-brand-hover'
                   }`}
                 >
                   {tpl.isActive ? t('Tạm dừng') : t('Bật chạy')}
@@ -401,7 +401,7 @@ export default function ContentEditorPage() {
                 <button
                   type="button"
                   onClick={() => handleDelete(tpl.id)}
-                  className="flex-1 text-center py-1.5 text-xs font-bold text-red-650 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 transition-colors cursor-pointer active:scale-95"
+                  className="flex-1 text-center py-1.5 text-xs font-bold text-slate-450 hover:text-brand transition-colors cursor-pointer active:scale-95"
                 >
                   {t('Xóa')}
                 </button>
@@ -426,14 +426,14 @@ export default function ContentEditorPage() {
 
             {/* AI Assistant Toggle Button */}
             {!editingId && (
-              <div className="bg-gradient-to-r from-purple-500/10 to-brand/10 rounded-xl p-3 border border-brand/20">
+              <div className="bg-orange-50/40 rounded-xl p-3 border border-brand/15">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-black text-brand flex items-center gap-1.5">
                     {t('Trợ lý viết bài thông minh AI (Gemini)')}
                   </span>
                   <button
                     type="button"
-                    className="text-[10px] font-extrabold bg-brand text-white px-2.5 py-1 rounded shadow-sm cursor-pointer hover:bg-brand-hover transition-colors"
+                    className="text-[10px] font-extrabold bg-white text-brand border border-brand/35 px-2.5 py-1 rounded shadow-sm cursor-pointer hover:bg-orange-50 transition-colors"
                     onClick={() => setShowAiPanel(!showAiPanel)}
                   >
                     {showAiPanel ? t('Đóng AI Panel') : t('Mở AI Panel')}
@@ -445,7 +445,7 @@ export default function ContentEditorPage() {
                     <div>
                       <label className="block font-bold text-slate-500 uppercase mb-1">{t('URL trang đích phân tích *')}</label>
                       <input
-                        className="input text-xs w-full py-1.5"
+                        className="input text-xs w-full py-1.5 bg-white"
                         type="url"
                         placeholder="https://your-site.com/products-a"
                         value={aiUrl}
@@ -456,18 +456,16 @@ export default function ContentEditorPage() {
                     <div>
                       <label className="block font-bold text-slate-500 uppercase mb-1">{t('Yêu cầu/Định hướng viết bài (tùy chọn)')}</label>
                       <input
-                        className="input text-xs w-full py-1.5"
+                        className="input text-xs w-full py-1.5 bg-white"
                         placeholder={t('Ví dụ: Giọng văn hài hước hóm hỉnh, nhiều hashtag...')}
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                       />
                     </div>
 
-
-
                     <button
                       type="button"
-                      className="btn-primary w-full py-2 text-xs"
+                      className="w-full py-2 bg-brand hover:bg-brand-hover text-white font-bold rounded-xl transition-colors text-xs shadow-sm cursor-pointer disabled:opacity-50"
                       disabled={generating}
                       onClick={handleGenerateAi}
                     >
@@ -533,9 +531,9 @@ export default function ContentEditorPage() {
               {/* Image Upload & AI Generation Area */}
               <div className="space-y-2">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase">{t('Hình ảnh đi kèm')}</label>
-                <div className="border border-slate-250 rounded-xl p-3 bg-slate-50/50 space-y-3">
+                <div className="border border-slate-150 rounded-xl p-3 bg-white space-y-3">
                   {/* Drag-drop or Preview box */}
-                  <div className="border-2 border-dashed border-slate-200 bg-white rounded-xl p-3 text-center hover:border-brand/40 transition-colors">
+                  <div className="border border-dashed border-slate-200 bg-slate-50/50 rounded-xl p-3 text-center hover:border-brand/45 transition-colors">
                     {imagePreview ? (
                       <div className="relative">
                         <img
@@ -564,7 +562,7 @@ export default function ContentEditorPage() {
                   </div>
 
                   {/* AI Image Generator Box */}
-                  <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                  <div className="pt-2.5 border-t border-slate-100 space-y-2">
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t('Hoặc tạo ảnh minh họa bằng AI')}</p>
                     <div className="flex gap-2">
                       <input
@@ -572,14 +570,14 @@ export default function ContentEditorPage() {
                         value={customImagePrompt}
                         onChange={(e) => setCustomImagePrompt(e.target.value)}
                         placeholder={t('Nhập mô tả hình ảnh muốn vẽ...')}
-                        className="input text-xs w-full py-1.5 flex-1 bg-white border-slate-200/85 focus:border-brand"
+                        className="input text-xs w-full py-1.5 flex-1 bg-slate-50/60 border-slate-200/85 focus:bg-white focus:border-brand"
                         disabled={imageGenerating}
                       />
                       <button
                         type="button"
                         onClick={handleGenerateCustomImage}
                         disabled={imageGenerating || !customImagePrompt.trim()}
-                        className="px-3.5 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100/80 border border-orange-200 text-brand font-bold text-[11px] transition-all disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                        className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-orange-50/60 border border-brand/35 text-brand font-bold text-[11px] transition-all disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer shrink-0"
                       >
                         {imageGenerating ? (
                           <>
@@ -612,9 +610,9 @@ export default function ContentEditorPage() {
 
               {/* Live Preview block */}
               {(title || content) && (
-                <div className="bg-slate-50 border rounded-xl p-3">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">{t('Xem trước bài đăng')}</p>
-                  <div className="bg-white rounded-lg p-3 shadow-sm border text-xs">
+                <div className="bg-white border border-brand/20 rounded-xl p-4">
+                  <p className="text-[9px] font-bold text-brand uppercase tracking-wider mb-2">{t('Xem trước bài đăng')}</p>
+                  <div className="bg-slate-50/50 rounded-lg p-3 border border-slate-100 text-xs">
                     <p className="font-bold text-slate-900 mb-1.5">{title || t('(Chưa có tiêu đề)')}</p>
                     <p className="text-slate-650 whitespace-pre-wrap leading-normal">
                       {content

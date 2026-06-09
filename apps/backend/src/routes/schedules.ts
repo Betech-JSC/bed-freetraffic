@@ -94,6 +94,7 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
       title,
       content,
       platforms,
+      targetConnectionsJson,
       urlTarget,
       recipients,
       scheduledAt,
@@ -155,6 +156,7 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
         content: String(content).trim(),
         imageUrl: imageUrl || null,
         platforms: platformStr,
+        targetConnectionsJson: targetConnectionsJson ? String(targetConnectionsJson).trim() : null,
         urlTarget: urlTarget?.trim() || null,
         recipients: recipients?.trim() || null,
         scheduledAt: scheduledDate,
@@ -276,6 +278,9 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
       return;
     }
     data.platforms = platformStr;
+  }
+  if (body.targetConnectionsJson !== undefined) {
+    data.targetConnectionsJson = body.targetConnectionsJson ? String(body.targetConnectionsJson).trim() : null;
   }
   if (body.urlTarget !== undefined) data.urlTarget = body.urlTarget?.trim() || null;
   if (body.recipients !== undefined) data.recipients = body.recipients?.trim() || null;

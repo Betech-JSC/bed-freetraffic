@@ -72,7 +72,7 @@ export function Sidebar() {
     {
       title: t('Trợ giúp & Cài đặt'),
       items: [
-        { href: '/dashboard/guide', label: '📖 Hướng dẫn sử dụng' },
+        { href: '/dashboard/guide', label: 'Hướng dẫn sử dụng' },
         { href: '/dashboard/users', label: t('Người dùng') },
         { href: '/dashboard/settings', label: t('settings') },
       ]
@@ -86,7 +86,10 @@ export function Sidebar() {
     const saved = localStorage.getItem('sidebar_expanded_groups');
     if (saved) {
       try {
-        setExpandedGroups(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        setTimeout(() => {
+          setExpandedGroups(parsed);
+        }, 0);
       } catch (e) {
         console.error('Failed to parse sidebar_expanded_groups', e);
       }
@@ -146,17 +149,6 @@ export function Sidebar() {
                 className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-bold text-slate-400 hover:text-brand uppercase tracking-widest transition-colors duration-200 group/title text-left cursor-pointer animate-none"
               >
                 <span>{group.title}</span>
-                <svg
-                  className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 group-hover/title:text-brand ${
-                    isExpanded ? 'rotate-180' : ''
-                  }`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
               </button>
 
               <div

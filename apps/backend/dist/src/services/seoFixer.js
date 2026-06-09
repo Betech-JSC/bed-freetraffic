@@ -26,7 +26,7 @@ KHÔNG bao bọc chuỗi JSON bằng thẻ code markdown như \`\`\`json. Hãy t
 - Từ khóa hiện tại: ${keywords || 'Chưa cấu hình'}
 - Danh sách lỗi SEO phát hiện được: ${issues.length > 0 ? issues.join(', ') : 'Không phát hiện lỗi cụ thể'}`;
     try {
-        const res = await fetch(ai.url, {
+        const res = await (0, ai_1.fetchWithRetry)(ai.url, {
             method: 'POST',
             headers: ai.headers,
             body: JSON.stringify({
@@ -46,7 +46,7 @@ KHÔNG bao bọc chuỗi JSON bằng thẻ code markdown như \`\`\`json. Hãy t
         const data = await res.json();
         const contentText = data.choices?.[0]?.message?.content?.trim() || '{}';
         try {
-            const parsed = JSON.parse(contentText);
+            const parsed = (0, ai_1.parseAiJson)(contentText);
             return {
                 title: parsed.title || title,
                 description: parsed.description || description,

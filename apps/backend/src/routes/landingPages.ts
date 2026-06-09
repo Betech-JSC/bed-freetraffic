@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
-import { getAiConfig } from '../lib/ai';
+import { getAiConfig, parseAiJson, fetchWithRetry } from '../lib/ai';
 
 
 const router = Router();
@@ -56,7 +56,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response): Promis
 // Create new landing page
 router.post('/', authenticate, requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId } = req.body;
+    const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId, enableMessengerChat } = req.body;
     if (!title || !slug) {
       res.status(400).json({ error: 'Tiêu đề và đường dẫn (slug) là bắt buộc.' });
       return;
@@ -80,6 +80,7 @@ router.post('/', authenticate, requireWrite, async (req: AuthRequest, res: Respo
         status: status || 'DRAFT',
         fbPixelId: fbPixelId || null,
         googleTagId: googleTagId || null,
+        enableMessengerChat: enableMessengerChat !== undefined ? !!enableMessengerChat : false,
         workspaceId: req.workspaceId,
       },
     });
@@ -94,7 +95,7 @@ router.post('/', authenticate, requireWrite, async (req: AuthRequest, res: Respo
 router.put('/:id', authenticate, requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string);
-    const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId } = req.body;
+    const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId, enableMessengerChat } = req.body;
 
     const existing = await prisma.landingPage.findUnique({
       where: { id },
@@ -140,6 +141,7 @@ router.put('/:id', authenticate, requireWrite, async (req: AuthRequest, res: Res
         status: status !== undefined ? status : existing.status,
         fbPixelId: fbPixelId !== undefined ? fbPixelId : existing.fbPixelId,
         googleTagId: googleTagId !== undefined ? googleTagId : existing.googleTagId,
+        enableMessengerChat: enableMessengerChat !== undefined ? !!enableMessengerChat : existing.enableMessengerChat,
       },
     });
 
@@ -305,7 +307,7 @@ Quy tắc thiết kế quan trọng:
 5. Chỉ trả về MẢNG JSON HỢP LỆ dạng PageBlock[].
 6. KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô để có thể chạy JSON.parse() trực tiếp.`;
 
-    const response = await fetch(ai.url, {
+    const response = await fetchWithRetry(ai.url, {
       method: 'POST',
       headers: ai.headers,
       body: JSON.stringify({
@@ -330,7 +332,7 @@ Quy tắc thiết kế quan trọng:
     const contentText = data.choices?.[0]?.message?.content?.trim() || '[]';
 
     try {
-      const parsed = JSON.parse(contentText);
+      const parsed = parseAiJson(contentText);
       if (Array.isArray(parsed)) {
         // Add random ID if not present and ensure high-quality themed images
         const processed = parsed.map((b: any, idx: number) => {
@@ -357,6 +359,69 @@ Quy tắc thiết kế quan trọng:
   } catch (err: any) {
     console.error('[AI Page Generator Error]:', err);
     res.status(500).json({ error: err.message || 'Lỗi hệ thống khi sinh trang.' });
+  }
+});
+
+router.post('/:id/share-facebook', authenticate, requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string);
+    const { connectionIds, message } = req.body;
+    
+    if (!connectionIds || !Array.isArray(connectionIds) || connectionIds.length === 0) {
+      res.status(400).json({ error: 'Vui lòng chọn ít nhất một Fanpage để chia sẻ.' });
+      return;
+    }
+
+    const page = await prisma.landingPage.findUnique({ where: { id } });
+    if (!page) {
+      res.status(404).json({ error: 'Không tìm thấy Landing Page' });
+      return;
+    }
+
+    const { dispatchToPlatform } = await import('../lib/dispatch');
+    const results = [];
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const landingPageUrl = `${frontendUrl}/p/${page.slug}`;
+
+    for (const connId of connectionIds) {
+      const conn = await prisma.socialConnection.findFirst({
+        where: { id: connId, platform: 'facebook', workspaceId: req.workspaceId }
+      });
+      if (!conn) {
+        results.push({ connectionId: connId, success: false, message: 'Không tìm thấy kết nối Facebook' });
+        continue;
+      }
+
+      const utmUrl = `${landingPageUrl}?utm_source=facebook&utm_medium=social&utm_campaign=share_landing&utm_term=${encodeURIComponent(conn.pageName || '')}`;
+
+      try {
+        const result = await dispatchToPlatform('facebook', {
+          title: page.title,
+          content: message || `Khám phá trang mới của chúng tôi: ${page.title}`,
+          urlTarget: utmUrl,
+          workspaceId: req.workspaceId,
+          connectionId: conn.id
+        });
+        results.push({
+          connectionId: connId,
+          pageName: conn.pageName,
+          success: result.success,
+          message: result.message
+        });
+      } catch (err: any) {
+        results.push({
+          connectionId: connId,
+          pageName: conn.pageName,
+          success: false,
+          message: err.message
+        });
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi khi chia sẻ lên Fanpage' });
   }
 });
 

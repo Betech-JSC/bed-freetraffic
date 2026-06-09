@@ -10,6 +10,14 @@ const prisma_1 = __importDefault(require("../lib/prisma"));
 const facebookPost_1 = require("../lib/facebookPost");
 const facebookConnect_1 = require("../services/facebookConnect");
 const router = (0, express_1.Router)();
+/** Safe accessor — trả về workspaceId hoặc throw lỗi 400 nếu thiếu */
+function requireWorkspaceId(req, res) {
+    if (!req.workspaceId) {
+        res.status(400).json({ error: 'Không xác định được Workspace. Vui lòng đăng nhập lại.' });
+        return null;
+    }
+    return req.workspaceId;
+}
 // ==================== CHUNG ====================
 // Lấy danh sách tất cả kết nối
 router.get('/', async (req, res) => {
@@ -24,6 +32,19 @@ router.get('/', async (req, res) => {
             accessToken: c.accessToken ? c.accessToken.substring(0, 8) + '***' : ''
         }));
         res.json(safe);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Lỗi máy chủ' });
+    }
+});
+// Ngắt kết nối một connection cụ thể
+router.delete('/connections/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        await prisma_1.default.socialConnection.deleteMany({
+            where: { id, workspaceId: req.workspaceId }
+        });
+        res.json({ message: `Đã xóa kết nối thành công` });
     }
     catch (error) {
         res.status(500).json({ error: 'Lỗi máy chủ' });
@@ -46,7 +67,7 @@ router.delete('/:platform', async (req, res) => {
 // ==================== FACEBOOK ====================
 router.get('/facebook/status', async (req, res) => {
     try {
-        const status = await (0, facebookConnect_1.getFacebookBotStatus)(req.workspaceId);
+        const status = await (0, facebookConnect_1.getFacebookBotStatus)(req.workspaceId ?? 0);
         res.json(status);
     }
     catch {
@@ -98,7 +119,7 @@ router.post('/facebook/list-pages', async (req, res) => {
 router.post('/facebook/connect', async (req, res) => {
     try {
         const { pageId, accessToken } = req.body;
-        const verified = await (0, facebookConnect_1.saveFacebookConnection)(pageId, accessToken, req.workspaceId);
+        const verified = await (0, facebookConnect_1.saveFacebookConnection)(pageId, accessToken, req.workspaceId ?? 0);
         res.json({
             success: true,
             pageName: verified.pageName,
@@ -115,7 +136,7 @@ router.post('/facebook/connect', async (req, res) => {
 });
 router.post('/facebook/test-bot', async (req, res) => {
     try {
-        const status = await (0, facebookConnect_1.getFacebookBotStatus)(req.workspaceId);
+        const status = await (0, facebookConnect_1.getFacebookBotStatus)(req.workspaceId ?? 0);
         if (!status.botReady) {
             res.status(400).json({ success: false, error: status.issues.join(' ') });
             return;
@@ -151,27 +172,31 @@ router.post('/facebook/auth-url', async (req, res) => {
     }
 });
 async function saveFacebookPage(page, workspaceId) {
-    await prisma_1.default.socialConnection.upsert({
-        where: {
-            platform_workspaceId: {
-                platform: 'facebook',
-                workspaceId
-            }
-        },
-        update: {
-            accessToken: page.access_token,
-            pageName: page.name,
-            pageId: page.id,
-            status: 'CONNECTED',
-        },
-        create: {
-            platform: 'facebook',
-            workspaceId,
-            accessToken: page.access_token,
-            pageName: page.name,
-            pageId: page.id,
-        },
+    const existing = await prisma_1.default.socialConnection.findFirst({
+        where: { platform: 'facebook', pageId: page.id, workspaceId }
     });
+    if (existing) {
+        await prisma_1.default.socialConnection.update({
+            where: { id: existing.id },
+            data: {
+                accessToken: page.access_token,
+                pageName: page.name,
+                status: 'CONNECTED',
+            }
+        });
+    }
+    else {
+        await prisma_1.default.socialConnection.create({
+            data: {
+                platform: 'facebook',
+                workspaceId,
+                accessToken: page.access_token,
+                pageName: page.name,
+                pageId: page.id,
+                status: 'CONNECTED',
+            }
+        });
+    }
 }
 // Bước 2: Nhận callback code từ Facebook, đổi lấy token
 router.post('/facebook/callback', async (req, res) => {
@@ -200,7 +225,7 @@ router.post('/facebook/callback', async (req, res) => {
             const want = String(preferredPageId).trim();
             const matched = pages.find((p) => p.id === want);
             if (matched) {
-                await saveFacebookPage(matched, req.workspaceId);
+                await saveFacebookPage(matched, req.workspaceId ?? 0);
                 res.json({
                     success: true,
                     pages,
@@ -217,7 +242,7 @@ router.post('/facebook/callback', async (req, res) => {
         // Một Page → lưu luôn; nhiều Page → để frontend chọn
         if (pages.length === 1) {
             const page = pages[0];
-            await saveFacebookPage(page, req.workspaceId);
+            await saveFacebookPage(page, req.workspaceId ?? 0);
             res.json({
                 success: true,
                 pages,
@@ -249,27 +274,30 @@ router.post('/facebook/bind-page', async (req, res) => {
             res.status(400).json({ error: 'Thiếu Page Access Token. Dán token từ Graph API Explorer.' });
             return;
         }
-        const verified = await (0, facebookConnect_1.saveFacebookConnection)(pageId, token, req.workspaceId);
+        const verified = await (0, facebookConnect_1.saveFacebookConnection)(pageId, token, req.workspaceId ?? 0);
         res.json({ success: true, pageName: verified.pageName, pageId: verified.pageId, fanCount: verified.fanCount });
     }
     catch (error) {
         res.status(500).json({ error: 'Lỗi máy chủ' });
     }
 });
-// Chọn Page khác (khi user có nhiều page)
 router.post('/facebook/select-page', async (req, res) => {
     try {
         const { pageAccessToken, pageId, pageName } = req.body;
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'facebook',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: { accessToken: pageAccessToken, pageName, pageId, status: 'CONNECTED' },
-            create: { platform: 'facebook', workspaceId: req.workspaceId, accessToken: pageAccessToken, pageName, pageId }
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'facebook', pageId, workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: { accessToken: pageAccessToken, pageName, status: 'CONNECTED' }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: { platform: 'facebook', workspaceId: req.workspaceId, accessToken: pageAccessToken, pageName, pageId, status: 'CONNECTED' }
+            });
+        }
         res.json({ success: true });
     }
     catch (error) {
@@ -317,16 +345,20 @@ router.post('/email/connect', async (req, res) => {
         console.log(`[SMTP] Kết nối thành công tới ${smtp.host}:${smtp.port}!`);
         // Lưu config vào DB (dưới dạng JSON trong accessToken)
         const config = JSON.stringify({ email, password, ...smtp });
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'email',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: { accessToken: config, pageName: email, status: 'CONNECTED' },
-            create: { platform: 'email', workspaceId: req.workspaceId, accessToken: config, pageName: email }
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'email', workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: { accessToken: config, pageName: email, status: 'CONNECTED' }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: { platform: 'email', workspaceId: req.workspaceId, accessToken: config, pageName: email, pageId: 'default', status: 'CONNECTED' }
+            });
+        }
         res.json({ success: true, email, smtpHost: smtp.host });
     }
     catch (error) {
@@ -412,27 +444,32 @@ router.post('/zalo/callback', async (req, res) => {
         });
         const oaData = await oaRes.json();
         const oaName = oaData.data?.name || 'Zalo OA';
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'zalo',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: {
-                accessToken: tokenData.access_token,
-                pageName: oaName,
-                pageId: oaData.data?.oa_id?.toString(),
-                status: 'CONNECTED'
-            },
-            create: {
-                platform: 'zalo',
-                workspaceId: req.workspaceId,
-                accessToken: tokenData.access_token,
-                pageName: oaName,
-                pageId: oaData.data?.oa_id?.toString()
-            }
+        const pageId = oaData.data?.oa_id?.toString() || 'default';
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'zalo', pageId, workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: {
+                    accessToken: tokenData.access_token,
+                    pageName: oaName,
+                    status: 'CONNECTED'
+                }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: {
+                    platform: 'zalo',
+                    workspaceId: req.workspaceId,
+                    accessToken: tokenData.access_token,
+                    pageName: oaName,
+                    pageId,
+                    status: 'CONNECTED'
+                }
+            });
+        }
         res.json({ success: true, oaName });
     }
     catch (error) {
@@ -456,16 +493,21 @@ router.post('/zalo/quick-connect', async (req, res) => {
             return;
         }
         const oaName = oaData.data?.name || 'Zalo OA';
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'zalo',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: { accessToken, pageName: oaName, pageId: oaData.data?.oa_id?.toString(), status: 'CONNECTED' },
-            create: { platform: 'zalo', workspaceId: req.workspaceId, accessToken, pageName: oaName, pageId: oaData.data?.oa_id?.toString() }
+        const pageId = oaData.data?.oa_id?.toString() || 'default';
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'zalo', pageId, workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: { accessToken, pageName: oaName, status: 'CONNECTED' }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: { platform: 'zalo', workspaceId: req.workspaceId, accessToken, pageName: oaName, pageId, status: 'CONNECTED' }
+            });
+        }
         res.json({ success: true, oaName });
     }
     catch (error) {
@@ -510,28 +552,31 @@ router.post('/mailchimp/connect', async (req, res) => {
             res.status(400).json({ error: err.detail || `Lỗi API Mailchimp: HTTP ${verifyRes.status}` });
             return;
         }
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'mailchimp',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: {
-                accessToken: apiKey,
-                pageId: serverPrefix,
-                pageName: 'Mailchimp API',
-                status: 'CONNECTED',
-            },
-            create: {
-                platform: 'mailchimp',
-                workspaceId: req.workspaceId,
-                accessToken: apiKey,
-                pageId: serverPrefix,
-                pageName: 'Mailchimp API',
-                status: 'CONNECTED',
-            },
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'mailchimp', pageId: serverPrefix, workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: {
+                    accessToken: apiKey,
+                    pageName: 'Mailchimp API',
+                    status: 'CONNECTED',
+                }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: {
+                    platform: 'mailchimp',
+                    workspaceId: req.workspaceId,
+                    accessToken: apiKey,
+                    pageId: serverPrefix,
+                    pageName: 'Mailchimp API',
+                    status: 'CONNECTED',
+                }
+            });
+        }
         res.json({ success: true, message: 'Kết nối Mailchimp thành công!' });
     }
     catch (error) {
@@ -564,28 +609,31 @@ router.post('/telegram/connect', async (req, res) => {
         }
         const chatData = await chatRes.json();
         const chatTitle = chatData.result?.title || chatData.result?.username || chatId;
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'telegram',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: {
-                accessToken: botToken,
-                pageId: chatId,
-                pageName: `@${botUsername} → ${chatTitle}`,
-                status: 'CONNECTED',
-            },
-            create: {
-                platform: 'telegram',
-                workspaceId: req.workspaceId,
-                accessToken: botToken,
-                pageId: chatId,
-                pageName: `@${botUsername} → ${chatTitle}`,
-                status: 'CONNECTED',
-            },
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'telegram', pageId: chatId, workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: {
+                    accessToken: botToken,
+                    pageName: `@${botUsername} → ${chatTitle}`,
+                    status: 'CONNECTED',
+                }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: {
+                    platform: 'telegram',
+                    workspaceId: req.workspaceId,
+                    accessToken: botToken,
+                    pageId: chatId,
+                    pageName: `@${botUsername} → ${chatTitle}`,
+                    status: 'CONNECTED',
+                }
+            });
+        }
         res.json({ success: true, message: 'Kết nối Telegram Bot thành công!' });
     }
     catch (error) {
@@ -627,28 +675,31 @@ router.post('/reddit/connect', async (req, res) => {
             return;
         }
         const config = JSON.stringify({ clientId, clientSecret, username, password, subreddit });
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'reddit',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: {
-                accessToken: config,
-                pageId: subreddit,
-                pageName: `/r/${subreddit} (u/${username})`,
-                status: 'CONNECTED',
-            },
-            create: {
-                platform: 'reddit',
-                workspaceId: req.workspaceId,
-                accessToken: config,
-                pageId: subreddit,
-                pageName: `/r/${subreddit} (u/${username})`,
-                status: 'CONNECTED',
-            },
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'reddit', pageId: subreddit, workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: {
+                    accessToken: config,
+                    pageName: `/r/${subreddit} (u/${username})`,
+                    status: 'CONNECTED',
+                }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: {
+                    platform: 'reddit',
+                    workspaceId: req.workspaceId,
+                    accessToken: config,
+                    pageId: subreddit,
+                    pageName: `/r/${subreddit} (u/${username})`,
+                    status: 'CONNECTED',
+                }
+            });
+        }
         res.json({ success: true, message: 'Kết nối Reddit thành công!' });
     }
     catch (error) {
@@ -678,28 +729,31 @@ router.post('/moz/connect', async (req, res) => {
             res.status(400).json({ error: `Xác thực Moz thất bại: API trả về HTTP ${verifyRes.status}` });
             return;
         }
-        await prisma_1.default.socialConnection.upsert({
-            where: {
-                platform_workspaceId: {
-                    platform: 'moz',
-                    workspaceId: req.workspaceId
-                }
-            },
-            update: {
-                accessToken: secretKey,
-                pageId: accessId,
-                pageName: 'Moz API',
-                status: 'CONNECTED',
-            },
-            create: {
-                platform: 'moz',
-                workspaceId: req.workspaceId,
-                accessToken: secretKey,
-                pageId: accessId,
-                pageName: 'Moz API',
-                status: 'CONNECTED',
-            },
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'moz', pageId: accessId, workspaceId: req.workspaceId }
         });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: {
+                    accessToken: secretKey,
+                    pageName: 'Moz API',
+                    status: 'CONNECTED',
+                }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: {
+                    platform: 'moz',
+                    workspaceId: req.workspaceId,
+                    accessToken: secretKey,
+                    pageId: accessId,
+                    pageName: 'Moz API',
+                    status: 'CONNECTED',
+                }
+            });
+        }
         res.json({ success: true, message: 'Kết nối Moz API thành công!' });
     }
     catch (error) {

@@ -10,58 +10,60 @@ export default function ZaloCallbackPage() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    setMessage(t('Đang xác thực với Zalo...'));
-    const run = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get('code') || params.get('oa_id');
-      const error = params.get('error_description') || params.get('error');
+    setTimeout(() => {
+      setMessage(t('Đang xác thực với Zalo...'));
+      const run = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code') || params.get('oa_id');
+        const error = params.get('error_description') || params.get('error');
 
-      if (error) {
-        setStatus('error');
-        setMessage(decodeURIComponent(error));
-        return;
-      }
-
-      if (!code) {
-        setStatus('error');
-        setMessage(t('Không nhận được mã xác thực từ Zalo.'));
-        return;
-      }
-
-      const raw = localStorage.getItem('zalo_oauth');
-      if (!raw) {
-        setStatus('error');
-        setMessage(t('Thiếu cấu hình OAuth. Hãy thử đăng nhập lại từ trang Settings.'));
-        return;
-      }
-
-      const { appId, appSecret, redirectUri } = JSON.parse(raw);
-
-      try {
-        const res = await apiFetch('/social/zalo/callback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, appId, appSecret, redirectUri }),
-        });
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
+        if (error) {
           setStatus('error');
-          setMessage(data.error || t('Không thể kết nối Zalo.'));
+          setMessage(decodeURIComponent(error));
           return;
         }
 
-        localStorage.removeItem('zalo_oauth');
-        setStatus('success');
-        setMessage(`${t('Đã kết nối:')} ${data.oaName || 'Zalo OA'}`);
-        setTimeout(() => window.close(), 1500);
-      } catch {
-        setStatus('error');
-        setMessage(t('Lỗi kết nối máy chủ.'));
-      }
-    };
+        if (!code) {
+          setStatus('error');
+          setMessage(t('Không nhận được mã xác thực từ Zalo.'));
+          return;
+        }
 
-    run();
+        const raw = localStorage.getItem('zalo_oauth');
+        if (!raw) {
+          setStatus('error');
+          setMessage(t('Thiếu cấu hình OAuth. Hãy thử đăng nhập lại từ trang Settings.'));
+          return;
+        }
+
+        const { appId, appSecret, redirectUri } = JSON.parse(raw);
+
+        try {
+          const res = await apiFetch('/social/zalo/callback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, appId, appSecret, redirectUri }),
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.success) {
+            setStatus('error');
+            setMessage(data.error || t('Không thể kết nối Zalo.'));
+            return;
+          }
+
+          localStorage.removeItem('zalo_oauth');
+          setStatus('success');
+          setMessage(`${t('Đã kết nối:')} ${data.oaName || 'Zalo OA'}`);
+          setTimeout(() => window.close(), 1500);
+        } catch {
+          setStatus('error');
+          setMessage(t('Lỗi kết nối máy chủ.'));
+        }
+      };
+
+      run();
+    }, 0);
   }, [t]);
 
   return (

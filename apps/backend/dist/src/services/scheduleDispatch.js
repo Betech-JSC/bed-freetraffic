@@ -41,14 +41,58 @@ async function executeContentSchedule(item) {
             console.error('Failed to apply image overlay:', err);
         }
     }
-    const channelResults = await (0, dispatch_1.dispatchToAllPlatforms)(row.platforms, {
-        title: resolved.title,
-        content: resolved.content,
-        imageUrl: finalImageUrl,
-        urlTarget: resolved.urlTarget || undefined,
-        emailRecipients: row.recipients?.trim() || undefined,
-        workspaceId: row.workspaceId || undefined,
-    });
+    let targets = [];
+    if (row.targetConnectionsJson) {
+        try {
+            const parsed = JSON.parse(row.targetConnectionsJson);
+            if (Array.isArray(parsed)) {
+                targets = parsed.map((t) => ({
+                    connectionId: Number(t.connectionId || 0),
+                    platform: String(t.platform).trim().toLowerCase(),
+                    pageName: t.pageName ? String(t.pageName) : undefined
+                })).filter(t => t.platform);
+            }
+        }
+        catch {
+            // ignore
+        }
+    }
+    // Fallback to platforms string parsing
+    if (targets.length === 0) {
+        const platformList = (0, dispatch_1.parsePlatforms)(row.platforms);
+        for (const p of platformList) {
+            targets.push({ connectionId: 0, platform: p });
+        }
+    }
+    const channelResults = [];
+    for (const target of targets) {
+        let pageName = target.pageName;
+        if (!pageName && target.connectionId > 0) {
+            const conn = await prisma_1.default.socialConnection.findUnique({ where: { id: target.connectionId } });
+            pageName = conn?.pageName || undefined;
+        }
+        let result;
+        try {
+            result = await (0, dispatch_1.dispatchToPlatform)(target.platform, {
+                title: resolved.title,
+                content: resolved.content,
+                imageUrl: finalImageUrl,
+                urlTarget: resolved.urlTarget || undefined,
+                emailRecipients: target.platform === 'email' ? row.recipients?.trim() || undefined : undefined,
+                workspaceId: row.workspaceId || undefined,
+                connectionId: target.connectionId > 0 ? target.connectionId : undefined,
+            });
+        }
+        catch (err) {
+            result = { success: false, message: `Lỗi thực thi: ${err.message}` };
+        }
+        channelResults.push({
+            platform: pageName ? `${target.platform} (${pageName})` : target.platform,
+            success: result.success,
+            message: result.message,
+            at: new Date().toISOString(),
+        });
+    }
     const { status, errorMessage } = (0, dispatch_1.summarizeChannelResults)(channelResults);
     await prisma_1.default.contentSchedule.update({
         where: { id: item.id },

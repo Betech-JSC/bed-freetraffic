@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma';
 import {
-  dispatchToAllPlatforms,
+  dispatchToPlatform,
+  parsePlatforms,
   summarizeChannelResults,
   type ChannelResult,
 } from '../lib/dispatch';
@@ -61,14 +62,61 @@ export async function executeContentSchedule(
     }
   }
 
-  const channelResults = await dispatchToAllPlatforms(row.platforms, {
-    title: resolved.title,
-    content: resolved.content,
-    imageUrl: finalImageUrl,
-    urlTarget: resolved.urlTarget || undefined,
-    emailRecipients: row.recipients?.trim() || undefined,
-    workspaceId: row.workspaceId || undefined,
-  });
+  let targets: { connectionId: number; platform: string; pageName?: string }[] = [];
+  if (row.targetConnectionsJson) {
+    try {
+      const parsed = JSON.parse(row.targetConnectionsJson);
+      if (Array.isArray(parsed)) {
+        targets = parsed.map((t: any) => ({
+          connectionId: Number(t.connectionId || 0),
+          platform: String(t.platform).trim().toLowerCase(),
+          pageName: t.pageName ? String(t.pageName) : undefined
+        })).filter(t => t.platform);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Fallback to platforms string parsing
+  if (targets.length === 0) {
+    const platformList = parsePlatforms(row.platforms);
+    for (const p of platformList) {
+      targets.push({ connectionId: 0, platform: p });
+    }
+  }
+
+  const channelResults: ChannelResult[] = [];
+
+  for (const target of targets) {
+    let pageName = target.pageName;
+    if (!pageName && target.connectionId > 0) {
+      const conn = await prisma.socialConnection.findUnique({ where: { id: target.connectionId } });
+      pageName = conn?.pageName || undefined;
+    }
+
+    let result;
+    try {
+      result = await dispatchToPlatform(target.platform, {
+        title: resolved.title,
+        content: resolved.content,
+        imageUrl: finalImageUrl,
+        urlTarget: resolved.urlTarget || undefined,
+        emailRecipients: target.platform === 'email' ? row.recipients?.trim() || undefined : undefined,
+        workspaceId: row.workspaceId || undefined,
+        connectionId: target.connectionId > 0 ? target.connectionId : undefined,
+      });
+    } catch (err: any) {
+      result = { success: false, message: `Lỗi thực thi: ${err.message}` };
+    }
+
+    channelResults.push({
+      platform: pageName ? `${target.platform} (${pageName})` : target.platform,
+      success: result.success,
+      message: result.message,
+      at: new Date().toISOString(),
+    });
+  }
 
   const { status, errorMessage } = summarizeChannelResults(channelResults);
 

@@ -43,7 +43,7 @@ router.get('/:platform/url', async (req: Request, res: Response): Promise<void> 
       const appId = process.env.META_APP_ID || process.env.FB_APP_ID;
       if (appId) {
         const scopes = action === 'connect' 
-          ? 'public_profile,email,pages_show_list,pages_read_engagement,pages_manage_posts'
+          ? 'public_profile,pages_show_list,pages_read_engagement,pages_manage_posts'
           : 'public_profile,email';
         const graphVersion = process.env.FB_GRAPH_VERSION || 'v21.0';
         const url = `https://www.facebook.com/${graphVersion}/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scopes)}&response_type=code&state=${state}`;
@@ -316,36 +316,47 @@ router.get('/:platform/callback', async (req: Request, res: Response): Promise<v
           secure: false,
           oauthConnected: true
         });
-        await prisma.socialConnection.upsert({
-          where: {
-            platform_workspaceId: { platform: 'email', workspaceId }
-          },
-          update: { accessToken: mockSmtp, pageName: userProfile.email, status: 'CONNECTED' },
-          create: { platform: 'email', workspaceId, accessToken: mockSmtp, pageName: userProfile.email, status: 'CONNECTED' }
+        const existing = await prisma.socialConnection.findFirst({
+          where: { platform: 'email', workspaceId }
         });
+        if (existing) {
+          await prisma.socialConnection.update({
+            where: { id: existing.id },
+            data: { accessToken: mockSmtp, pageName: userProfile.email, status: 'CONNECTED' }
+          });
+        } else {
+          await prisma.socialConnection.create({
+            data: { platform: 'email', workspaceId, accessToken: mockSmtp, pageName: userProfile.email, pageId: 'default', status: 'CONNECTED' }
+          });
+        }
       }
       
       // Facebook & Zalo OA connection
       if (oaProfile) {
-        await prisma.socialConnection.upsert({
-          where: {
-            platform_workspaceId: { platform, workspaceId }
-          },
-          update: {
-            accessToken: oaProfile.accessToken,
-            pageName: oaProfile.pageName,
-            pageId: oaProfile.pageId,
-            status: 'CONNECTED'
-          },
-          create: {
-            platform,
-            workspaceId,
-            accessToken: oaProfile.accessToken,
-            pageName: oaProfile.pageName,
-            pageId: oaProfile.pageId,
-            status: 'CONNECTED'
-          }
+        const existing = await prisma.socialConnection.findFirst({
+          where: { platform, pageId: oaProfile.pageId, workspaceId }
         });
+        if (existing) {
+          await prisma.socialConnection.update({
+            where: { id: existing.id },
+            data: {
+              accessToken: oaProfile.accessToken,
+              pageName: oaProfile.pageName,
+              status: 'CONNECTED'
+            }
+          });
+        } else {
+          await prisma.socialConnection.create({
+            data: {
+              platform,
+              workspaceId,
+              accessToken: oaProfile.accessToken,
+              pageName: oaProfile.pageName,
+              pageId: oaProfile.pageId,
+              status: 'CONNECTED'
+            }
+          });
+        }
       }
 
       res.redirect(`${frontendUrl}/oauth/callback?connect=success&platform=${platform}`);

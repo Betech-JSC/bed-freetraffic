@@ -160,9 +160,10 @@ model AnalyticsSnapshot {
 model AutomationTask {
   id              Int            @id @default(autoincrement())
   name            String
-  urlTarget       String
-  platforms       String
-  emailRecipients String?
+  urlTarget            String
+  platforms            String
+  targetConnectionsJson String?
+  emailRecipients      String?
   abTestId        Int?
   abTest          AbTest?        @relation(fields: [abTestId], references: [id], onDelete: SetNull)
   status          String         @default("STOPPED")
@@ -203,7 +204,7 @@ model SocialConnection {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  @@unique([platform, workspaceId])
+  @@unique([platform, pageId, workspaceId])
 }
 
 model PostTemplate {
@@ -229,9 +230,10 @@ model ContentSchedule {
   id              Int        @id @default(autoincrement())
   title           String
   content         String
-  imageUrl        String?
-  platforms       String
-  urlTarget       String?
+  imageUrl             String?
+  platforms            String
+  targetConnectionsJson String?
+  urlTarget            String?
   recipients      String?
   scheduledAt     DateTime
   repeatRule      String?
@@ -442,9 +444,10 @@ model LandingPage {
   htmlContent  String
   cssContent   String?
   status       String           @default("DRAFT")
-  fbPixelId    String?
-  googleTagId  String?
-  workspaceId  Int?
+  fbPixelId            String?
+  googleTagId          String?
+  enableMessengerChat  Boolean          @default(false)
+  workspaceId          Int?
   workspace    Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   forms        CustomForm[]
   abTestsA     AbTest[]         @relation("LpVariantA")

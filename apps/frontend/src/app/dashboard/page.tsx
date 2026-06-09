@@ -64,17 +64,17 @@ export default function DashboardPage() {
         <StatCard
           label={t('keywordsTracked')}
           value={loading ? '—' : data.stats.totalKeywords.toLocaleString()}
-          accent="blue"
+          accent="slate"
         />
         <StatCard
           label={t('activeChannels')}
           value={loading ? '—' : data.stats.activeChannels}
-          accent="emerald"
+          accent="brand"
         />
         <StatCard
           label={t('organicClicks')}
           value={loading ? '—' : data.stats.organicSearch.toLocaleString()}
-          accent="violet"
+          accent="slate"
         />
       </div>
 
@@ -90,7 +90,7 @@ export default function DashboardPage() {
                 <span className="w-2.5 h-2.5 rounded-full bg-brand" /> {t('totalTraffic')}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
                 {data.stats.gscConnected ? 'GSC Clicks' : 'Keywords'}
               </span>
             </div>
@@ -117,7 +117,7 @@ export default function DashboardPage() {
                     }}
                   />
                   <Line yAxisId="left" type="monotone" dataKey="traffic" stroke="#e85d26" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                  <Line yAxisId="right" type="monotone" dataKey="keywords" stroke="#2563eb" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
+                  <Line yAxisId="right" type="monotone" dataKey="keywords" stroke="#94a3b8" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -136,13 +136,13 @@ export default function DashboardPage() {
             <div key={api.label} className="mb-5 last:mb-0">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium text-slate-700">{api.label}</span>
-                <span className={api.ok ? 'badge-success' : 'badge-neutral'}>
+                <span className={api.ok ? 'badge-brand' : 'badge-neutral'}>
                   {api.ok ? t('connected') : t('notConnected')}
                 </span>
               </div>
               <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${api.ok ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' : 'bg-slate-200 w-1/5'}`}
+                  className={`h-full rounded-full transition-all duration-500 ${api.ok ? 'bg-gradient-to-r from-brand to-orange-500' : 'bg-slate-200 w-1/5'}`}
                   style={{ width: api.ok ? '100%' : '20%' }}
                 />
               </div>
@@ -151,7 +151,7 @@ export default function DashboardPage() {
 
           {!data.stats.gscConnected && (
             <p className="alert-info mt-4 text-xs leading-relaxed">
-              Thêm <code className="font-mono text-sky-800">GSC_SITE_URL</code> trong backend .env để bật dữ liệu Search Console thật.
+              Thêm <code className="font-mono text-brand">GSC_SITE_URL</code> trong backend .env để bật dữ liệu Search Console thật.
             </p>
           )}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { apiUrl } from '@/lib/api';
 
@@ -17,7 +17,7 @@ interface MockPage {
   category: string;
 }
 
-export default function MockOAuthSandbox() {
+function MockOAuthSandboxInner() {
   const searchParams = useSearchParams();
   const platform = (searchParams.get('platform') || 'google').toLowerCase();
   const action = searchParams.get('action') || 'login';
@@ -244,5 +244,19 @@ export default function MockOAuthSandbox() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function MockOAuthSandbox() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-200/80 p-8 max-w-md w-full relative overflow-hidden text-center animate-pulse">
+          <p className="text-sm font-extrabold text-slate-500 uppercase tracking-widest">Đang tải sandbox...</p>
+        </div>
+      </div>
+    }>
+      <MockOAuthSandboxInner />
+    </Suspense>
   );
 }

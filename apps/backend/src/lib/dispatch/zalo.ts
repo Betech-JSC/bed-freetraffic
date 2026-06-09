@@ -3,9 +3,11 @@ import { renderContent } from './render';
 import type { DispatchPayload, DispatchResult } from './types';
 
 export async function dispatchZalo(payload: DispatchPayload): Promise<DispatchResult> {
-  const zaloConn = await prisma.socialConnection.findFirst({
-    where: { platform: 'zalo', workspaceId: payload.workspaceId }
-  });
+  const zaloConn = payload.connectionId
+    ? await prisma.socialConnection.findUnique({ where: { id: payload.connectionId } })
+    : await prisma.socialConnection.findFirst({
+        where: { platform: 'zalo', workspaceId: payload.workspaceId }
+      });
   if (!zaloConn?.accessToken || zaloConn.status !== 'CONNECTED') {
     return { success: false, message: 'Chưa kết nối Zalo OA (Cài đặt)' };
   }

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -56,7 +89,7 @@ router.get('/:id', auth_1.authenticate, async (req, res) => {
 // Create new landing page
 router.post('/', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
     try {
-        const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId } = req.body;
+        const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId, enableMessengerChat } = req.body;
         if (!title || !slug) {
             res.status(400).json({ error: 'Tiêu đề và đường dẫn (slug) là bắt buộc.' });
             return;
@@ -78,6 +111,7 @@ router.post('/', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
                 status: status || 'DRAFT',
                 fbPixelId: fbPixelId || null,
                 googleTagId: googleTagId || null,
+                enableMessengerChat: enableMessengerChat !== undefined ? !!enableMessengerChat : false,
                 workspaceId: req.workspaceId,
             },
         });
@@ -91,7 +125,7 @@ router.post('/', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
 router.put('/:id', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
     try {
         const id = parseInt(req.params.id);
-        const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId } = req.body;
+        const { title, slug, layoutJson, htmlContent, cssContent, status, fbPixelId, googleTagId, enableMessengerChat } = req.body;
         const existing = await prisma_1.default.landingPage.findUnique({
             where: { id },
         });
@@ -133,6 +167,7 @@ router.put('/:id', auth_1.authenticate, auth_1.requireWrite, async (req, res) =>
                 status: status !== undefined ? status : existing.status,
                 fbPixelId: fbPixelId !== undefined ? fbPixelId : existing.fbPixelId,
                 googleTagId: googleTagId !== undefined ? googleTagId : existing.googleTagId,
+                enableMessengerChat: enableMessengerChat !== undefined ? !!enableMessengerChat : existing.enableMessengerChat,
             },
         });
         res.json(updated);
@@ -287,7 +322,7 @@ Quy tắc thiết kế quan trọng:
 4. Đối với ảnh (imageUrl) trong Hero: Hãy chọn hình ảnh chất lượng từ Unsplash tương thích với chủ đề. Ví dụ ảnh công nghệ/lập trình: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop", ảnh hải sản/món ăn: "https://images.unsplash.com/photo-1534080391025-09795d197360?w=800&auto=format&fit=crop", ảnh máy bay/du lịch: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&auto=format&fit=crop", vv.
 5. Chỉ trả về MẢNG JSON HỢP LỆ dạng PageBlock[].
 6. KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô để có thể chạy JSON.parse() trực tiếp.`;
-        const response = await fetch(ai.url, {
+        const response = await (0, ai_1.fetchWithRetry)(ai.url, {
             method: 'POST',
             headers: ai.headers,
             body: JSON.stringify({
@@ -309,7 +344,7 @@ Quy tắc thiết kế quan trọng:
         const data = await response.json();
         const contentText = data.choices?.[0]?.message?.content?.trim() || '[]';
         try {
-            const parsed = JSON.parse(contentText);
+            const parsed = (0, ai_1.parseAiJson)(contentText);
             if (Array.isArray(parsed)) {
                 // Add random ID if not present and ensure high-quality themed images
                 const processed = parsed.map((b, idx) => {
@@ -339,6 +374,62 @@ Quy tắc thiết kế quan trọng:
     catch (err) {
         console.error('[AI Page Generator Error]:', err);
         res.status(500).json({ error: err.message || 'Lỗi hệ thống khi sinh trang.' });
+    }
+});
+router.post('/:id/share-facebook', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const { connectionIds, message } = req.body;
+        if (!connectionIds || !Array.isArray(connectionIds) || connectionIds.length === 0) {
+            res.status(400).json({ error: 'Vui lòng chọn ít nhất một Fanpage để chia sẻ.' });
+            return;
+        }
+        const page = await prisma_1.default.landingPage.findUnique({ where: { id } });
+        if (!page) {
+            res.status(404).json({ error: 'Không tìm thấy Landing Page' });
+            return;
+        }
+        const { dispatchToPlatform } = await Promise.resolve().then(() => __importStar(require('../lib/dispatch')));
+        const results = [];
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const landingPageUrl = `${frontendUrl}/p/${page.slug}`;
+        for (const connId of connectionIds) {
+            const conn = await prisma_1.default.socialConnection.findFirst({
+                where: { id: connId, platform: 'facebook', workspaceId: req.workspaceId }
+            });
+            if (!conn) {
+                results.push({ connectionId: connId, success: false, message: 'Không tìm thấy kết nối Facebook' });
+                continue;
+            }
+            const utmUrl = `${landingPageUrl}?utm_source=facebook&utm_medium=social&utm_campaign=share_landing&utm_term=${encodeURIComponent(conn.pageName || '')}`;
+            try {
+                const result = await dispatchToPlatform('facebook', {
+                    title: page.title,
+                    content: message || `Khám phá trang mới của chúng tôi: ${page.title}`,
+                    urlTarget: utmUrl,
+                    workspaceId: req.workspaceId,
+                    connectionId: conn.id
+                });
+                results.push({
+                    connectionId: connId,
+                    pageName: conn.pageName,
+                    success: result.success,
+                    message: result.message
+                });
+            }
+            catch (err) {
+                results.push({
+                    connectionId: connId,
+                    pageName: conn.pageName,
+                    success: false,
+                    message: err.message
+                });
+            }
+        }
+        res.json({ success: true, results });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi khi chia sẻ lên Fanpage' });
     }
 });
 exports.default = router;

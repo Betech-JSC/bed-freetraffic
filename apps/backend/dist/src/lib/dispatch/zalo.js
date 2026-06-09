@@ -7,9 +7,11 @@ exports.dispatchZalo = dispatchZalo;
 const prisma_1 = __importDefault(require("../prisma"));
 const render_1 = require("./render");
 async function dispatchZalo(payload) {
-    const zaloConn = await prisma_1.default.socialConnection.findFirst({
-        where: { platform: 'zalo', workspaceId: payload.workspaceId }
-    });
+    const zaloConn = payload.connectionId
+        ? await prisma_1.default.socialConnection.findUnique({ where: { id: payload.connectionId } })
+        : await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'zalo', workspaceId: payload.workspaceId }
+        });
     if (!zaloConn?.accessToken || zaloConn.status !== 'CONNECTED') {
         return { success: false, message: 'Chưa kết nối Zalo OA (Cài đặt)' };
     }

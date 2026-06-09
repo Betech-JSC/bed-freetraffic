@@ -17,7 +17,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem('locale') as Locale;
     if (saved === 'vi' || saved === 'en') {
-      setLocaleState(saved);
+      setTimeout(() => {
+        setLocaleState(saved);
+      }, 0);
     }
   }, []);
 
@@ -27,8 +29,8 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
   };
 
   const t = (text: string): string => {
-    const dict = (translations[locale] as any) || {};
-    return dict[text] || (translations['vi'] as any)[text] || text;
+    const dict = (translations[locale] as unknown as Record<string, string>) || {};
+    return dict[text] || (translations['vi'] as unknown as Record<string, string>)[text] || text;
   };
 
   return (

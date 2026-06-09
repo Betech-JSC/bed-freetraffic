@@ -60,7 +60,7 @@ Quy tắc:
 3. Hãy đưa ra giải pháp/định hướng rõ ràng và mời họ phản hồi lại thư này nếu cần hỗ trợ trực tiếp.
 4. Chỉ trả về NỘI DUNG EMAIL DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
         try {
-            const response = await fetch(ai.url, {
+            const response = await (0, ai_1.fetchWithRetry)(ai.url, {
                 method: 'POST',
                 headers: ai.headers,
                 body: JSON.stringify({
@@ -284,7 +284,7 @@ Quy tắc:
 2. Xưng hô thân mật phù hợp (ví dụ: chào anh/chị, xưng em hoặc tên thương hiệu).
 3. Chỉ trả về NỘI DUNG DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br>, <ul>, <li> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
                             try {
-                                const response = await fetch(ai.url, {
+                                const response = await (0, ai_1.fetchWithRetry)(ai.url, {
                                     method: 'POST',
                                     headers: ai.headers,
                                     body: JSON.stringify({

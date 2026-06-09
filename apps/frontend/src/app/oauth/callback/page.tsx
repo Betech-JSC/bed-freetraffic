@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function UnifiedOAuthCallbackPage() {
+function UnifiedOAuthCallbackPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -11,65 +11,68 @@ export default function UnifiedOAuthCallbackPage() {
 
   useEffect(() => {
     const error = searchParams.get('error');
-    if (error) {
-      setStatus('error');
-      setMsg(decodeURIComponent(error));
-      return;
-    }
-
     const token = searchParams.get('token');
     const user = searchParams.get('user');
     const connect = searchParams.get('connect');
     const platform = searchParams.get('platform');
 
-    // Luồng 1: Đăng nhập xã hội (Social Login)
-    if (token && user) {
-      try {
-        setStatus('success');
-        setMsg('Đăng nhập thành công! Đang chuyển hướng...');
-        
-        // Lưu cookie & localStorage
-        document.cookie = `token=${token}; path=/; max-age=604800`;
-        localStorage.setItem('user', decodeURIComponent(user));
-        
-        // Chuyển hướng về trang chủ dashboard
-        setTimeout(() => {
-          router.push('/dashboard');
-          router.refresh();
-        }, 1200);
-      } catch (err: any) {
+    setTimeout(() => {
+      if (error) {
         setStatus('error');
-        setMsg(err.message || 'Lỗi lưu thông tin phiên đăng nhập');
+        setMsg(decodeURIComponent(error));
+        return;
       }
-      return;
-    }
 
-    // Luồng 2: Kết nối tài khoản / Kênh (Social Connection)
-    if (connect === 'success' && platform) {
-      setStatus('success');
-      setMsg(`Đã kết nối tài khoản ${platform.toUpperCase()} thành công!`);
-
-      // Gửi message thông báo cho trang Cài đặt (nếu mở dạng Popup)
-      if (typeof window !== 'undefined' && window.opener) {
+      // Luồng 1: Đăng nhập xã hội (Social Login)
+      if (token && user) {
         try {
-          window.opener.postMessage({ type: 'social_connected', platform }, '*');
-        } catch (err) {
-          console.error('Không thể truyền tin sang cửa sổ chính:', err);
+          setStatus('success');
+          setMsg('Đăng nhập thành công! Đang chuyển hướng...');
+          
+          // Lưu cookie & localStorage
+          document.cookie = `token=${token}; path=/; max-age=604800`;
+          localStorage.setItem('user', decodeURIComponent(user));
+          
+          // Chuyển hướng về trang chủ dashboard
+          setTimeout(() => {
+            router.push('/dashboard');
+            router.refresh();
+          }, 1200);
+        } catch (err: unknown) {
+          setStatus('error');
+          const errorMsg = err instanceof Error ? err.message : 'Lỗi lưu thông tin phiên đăng nhập';
+          setMsg(errorMsg);
         }
+        return;
       }
 
-      // Đóng popup tự động sau 1.5s
-      setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          window.close();
-        }
-      }, 1500);
-      return;
-    }
+      // Luồng 2: Kết nối tài khoản / Kênh (Social Connection)
+      if (connect === 'success' && platform) {
+        setStatus('success');
+        setMsg(`Đã kết nối tài khoản ${platform.toUpperCase()} thành công!`);
 
-    // Lỗi không xác định
-    setStatus('error');
-    setMsg('Yêu cầu OAuth không hợp lệ hoặc thiếu tham số chuyển tiếp.');
+        // Gửi message thông báo cho trang Cài đặt (nếu mở dạng Popup)
+        if (typeof window !== 'undefined' && window.opener) {
+          try {
+            window.opener.postMessage({ type: 'social_connected', platform }, '*');
+          } catch (err) {
+            console.error('Không thể truyền tin sang cửa sổ chính:', err);
+          }
+        }
+
+        // Đóng popup tự động sau 1.5s
+        setTimeout(() => {
+          if (typeof window !== 'undefined') {
+            window.close();
+          }
+        }, 1500);
+        return;
+      }
+
+      // Lỗi không xác định
+      setStatus('error');
+      setMsg('Yêu cầu OAuth không hợp lệ hoặc thiếu tham số chuyển tiếp.');
+    }, 0);
   }, [searchParams, router]);
 
   return (
@@ -118,5 +121,22 @@ export default function UnifiedOAuthCallbackPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function UnifiedOAuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 p-8 max-w-sm w-full text-center space-y-4">
+          <div className="flex flex-col items-center space-y-3">
+            <div className="w-10 h-10 border-4 border-brand border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm font-extrabold text-slate-500 uppercase tracking-widest animate-pulse">XÁC THỰC...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <UnifiedOAuthCallbackPageInner />
+    </Suspense>
   );
 }

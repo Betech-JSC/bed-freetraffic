@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma';
-import { getAiConfig } from '../lib/ai';
+import { getAiConfig, fetchWithRetry } from '../lib/ai';
 
 
 export interface ChatMessageData {
@@ -137,7 +137,7 @@ Yêu cầu trả về kết quả định dạng JSON với các trường sau (
   "reason": "Giải thích ngắn gọn lý do phân loại (dưới 40 từ)"
 }`;
 
-    let response = await fetch(ai.url, {
+    let response = await fetchWithRetry(ai.url, {
       method: 'POST',
       headers: ai.headers,
       body: JSON.stringify({
@@ -156,7 +156,7 @@ Yêu cầu trả về kết quả định dạng JSON với các trường sau (
     // Fallback model if primary failed (e.g. rate limit 429)
     if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
       console.warn(`[AI-CRM-Segmentation] Primary model failed (${response.status}). Trying fallback Llama...`);
-      response = await fetch(ai.url, {
+      response = await fetchWithRetry(ai.url, {
         method: 'POST',
         headers: ai.headers,
         body: JSON.stringify({
@@ -308,7 +308,7 @@ Nhiệm vụ của bạn:
 4. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
 5. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
 
-      let response = await fetch(ai.url, {
+      let response = await fetchWithRetry(ai.url, {
         method: 'POST',
         headers: ai.headers,
         body: JSON.stringify({
@@ -326,7 +326,7 @@ Nhiệm vụ của bạn:
       // Fallback model if primary failed (e.g. rate limit 429 or 502)
       if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
         console.warn(`[cskhChat] Primary model ${ai.model} failed (${response.status}). Trying fallback Qwen...`);
-        response = await fetch(ai.url, {
+        response = await fetchWithRetry(ai.url, {
           method: 'POST',
           headers: ai.headers,
           body: JSON.stringify({

@@ -46,10 +46,12 @@ function buildFacebookMessage(message, link) {
         return text;
     return text ? `${text}\n\n${withScheme}` : withScheme;
 }
-async function refreshFacebookPageTokenIfNeeded(workspaceId) {
-    const fb = await prisma_1.default.socialConnection.findFirst({
-        where: { platform: 'facebook', workspaceId }
-    });
+async function refreshFacebookPageTokenIfNeeded(workspaceId, connectionId) {
+    const fb = connectionId
+        ? await prisma_1.default.socialConnection.findUnique({ where: { id: connectionId } })
+        : await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'facebook', workspaceId }
+        });
     if (!fb?.pageId || !fb.accessToken)
         return;
     const res = await fetch(`https://graph.facebook.com/${exports.FB_GRAPH_VERSION}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(fb.accessToken)}`);
@@ -62,10 +64,12 @@ async function refreshFacebookPageTokenIfNeeded(workspaceId) {
         });
     }
 }
-async function getFacebookPageConnection(workspaceId) {
-    const fb = await prisma_1.default.socialConnection.findFirst({
-        where: { platform: 'facebook', workspaceId }
-    });
+async function getFacebookPageConnection(workspaceId, connectionId) {
+    const fb = connectionId
+        ? await prisma_1.default.socialConnection.findUnique({ where: { id: connectionId } })
+        : await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'facebook', workspaceId }
+        });
     if (!fb || fb.status !== 'CONNECTED' || !fb.accessToken) {
         return {
             ok: false,
@@ -86,8 +90,8 @@ async function getFacebookPageConnection(workspaceId) {
     };
 }
 async function publishToFacebookPage(opts) {
-    await refreshFacebookPageTokenIfNeeded(opts.workspaceId);
-    const conn = await getFacebookPageConnection(opts.workspaceId);
+    await refreshFacebookPageTokenIfNeeded(opts.workspaceId, opts.connectionId);
+    const conn = await getFacebookPageConnection(opts.workspaceId, opts.connectionId);
     if (!conn.ok)
         return { success: false, message: conn.message };
     const { pageId, accessToken } = conn;

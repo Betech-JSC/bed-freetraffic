@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import Link from 'next/link';
@@ -19,12 +19,11 @@ function parsePlatforms(platforms: unknown): string[] {
   }
 }
 
-// No inline SVG icons
-
 export default function AutomationPage() {
   const { t } = useLocale();
   const [tasks, setTasks] = useState<any[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [connections, setConnections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -32,7 +31,7 @@ export default function AutomationPage() {
   const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState('');
   const [urlTarget, setUrlTarget] = useState('');
-  const [platforms, setPlatforms] = useState<string[]>(['facebook']);
+  const [selectedTargets, setSelectedTargets] = useState<{ connectionId: number; platform: string; pageName?: string }[]>([]);
   const [emailRecipients, setEmailRecipients] = useState('');
   const [abTestId, setAbTestId] = useState('');
   const [useAi, setUseAi] = useState(false);
@@ -59,18 +58,20 @@ export default function AutomationPage() {
   const fetchData = async (silent = false) => {
     if (!silent) setError('');
     try {
-      const [taskData, logData, testsData, fbStatus, customersData] = await Promise.all([
+      const [taskData, logData, testsData, fbStatus, customersData, socialData] = await Promise.all([
         apiJson<any[]>('/automation/tasks'),
         apiJson<any[]>('/automation/logs'),
         apiJson<{ id: number; name: string }[]>('/abtests/running').catch(() => []),
         apiJson<FacebookBotStatus>('/social/facebook/status').catch(() => null),
         apiJson<any[]>('/customers').catch(() => []),
+        apiJson<any[]>('/social').catch(() => []),
       ]);
       setFbBotStatus(fbStatus);
       setAbTests(testsData);
       setTasks(Array.isArray(taskData) ? taskData : []);
       setLogs(Array.isArray(logData) ? logData : []);
       setCrmCustomers(Array.isArray(customersData) ? customersData : []);
+      setConnections(Array.isArray(socialData) ? socialData : []);
     } catch (e: unknown) {
       if (!silent) {
         setError(e instanceof Error ? e.message : t('Không tải được dữ liệu Bot'));
@@ -139,7 +140,7 @@ export default function AutomationPage() {
     setUseAi(false);
     setAiPrompt('');
     setAiGenerateImage(false);
-    setPlatforms(['facebook']);
+    setSelectedTargets([]);
     setShowCustomerSelect(false);
     setShowModal(true);
   };
@@ -148,7 +149,6 @@ export default function AutomationPage() {
     setEditingTask(task);
     setName(task.name);
     setUrlTarget(task.urlTarget);
-    setPlatforms(parsePlatforms(task.platforms));
     setEmailRecipients(task.emailRecipients || '');
     setAbTestId(task.abTestId?.toString() || '');
     setUseAi(task.useAi);
@@ -156,6 +156,18 @@ export default function AutomationPage() {
     setAiGenerateImage(task.aiGenerateImage);
     setRssUrl(task.rssUrl || '');
     setShowCustomerSelect(false);
+
+    if (task.targetConnectionsJson) {
+      try {
+        setSelectedTargets(JSON.parse(task.targetConnectionsJson));
+      } catch {
+        setSelectedTargets([]);
+      }
+    } else {
+      const platformList = parsePlatforms(task.platforms);
+      setSelectedTargets(platformList.map(p => ({ connectionId: 0, platform: p })));
+    }
+
     setShowModal(true);
   };
 
@@ -174,18 +186,40 @@ export default function AutomationPage() {
     }
   };
 
+  const toggleTarget = (platform: string, connectionId = 0, pageName?: string) => {
+    setSelectedTargets(prev => {
+      const exists = prev.some(t => t.platform === platform && t.connectionId === connectionId);
+      if (exists) {
+        return prev.filter(t => !(t.platform === platform && t.connectionId === connectionId));
+      } else {
+        return [...prev, { platform, connectionId, pageName }];
+      }
+    });
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (platforms.includes('facebook') && (!urlTarget.trim() || urlTarget.trim() === '0')) {
+
+    const hasFacebook = selectedTargets.some(t => t.platform === 'facebook');
+    if (hasFacebook && (!urlTarget.trim() || urlTarget.trim() === '0')) {
       setError(t('Facebook Bot cần URL đích đầy đủ (vd: https://website-cua-ban.com).'));
       return;
     }
+
+    if (selectedTargets.length === 0) {
+      setError(t('Vui lòng chọn ít nhất một kênh hoặc Fanpage để chạy tự động.'));
+      return;
+    }
+
+    // Extract unique platforms array for backward compatibility
+    const platforms = Array.from(new Set(selectedTargets.map(t => t.platform)));
 
     const body = {
       name,
       urlTarget,
       platforms,
+      targetConnectionsJson: JSON.stringify(selectedTargets),
       emailRecipients: platforms.includes('email') ? emailRecipients : undefined,
       abTestId: abTestId ? parseInt(abTestId, 10) : undefined,
       useAi,
@@ -220,19 +254,13 @@ export default function AutomationPage() {
       setUseAi(false);
       setAiPrompt('');
       setAiGenerateImage(false);
-      setPlatforms(['facebook']);
+      setSelectedTargets([]);
       setEditingTask(null);
       setShowCustomerSelect(false);
       await fetchData(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('Không lưu được cấu hình Bot'));
     }
-  };
-
-  const togglePlatform = (platform: string) => {
-    setPlatforms(prev => 
-      prev.includes(platform) ? prev.filter(p => p !== platform) : [...prev, platform]
-    );
   };
 
   // Metrics calculation
@@ -263,6 +291,25 @@ export default function AutomationPage() {
     }
   };
 
+  const getTargetSummary = (task: any) => {
+    if (task.targetConnectionsJson) {
+      try {
+        const targets = JSON.parse(task.targetConnectionsJson);
+        if (Array.isArray(targets) && targets.length > 0) {
+          const names = targets.map((t: any) => t.pageName || t.platform);
+          return names.join(', ');
+        }
+      } catch {
+        // ignore
+      }
+    }
+    const platforms = parsePlatforms(task.platforms);
+    return platforms.join(', ');
+  };
+
+  const activeFbConns = connections.filter(c => c.platform === 'facebook' && c.status === 'CONNECTED');
+  const activeZaloConns = connections.filter(c => c.platform === 'zalo' && c.status === 'CONNECTED');
+
   return (
     <div className="space-y-8 page-container">
       <PageHeader
@@ -278,11 +325,11 @@ export default function AutomationPage() {
       {error && <div className="alert-error text-sm">{error}</div>}
 
       {/* Warnings & Help Banner */}
-      {platforms.includes('facebook') && fbBotStatus && !fbBotStatus.botReady && (
+      {fbBotStatus && !fbBotStatus.botReady && activeFbConns.length === 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950 flex items-start gap-3 shadow-sm">
           <div>
             <p className="font-bold">{t('Facebook chưa sẵn sàng — Bot không thể tự động đăng bài')}</p>
-            <p className="text-slate-500 mt-0.5">{fbBotStatus.issues[0] || t('Vui lòng hoàn tất kết nối Fanpage trong phần Cài đặt.')}</p>
+            <p className="text-slate-500 mt-0.5">{t('Vui lòng hoàn tất kết nối ít nhất một Fanpage trong phần Cài đặt.')}</p>
             <Link href="/dashboard/settings" className="inline-block mt-2 font-bold text-brand hover:underline">
               {t('Đi tới Cài đặt → Facebook')}
             </Link>
@@ -340,8 +387,8 @@ export default function AutomationPage() {
               <thead>
                 <tr>
                   <th className="p-4 font-bold text-xs text-slate-500 uppercase">{t('Tên Chiến dịch')}</th>
-                  <th className="p-4 font-bold text-xs text-slate-500 uppercase">{t('URL Đích')}</th>
-                  <th className="p-4 font-bold text-xs text-slate-500 uppercase">{t('Nền tảng')}</th>
+                  <th className="p-4 font-bold text-xs text-slate-500 uppercase">{t('Trang đích / RSS')}</th>
+                  <th className="p-4 font-bold text-xs text-slate-500 uppercase">{t('Trang đích đã chọn')}</th>
                   <th className="p-4 font-bold text-xs text-slate-500 uppercase text-center">{t('Trạng thái')}</th>
                   <th className="p-4 font-bold text-xs text-slate-500 uppercase text-right" />
                 </tr>
@@ -369,7 +416,7 @@ export default function AutomationPage() {
                     <td className="p-4 text-slate-500 truncate max-w-[180px]">
                       {task.rssUrl ? (
                         <div className="flex flex-col gap-0.5" title={`RSS: ${task.rssUrl}`}>
-                          <span className="text-[10px] bg-orange-100 text-orange-850 px-1 py-0.5 rounded font-extrabold w-fit uppercase">RSS</span>
+                          <span className="text-[10px] bg-orange-100 text-orange-850 px-1 py-0.5 rounded font-extrabold w-fit uppercase font-mono">RSS</span>
                           <a href={task.rssUrl} target="_blank" rel="noopener noreferrer" className="hover:text-brand hover:underline text-xs truncate block">
                             {task.rssUrl}
                           </a>
@@ -381,12 +428,8 @@ export default function AutomationPage() {
                       )}
                     </td>
                     <td className="p-4">
-                      <div className="flex gap-1 flex-wrap">
-                        {parsePlatforms(task.platforms).map((p: string) => (
-                          <span key={p} className={`px-2 py-0.5 border text-[10px] font-bold rounded-md uppercase tracking-wider ${getPlatformBadge(p)}`}>
-                            {t(p)}
-                          </span>
-                        ))}
+                      <div className="text-xs text-slate-600 font-medium max-w-[200px] truncate" title={getTargetSummary(task)}>
+                        {getTargetSummary(task)}
                       </div>
                     </td>
                     <td className="p-4 text-center">
@@ -573,28 +616,86 @@ export default function AutomationPage() {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">{t('Chọn các kênh chạy tự động')}</label>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { id: 'facebook', label: 'Facebook' },
-                    { id: 'email', label: 'Email' },
-                    { id: 'zalo', label: 'Zalo OA' },
-                    { id: 'youtube', label: 'YouTube' },
-                    { id: 'community', label: 'Community' },
-                  ].map(p => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => togglePlatform(p.id)}
-                      className={`px-3 py-1.5 rounded border transition-all text-[11px] font-bold cursor-pointer ${
-                        platforms.includes(p.id)
-                          ? 'bg-brand/10 border-brand/20 text-brand'
-                          : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                      }`}
-                    >
-                      {t(p.label)}
-                    </button>
-                  ))}
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5">{t('Chọn trang & Kênh chạy tự động *')}</label>
+                <div className="space-y-3 border border-slate-200 rounded-xl p-3 bg-slate-50 max-h-56 overflow-y-auto custom-scrollbar font-medium">
+                  {/* FACEBOOK MULTI-SELECT */}
+                  <div>
+                    <span className="font-bold text-slate-800 text-[10px] uppercase block mb-1">Facebook Fanpages</span>
+                    {activeFbConns.length === 0 ? (
+                      <span className="text-[10px] text-slate-400 italic block ml-2">
+                        {t('Chưa kết nối Fanpage nào.')}{' '}
+                        <Link href="/dashboard/settings" className="text-brand hover:underline font-bold">
+                          {t('Kết nối ngay')}
+                        </Link>
+                      </span>
+                    ) : (
+                      activeFbConns.map(conn => {
+                        const isSelected = selectedTargets.some(t => t.platform === 'facebook' && t.connectionId === conn.id);
+                        return (
+                          <label key={conn.id} className="flex items-center gap-2 cursor-pointer py-1 hover:bg-slate-100 rounded px-1 text-[11px] text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleTarget('facebook', conn.id, conn.pageName)}
+                              className="rounded border-slate-350 text-brand focus:ring-brand"
+                            />
+                            <span className="truncate">{conn.pageName} (ID: {conn.pageId})</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* ZALO OA MULTI-SELECT */}
+                  <div className="border-t border-slate-200/60 pt-2">
+                    <span className="font-bold text-slate-800 text-[10px] uppercase block mb-1">Zalo OA Channels</span>
+                    {activeZaloConns.length === 0 ? (
+                      <span className="text-[10px] text-slate-400 italic block ml-2">
+                        {t('Chưa kết nối Zalo OA nào.')}{' '}
+                        <Link href="/dashboard/settings" className="text-brand hover:underline font-bold">
+                          {t('Kết nối ngay')}
+                        </Link>
+                      </span>
+                    ) : (
+                      activeZaloConns.map(conn => {
+                        const isSelected = selectedTargets.some(t => t.platform === 'zalo' && t.connectionId === conn.id);
+                        return (
+                          <label key={conn.id} className="flex items-center gap-2 cursor-pointer py-1 hover:bg-slate-100 rounded px-1 text-[11px] text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleTarget('zalo', conn.id, conn.pageName)}
+                              className="rounded border-slate-350 text-brand focus:ring-brand"
+                            />
+                            <span className="truncate">{conn.pageName} (ID: {conn.pageId})</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* OTHER PLATFORMS */}
+                  <div className="border-t border-slate-200/60 pt-2">
+                    <span className="font-bold text-slate-800 text-[10px] uppercase block mb-1">Các kênh khác</span>
+                    {[
+                      { id: 'email', label: 'Email Marketing' },
+                      { id: 'youtube', label: 'YouTube (Hướng dẫn tay)' },
+                      { id: 'community', label: 'Community Forum' },
+                    ].map(p => {
+                      const isSelected = selectedTargets.some(t => t.platform === p.id && t.connectionId === 0);
+                      return (
+                        <label key={p.id} className="flex items-center gap-2 cursor-pointer py-1 hover:bg-slate-100 rounded px-1 text-[11px] text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleTarget(p.id, 0)}
+                            className="rounded border-slate-350 text-brand focus:ring-brand"
+                          />
+                          <span>{t(p.label)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -614,7 +715,7 @@ export default function AutomationPage() {
                 </select>
               </div>
 
-              {platforms.includes('email') && (
+              {selectedTargets.some(t => t.platform === 'email') && (
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Danh sách Email nhận (phân cách bằng dấu phẩy)')}</label>
                   <input
@@ -671,7 +772,7 @@ export default function AutomationPage() {
                     onChange={(e) => setUseAi(e.target.checked)}
                     className="rounded border-slate-350 text-brand focus:ring-brand"
                   />
-                  <span className="font-bold text-slate-700">{t('Tự động viết nội dung bằng AI (Gemini)')}</span>
+                  <span className="font-bold text-slate-700">{t('Tự động viết nội dung bằng AI (Gemini) với AI Content Spin')}</span>
                 </label>
                 
                 {useAi && (

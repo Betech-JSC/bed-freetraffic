@@ -90,27 +90,76 @@ export const startRssScannerEngine = () => {
             continue;
           }
 
-          const platformList = parsePlatforms(task.platforms);
-          const platformsStr = platformList.join(',');
+          let targets: { connectionId: number; platform: string; pageName?: string }[] = [];
+          if (task.targetConnectionsJson) {
+            try {
+              const parsed = JSON.parse(task.targetConnectionsJson);
+              if (Array.isArray(parsed)) {
+                targets = parsed.map((t: any) => ({
+                  connectionId: Number(t.connectionId),
+                  platform: String(t.platform).trim().toLowerCase(),
+                  pageName: t.pageName ? String(t.pageName) : undefined
+                })).filter(t => t.connectionId && t.platform);
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          if (targets.length === 0) {
+            const platformList = parsePlatforms(task.platforms);
+            for (const p of platformList) {
+              targets.push({ connectionId: 0, platform: p });
+            }
+          }
+
+          const { dispatchToPlatform } = await import('../lib/dispatch');
 
           for (const item of itemsToPublish) {
             console.log(`[RSS BOT] Đang đăng bài viết mới: "${item.title}"`);
 
-            let title = item.title;
-            let content = '';
-            let imageUrl: string | null = null;
+            for (const target of targets) {
+              let pageName = target.pageName;
+              if (!pageName && target.connectionId > 0) {
+                const conn = await prisma.socialConnection.findUnique({ where: { id: target.connectionId } });
+                pageName = conn?.pageName || undefined;
+              }
 
-            if (task.useAi) {
-              try {
-                const aiResult = await generateAiPostContent(item.link, task.aiPrompt);
-                title = aiResult.title;
-                content = aiResult.content;
-                if (task.aiGenerateImage) {
-                  imageUrl = await generateAiImage(title);
+              let title = item.title;
+              let content = '';
+              let imageUrl: string | null = null;
+
+              if (task.useAi) {
+                try {
+                  const originalPrompt = task.aiPrompt || '';
+                  const customPrompt = pageName 
+                    ? `${originalPrompt}\n\n[Lưu ý quan trọng]: Viết nội dung này dành riêng cho đối tượng độc giả và mang bản sắc thương hiệu của trang '${pageName}'. Điều chỉnh giọng văn và cấu trúc câu để khác biệt so với các bài đăng khác.`
+                    : originalPrompt;
+                  
+                  const aiResult = await generateAiPostContent(item.link, customPrompt);
+                  title = aiResult.title;
+                  content = aiResult.content;
+                  if (task.aiGenerateImage) {
+                    imageUrl = await generateAiImage(title);
+                  }
+                } catch (err: any) {
+                  console.error('[RSS BOT AI ERROR]:', err);
+                  // Fallback to template/default if AI fails
+                  const template = await getRandomTemplate(task.id);
+                  if (template) {
+                    title = template.title;
+                    content = renderContent(template.content, {
+                      urlTarget: item.link,
+                      name: item.title,
+                      description: item.description,
+                      date: item.pubDate,
+                    });
+                    imageUrl = template.thumbnailUrl || template.imageUrl;
+                  } else {
+                    content = `${item.description || item.title}\n\nXem chi tiết tại: {url}`;
+                  }
                 }
-              } catch (err: any) {
-                console.error('[RSS BOT AI ERROR]:', err);
-                // Fallback to template/default if AI fails
+              } else {
                 const template = await getRandomTemplate(task.id);
                 if (template) {
                   title = template.title;
@@ -125,45 +174,37 @@ export const startRssScannerEngine = () => {
                   content = `${item.description || item.title}\n\nXem chi tiết tại: {url}`;
                 }
               }
-            } else {
-              const template = await getRandomTemplate(task.id);
-              if (template) {
-                title = template.title;
-                content = renderContent(template.content, {
+
+              // Replace {url} placeholder with actual item link if not done by renderer/AI
+              content = content.replace(/\{url\}/g, item.link);
+
+              // Dispatch to the target connection
+              let result;
+              try {
+                result = await dispatchToPlatform(target.platform, {
+                  title,
+                  content,
+                  imageUrl,
                   urlTarget: item.link,
-                  name: item.title,
-                  description: item.description,
-                  date: item.pubDate,
+                  emailRecipients: task.emailRecipients || undefined,
+                  workspaceId: task.workspaceId || undefined,
+                  connectionId: target.connectionId > 0 ? target.connectionId : undefined,
                 });
-                imageUrl = template.thumbnailUrl || template.imageUrl;
-              } else {
-                content = `${item.description || item.title}\n\nXem chi tiết tại: {url}`;
+              } catch (err: any) {
+                result = { success: false, message: `Lỗi thực thi: ${err.message}` };
               }
-            }
 
-            // Replace {url} placeholder with actual item link if not done by renderer/AI
-            content = content.replace(/\{url\}/g, item.link);
-
-            // Dispatch
-            const results = await dispatchToAllPlatforms(platformsStr, {
-              title,
-              content,
-              imageUrl,
-              urlTarget: item.link,
-              emailRecipients: task.emailRecipients || undefined,
-              workspaceId: task.workspaceId || undefined,
-            });
-
-            // Log results
-            for (const res of results) {
+              // Log results
+              const displayTarget = pageName ? `${target.platform} (${pageName})` : target.platform;
               await prisma.botLog.create({
                 data: {
                   taskId: task.id,
-                  action: `RSS_POST_${res.platform.toUpperCase()}`,
-                  message: `[RSS] ${res.message} | Bài viết: "${item.title}"`,
-                  status: res.success ? 'SUCCESS' : 'ERROR'
+                  action: `RSS_POST_${target.platform.toUpperCase()}`,
+                  message: `[RSS][Trang: ${pageName || 'Mặc định'}] ${result.message} | Bài viết: "${item.title}"`,
+                  status: result.success ? 'SUCCESS' : 'ERROR'
                 }
               });
+              console.log(`  -> [RSS][${displayTarget}] ${result.message}`);
             }
           }
 

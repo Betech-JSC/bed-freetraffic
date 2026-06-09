@@ -70,6 +70,7 @@ const forms_1 = __importDefault(require("./routes/forms"));
 const payments_1 = __importDefault(require("./routes/payments"));
 const orders_1 = __importDefault(require("./routes/orders"));
 const cskh_1 = __importDefault(require("./routes/cskh"));
+const socialAuth_1 = __importDefault(require("./routes/socialAuth"));
 const workspace_1 = require("./middleware/workspace");
 const auth_3 = require("./middleware/auth");
 const apiMeta_1 = require("./lib/apiMeta");
@@ -122,6 +123,7 @@ app.get('/api/health', (_req, res) => {
     });
 });
 app.use('/api/auth', auth_1.default);
+app.use('/api/auth/social', socialAuth_1.default);
 app.use('/api/workspaces', workspaces_1.default);
 app.use('/api/google', google_1.default);
 app.use('/api/email-campaigns', emailCampaigns_1.default);
@@ -142,14 +144,14 @@ app.use('/api/backlinks', auth_3.authenticate, workspace_1.workspaceMiddleware, 
 app.use('/api/alerts', auth_3.authenticate, workspace_1.workspaceMiddleware, alerts_1.default);
 app.use('/api/abtests', abtests_1.default);
 app.use('/api/customers', auth_3.authenticate, workspace_1.workspaceMiddleware, customers_1.default);
-app.use('/api/insights', insights_1.default);
+app.use('/api/insights', auth_3.authenticate, workspace_1.workspaceMiddleware, insights_1.default);
 app.use('/api/integrations', auth_3.authenticate, workspace_1.workspaceMiddleware, integrations_1.default);
 app.use('/api/integrations/mailchimp', auth_3.authenticate, workspace_1.workspaceMiddleware, mailchimp_1.default);
 app.use('/api/blog', auth_3.authenticate, workspace_1.workspaceMiddleware, blog_1.default);
 app.use('/api/landing-pages', auth_3.authenticate, workspace_1.workspaceMiddleware, landingPages_1.default);
 app.use('/api/forms', auth_3.authenticate, workspace_1.workspaceMiddleware, forms_1.default);
 app.use('/api/public', public_1.default);
-app.use('/api/payments', payments_1.default);
+app.use('/api/payments', payments_1.default); // auth handled internally per-route (webhooks are public)
 app.use('/api/orders', auth_3.authenticate, workspace_1.workspaceMiddleware, orders_1.default);
 app.use('/api/cskh', auth_3.authenticate, workspace_1.workspaceMiddleware, cskh_1.default);
 // Fallback 404 for any unregistered /api routes

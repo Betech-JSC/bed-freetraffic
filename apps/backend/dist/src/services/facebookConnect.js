@@ -122,27 +122,31 @@ async function saveFacebookConnection(pageId, accessToken, workspaceId) {
         throw new Error(verified.error || 'Không xác minh được Fanpage');
     }
     const tokenToStore = verified.pageAccessToken?.trim() || accessToken.trim();
-    await prisma_1.default.socialConnection.upsert({
-        where: {
-            platform_workspaceId: {
-                platform: 'facebook',
-                workspaceId
-            }
-        },
-        update: {
-            accessToken: tokenToStore,
-            pageName: verified.pageName,
-            pageId: verified.pageId,
-            status: 'CONNECTED',
-        },
-        create: {
-            platform: 'facebook',
-            workspaceId,
-            accessToken: tokenToStore,
-            pageName: verified.pageName,
-            pageId: verified.pageId,
-        },
+    const existing = await prisma_1.default.socialConnection.findFirst({
+        where: { platform: 'facebook', pageId: verified.pageId, workspaceId }
     });
+    if (existing) {
+        await prisma_1.default.socialConnection.update({
+            where: { id: existing.id },
+            data: {
+                accessToken: tokenToStore,
+                pageName: verified.pageName,
+                status: 'CONNECTED',
+            }
+        });
+    }
+    else {
+        await prisma_1.default.socialConnection.create({
+            data: {
+                platform: 'facebook',
+                workspaceId,
+                accessToken: tokenToStore,
+                pageName: verified.pageName,
+                pageId: verified.pageId,
+                status: 'CONNECTED',
+            }
+        });
+    }
     return verified;
 }
 const REQUIRED_POST_SCOPES = ['pages_manage_posts', 'pages_read_engagement'];

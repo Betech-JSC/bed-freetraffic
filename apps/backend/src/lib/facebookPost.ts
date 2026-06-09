@@ -37,10 +37,12 @@ export function buildFacebookMessage(message: string, link?: string | null): str
   return text ? `${text}\n\n${withScheme}` : withScheme;
 }
 
-async function refreshFacebookPageTokenIfNeeded(workspaceId?: number): Promise<void> {
-  const fb = await prisma.socialConnection.findFirst({
-    where: { platform: 'facebook', workspaceId }
-  });
+async function refreshFacebookPageTokenIfNeeded(workspaceId?: number, connectionId?: number): Promise<void> {
+  const fb = connectionId
+    ? await prisma.socialConnection.findUnique({ where: { id: connectionId } })
+    : await prisma.socialConnection.findFirst({
+        where: { platform: 'facebook', workspaceId }
+      });
   if (!fb?.pageId || !fb.accessToken) return;
 
   const res = await fetch(
@@ -56,10 +58,12 @@ async function refreshFacebookPageTokenIfNeeded(workspaceId?: number): Promise<v
   }
 }
 
-export async function getFacebookPageConnection(workspaceId?: number): Promise<FacebookConnectionCheck> {
-  const fb = await prisma.socialConnection.findFirst({
-    where: { platform: 'facebook', workspaceId }
-  });
+export async function getFacebookPageConnection(workspaceId?: number, connectionId?: number): Promise<FacebookConnectionCheck> {
+  const fb = connectionId
+    ? await prisma.socialConnection.findUnique({ where: { id: connectionId } })
+    : await prisma.socialConnection.findFirst({
+        where: { platform: 'facebook', workspaceId }
+      });
   if (!fb || fb.status !== 'CONNECTED' || !fb.accessToken) {
     return {
       ok: false,
@@ -88,10 +92,11 @@ export async function publishToFacebookPage(opts: {
   /** false = bài nháp / không publish feed công khai (dùng cho test kết nối) */
   published?: boolean;
   workspaceId?: number;
+  connectionId?: number;
 }): Promise<{ success: boolean; message: string; postId?: string }> {
-  await refreshFacebookPageTokenIfNeeded(opts.workspaceId);
+  await refreshFacebookPageTokenIfNeeded(opts.workspaceId, opts.connectionId);
 
-  const conn = await getFacebookPageConnection(opts.workspaceId);
+  const conn = await getFacebookPageConnection(opts.workspaceId, opts.connectionId);
   if (!conn.ok) return { success: false, message: conn.message };
 
   const { pageId, accessToken } = conn;

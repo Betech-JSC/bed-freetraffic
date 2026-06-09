@@ -438,7 +438,6 @@ export default function GuidePage() {
                     : 'bg-white border border-slate-200/50 text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <span className="text-base shrink-0">{sec.icon}</span>
                 <div className="min-w-0 flex-1">
                   <p className="leading-tight truncate">{sec.title}</p>
                 </div>
@@ -449,13 +448,10 @@ export default function GuidePage() {
 
         {/* Right Side: Step-by-step Content */}
         <div className="lg:col-span-3 bg-white border border-slate-200/60 rounded-2xl p-6 md:p-8 shadow-md relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#f25c22] to-amber-500"></div>
+          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#f25c22] to-brand"></div>
           
           <div className="space-y-6">
             <div>
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-orange-500/10 text-2xl text-[#f25c22] mb-3">
-                {active.icon}
-              </div>
               <h2 className="text-xl font-black text-slate-900">{active.title}</h2>
               <p className="text-slate-500 text-xs mt-1">{active.subtitle}</p>
             </div>
@@ -473,10 +469,10 @@ export default function GuidePage() {
                   </div>
                   <div className="space-y-1.5 pb-2">
                     <h4 className="font-extrabold text-slate-800 text-sm">{step.title}</h4>
-                    <p className="text-slate-600 text-xs leading-relaxed">{step.description}</p>
+                    <p className="text-slate-650 text-xs leading-relaxed">{step.description}</p>
                     {step.tip && (
-                      <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-2.5 text-[11px] text-emerald-700 leading-relaxed mt-2">
-                        💡 <b>{tipLabel}</b> {step.tip}
+                      <div className="bg-orange-50 border border-brand/15 rounded-lg p-2.5 text-[11px] text-brand leading-relaxed mt-2">
+                        <b>{tipLabel}</b> {step.tip}
                       </div>
                     )}
                   </div>
@@ -486,8 +482,8 @@ export default function GuidePage() {
           </div>
 
           {active.notes && (
-            <div className="mt-8 pt-4 border-t border-slate-150 text-[10px] text-slate-400 italic">
-              📌 <b>{noteLabel}</b> {active.notes}
+            <div className="mt-8 pt-4 border-t border-slate-150 text-[10px] text-slate-500 font-semibold">
+              <b>{noteLabel}</b> {active.notes}
             </div>
           )}
         </div>

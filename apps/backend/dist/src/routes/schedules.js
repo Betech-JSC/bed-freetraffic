@@ -79,7 +79,7 @@ router.get('/', async (req, res) => {
 async function createSchedule(req, res) {
     try {
         const body = req.body ?? {};
-        const { title, content, platforms, urlTarget, recipients, scheduledAt, repeatRule, repeatUntil, abTestId, cronExpression, overlayText, overlayWatermark, overlayPosition, overlayFontSize, } = body;
+        const { title, content, platforms, targetConnectionsJson, urlTarget, recipients, scheduledAt, repeatRule, repeatUntil, abTestId, cronExpression, overlayText, overlayWatermark, overlayPosition, overlayFontSize, } = body;
         if (!title?.trim() || !content?.trim() || !platforms || !scheduledAt) {
             res.status(400).json({ error: 'Tiêu đề, nội dung, kênh gửi và thời gian là bắt buộc' });
             return;
@@ -118,6 +118,7 @@ async function createSchedule(req, res) {
                 content: String(content).trim(),
                 imageUrl: imageUrl || null,
                 platforms: platformStr,
+                targetConnectionsJson: targetConnectionsJson ? String(targetConnectionsJson).trim() : null,
                 urlTarget: urlTarget?.trim() || null,
                 recipients: recipients?.trim() || null,
                 scheduledAt: scheduledDate,
@@ -235,6 +236,9 @@ router.patch('/:id', auth_1.requireWrite, async (req, res) => {
             return;
         }
         data.platforms = platformStr;
+    }
+    if (body.targetConnectionsJson !== undefined) {
+        data.targetConnectionsJson = body.targetConnectionsJson ? String(body.targetConnectionsJson).trim() : null;
     }
     if (body.urlTarget !== undefined)
         data.urlTarget = body.urlTarget?.trim() || null;

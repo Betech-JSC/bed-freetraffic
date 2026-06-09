@@ -1,4 +1,4 @@
-import { getAiConfig } from '../lib/ai';
+import { getAiConfig, parseAiJson, fetchWithRetry } from '../lib/ai';
 
 export async function generateSeoRecommendations(
   title: string,
@@ -32,7 +32,7 @@ KHÔNG bao bọc chuỗi JSON bằng thẻ code markdown như \`\`\`json. Hãy t
 - Danh sách lỗi SEO phát hiện được: ${issues.length > 0 ? issues.join(', ') : 'Không phát hiện lỗi cụ thể'}`;
 
   try {
-    const res = await fetch(ai.url, {
+    const res = await fetchWithRetry(ai.url, {
       method: 'POST',
       headers: ai.headers,
       body: JSON.stringify({
@@ -55,7 +55,7 @@ KHÔNG bao bọc chuỗi JSON bằng thẻ code markdown như \`\`\`json. Hãy t
     const contentText = data.choices?.[0]?.message?.content?.trim() || '{}';
     
     try {
-      const parsed = JSON.parse(contentText);
+      const parsed = parseAiJson(contentText);
       return {
         title: parsed.title || title,
         description: parsed.description || description,

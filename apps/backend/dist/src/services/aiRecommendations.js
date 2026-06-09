@@ -131,7 +131,7 @@ async function enhanceWithOpenAi(items) {
     }
     try {
         const prompt = `Bạn là chuyên gia marketing. Tóm tắt ngắn (3 câu, tiếng Việt) và 1 gợi ý ưu tiên nhất từ danh sách:\n${JSON.stringify(items.slice(0, 8))}`;
-        const res = await fetch(ai.url, {
+        const res = await (0, ai_1.fetchWithRetry)(ai.url, {
             method: 'POST',
             headers: ai.headers,
             body: JSON.stringify({

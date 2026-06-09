@@ -51,7 +51,7 @@ async function extractNameFromMessage(message, email, apiKey, url, model, header
                 temperature: 0.1,
                 max_tokens: 50,
             }),
-            signal: AbortSignal.timeout(5000),
+            signal: AbortSignal.timeout(15000),
         });
         // Fallback model if primary failed (e.g. rate limit 429)
         if (!response.ok && apiKey.startsWith('sk-or-')) {
@@ -60,7 +60,7 @@ async function extractNameFromMessage(message, email, apiKey, url, model, header
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
-                    model: 'qwen/qwen-2.5-72b-instruct:free',
+                    model: 'meta-llama/llama-3.2-3b-instruct:free',
                     messages: [
                         {
                             role: 'system',
@@ -71,7 +71,7 @@ async function extractNameFromMessage(message, email, apiKey, url, model, header
                     temperature: 0.1,
                     max_tokens: 50,
                 }),
-                signal: AbortSignal.timeout(5000),
+                signal: AbortSignal.timeout(15000),
             });
         }
         if (response.ok) {
@@ -89,6 +89,97 @@ async function extractNameFromMessage(message, email, apiKey, url, model, header
         console.error('Lỗi khi gọi AI trích xuất tên khách hàng:', err);
     }
     return defaultName;
+}
+async function segmentLeadWithAi(workspaceId, sessionId, customerId) {
+    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    if (!ai.apiKey)
+        return;
+    try {
+        const messages = await prisma_1.default.chatMessage.findMany({
+            where: { sessionId },
+            orderBy: { createdAt: 'asc' }
+        });
+        if (messages.length === 0)
+            return;
+        const conversationText = messages
+            .map(m => `${m.sender === 'visitor' ? 'Khách hàng' : 'Trợ lý AI'}: ${m.content}`)
+            .join('\n');
+        const systemPrompt = `Bạn là chuyên gia phân tích bán hàng và phân loại khách hàng tiềm năng (Lead Scoring) bằng tiếng Việt.
+Dựa trên lịch sử hội thoại trò chuyện trực tuyến dưới đây giữa Khách hàng và Trợ lý AI, hãy thực hiện phân loại mức độ tiềm năng mua hàng.
+
+Các nhóm phân loại:
+- HOT: Khách hàng thể hiện nhu cầu mua hàng cực kỳ rõ ràng, muốn thanh toán ngay, đặt lịch ngay hoặc hỏi chi tiết cách giao dịch.
+- WARM: Khách hàng quan tâm thực sự, hỏi sâu về tính năng, giá cả, dịch vụ hoặc sản phẩm cụ thể, có khả năng mua hàng nhưng cần tư vấn thêm.
+- COLD: Khách hàng chỉ hỏi dạo qua loa, hỏi thông tin ngoài lề không liên quan, hoặc tin nhắn rác, chào hỏi xong im lặng.
+
+Yêu cầu trả về kết quả định dạng JSON với các trường sau (không sử dụng markdown block \`\`\`json, chỉ trả về chuỗi JSON thô):
+{
+  "status": "HOT" | "WARM" | "COLD",
+  "score": number (điểm từ 0 đến 100),
+  "reason": "Giải thích ngắn gọn lý do phân loại (dưới 40 từ)"
+}`;
+        let response = await (0, ai_1.fetchWithRetry)(ai.url, {
+            method: 'POST',
+            headers: ai.headers,
+            body: JSON.stringify({
+                model: ai.model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: `Lịch sử hội thoại:\n${conversationText}` }
+                ],
+                temperature: 0.2,
+                max_tokens: 200,
+                response_format: { type: 'json_object' }
+            }),
+            signal: AbortSignal.timeout(25000),
+        });
+        // Fallback model if primary failed (e.g. rate limit 429)
+        if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
+            console.warn(`[AI-CRM-Segmentation] Primary model failed (${response.status}). Trying fallback Llama...`);
+            response = await (0, ai_1.fetchWithRetry)(ai.url, {
+                method: 'POST',
+                headers: ai.headers,
+                body: JSON.stringify({
+                    model: 'meta-llama/llama-3.2-3b-instruct:free',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: `Lịch sử hội thoại:\n${conversationText}` }
+                    ],
+                    temperature: 0.2,
+                    max_tokens: 200,
+                    response_format: { type: 'json_object' }
+                }),
+                signal: AbortSignal.timeout(25000),
+            });
+        }
+        if (response.ok) {
+            const data = await response.json();
+            const resText = data.choices?.[0]?.message?.content?.trim();
+            if (resText) {
+                const result = JSON.parse(resText);
+                if (result.status && ['HOT', 'WARM', 'COLD'].includes(result.status.toUpperCase())) {
+                    const aiStatus = result.status.toUpperCase();
+                    const score = result.score || 0;
+                    const reason = result.reason || '';
+                    await prisma_1.default.customer.update({
+                        where: { id: customerId },
+                        data: { status: aiStatus }
+                    });
+                    const noteContent = `[AI Phân Loại]: Trạng thái: ${aiStatus} (Điểm: ${score}/100) - Lý do: ${reason}`;
+                    await prisma_1.default.customerNote.create({
+                        data: {
+                            customerId,
+                            content: noteContent
+                        }
+                    });
+                    console.log(`[AI-CRM-Segmentation] Đã phân loại Customer #${customerId} là ${aiStatus} (Score: ${score}). Lý do: ${reason}`);
+                }
+            }
+        }
+    }
+    catch (err) {
+        console.error('[AI-CRM-Segmentation] Lỗi phân loại khách hàng bằng AI:', err);
+    }
 }
 async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, userAgent) {
     // 1. Get or create session
@@ -172,7 +263,7 @@ Nhiệm vụ của bạn:
 3. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
 4. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
 5. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
-            let response = await fetch(ai.url, {
+            let response = await (0, ai_1.fetchWithRetry)(ai.url, {
                 method: 'POST',
                 headers: ai.headers,
                 body: JSON.stringify({
@@ -189,11 +280,11 @@ Nhiệm vụ của bạn:
             // Fallback model if primary failed (e.g. rate limit 429 or 502)
             if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
                 console.warn(`[cskhChat] Primary model ${ai.model} failed (${response.status}). Trying fallback Qwen...`);
-                response = await fetch(ai.url, {
+                response = await (0, ai_1.fetchWithRetry)(ai.url, {
                     method: 'POST',
                     headers: ai.headers,
                     body: JSON.stringify({
-                        model: 'qwen/qwen-2.5-72b-instruct:free',
+                        model: 'meta-llama/llama-3.2-3b-instruct:free',
                         messages: [
                             { role: 'system', content: systemPrompt },
                             ...messagesForAi
@@ -301,6 +392,12 @@ Nhiệm vụ của bạn:
                 followUpScheduledAt: scheduledTime,
                 followUpSent: false, // Reset followUpSent to allow follow-up if they resume chat
             }
+        });
+    }
+    // Gọi AI phân loại lead chạy ngầm ở cuối mỗi lượt chat nếu có khách hàng
+    if (customerId) {
+        void segmentLeadWithAi(workspaceId, session.id, customerId).catch(err => {
+            console.error('Lỗi segmentLeadWithAi:', err);
         });
     }
     return {

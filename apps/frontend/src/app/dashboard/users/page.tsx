@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useLocale } from '@/context/LocaleContext';
@@ -19,17 +19,19 @@ export default function UsersPage() {
   const [error, setError] = useState('');
   const [form, setForm] = useState({ email: '', password: '', name: '', role: 'EDITOR' });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setUsers(await apiJson<User[]>('/users'));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('Chỉ ADMIN mới xem được trang này'));
     }
-  };
+  }, [t]);
 
   useEffect(() => {
-    load();
-  }, []);
+    setTimeout(() => {
+      load();
+    }, 0);
+  }, [load]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();

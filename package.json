@@ -13,6 +13,10 @@
     "lint": "npm run lint --workspaces --if-present",
     "db:push": "npm run db:push -w apps/backend",
     "db:generate": "npm run db:generate -w apps/backend",
-    "check:backend": "powershell -ExecutionPolicy Bypass -File scripts/check-backend.ps1"
+    "check:backend": "powershell -ExecutionPolicy Bypass -File scripts/check-backend.ps1",
+    "openspec": "openspec"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "^1.4.1"
   }
 }

@@ -35,7 +35,12 @@ export function Topbar() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('user');
-      if (raw) setUser(JSON.parse(raw) as StoredUser);
+      if (raw) {
+        const parsed = JSON.parse(raw) as StoredUser;
+        setTimeout(() => {
+          setUser(parsed);
+        }, 0);
+      }
     } catch {
       /* ignore */
     }
@@ -94,17 +99,17 @@ export function Topbar() {
           </div>
 
           {apiOnline === true && (
-            <span className="hidden lg:inline-flex items-center gap-2 h-10 px-3.5 shrink-0 rounded-xl bg-emerald-50 text-emerald-800 text-xs font-semibold ring-1 ring-emerald-600/10">
+            <span className="hidden lg:inline-flex items-center gap-2 h-10 px-3.5 shrink-0 rounded-xl bg-orange-50/60 text-brand text-xs font-semibold ring-1 ring-brand/15">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand/60 opacity-60" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-brand" />
               </span>
               {t("Hệ thống hoạt động")}
             </span>
           )}
           {apiOnline === false && (
-            <span className="hidden lg:inline-flex items-center gap-2 h-10 px-3.5 shrink-0 rounded-xl bg-amber-50 text-amber-800 text-xs font-semibold ring-1 ring-amber-600/15">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
+            <span className="hidden lg:inline-flex items-center gap-2 h-10 px-3.5 shrink-0 rounded-xl bg-slate-50 text-slate-500 text-xs font-semibold ring-1 ring-slate-200/50 border border-slate-200/80">
+              <span className="h-2 w-2 rounded-full bg-slate-400" />
               {t("API offline")}
             </span>
           )}

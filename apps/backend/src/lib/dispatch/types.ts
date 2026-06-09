@@ -5,6 +5,7 @@ export type DispatchPayload = {
   urlTarget?: string;
   emailRecipients?: string;
   workspaceId?: number;
+  connectionId?: number;
 };
 
 export type DispatchResult = {

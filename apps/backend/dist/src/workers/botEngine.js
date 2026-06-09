@@ -75,8 +75,30 @@ async function publishScheduledContent(opts) {
 }
 async function executeAutomationTask(task) {
     console.log(`[BOT] Thực thi: ${task.name} (ID: ${task.id})`);
-    const platforms = parsePlatforms(task.platforms);
-    if (platforms.length === 0) {
+    let targets = [];
+    if (task.targetConnectionsJson) {
+        try {
+            const parsed = JSON.parse(task.targetConnectionsJson);
+            if (Array.isArray(parsed)) {
+                targets = parsed.map((t) => ({
+                    connectionId: Number(t.connectionId),
+                    platform: String(t.platform).trim().toLowerCase(),
+                    pageName: t.pageName ? String(t.pageName) : undefined
+                })).filter(t => t.connectionId && t.platform);
+            }
+        }
+        catch {
+            // ignore
+        }
+    }
+    // Fallback to platforms string parsing
+    if (targets.length === 0) {
+        const platformList = parsePlatforms(task.platforms);
+        for (const p of platformList) {
+            targets.push({ connectionId: 0, platform: p });
+        }
+    }
+    if (targets.length === 0) {
         console.log(`[BOT] Tác vụ ${task.name} không cấu hình kênh đăng nào.`);
         await prisma_1.default.automationTask.update({
             where: { id: task.id },
@@ -84,51 +106,59 @@ async function executeAutomationTask(task) {
         });
         return;
     }
-    const resolved = await (0, automationTemplate_1.resolveAutomationPost)(task);
-    if (!resolved) {
-        const errorMsg = '⚠️ Chưa có nội dung bài đăng. Vui lòng tạo trong Content Editor hoặc gắn A/B test.';
-        for (const platform of platforms) {
+    const { dispatchToPlatform } = await Promise.resolve().then(() => __importStar(require('../lib/dispatch')));
+    for (const target of targets) {
+        let pageName = target.pageName;
+        if (!pageName && target.connectionId > 0) {
+            const conn = await prisma_1.default.socialConnection.findUnique({ where: { id: target.connectionId } });
+            pageName = conn?.pageName || undefined;
+        }
+        // AI Content Spin
+        let taskToResolve = { ...task };
+        if (task.useAi && pageName) {
+            const originalPrompt = task.aiPrompt || '';
+            const customPrompt = `${originalPrompt}\n\n[Lưu ý quan trọng]: Viết nội dung này dành riêng cho đối tượng độc giả và mang bản sắc thương hiệu của trang '${pageName}'. Điều chỉnh giọng văn và cấu trúc câu để khác biệt so với các bài đăng khác.`;
+            taskToResolve.aiPrompt = customPrompt;
+        }
+        const resolved = await (0, automationTemplate_1.resolveAutomationPost)(taskToResolve);
+        if (!resolved) {
+            const errorMsg = `⚠️ Chưa có nội dung bài đăng cho trang ${pageName || target.platform}.`;
             await prisma_1.default.botLog.create({
                 data: {
                     taskId: task.id,
-                    action: `POST_${platform.toUpperCase()}`,
+                    action: `POST_${target.platform.toUpperCase()}`,
                     message: errorMsg,
                     status: 'ERROR'
                 }
             });
-            console.log(`  -> [${platform}] ${errorMsg}`);
+            console.log(`  -> [${target.platform}] ${errorMsg}`);
+            continue;
         }
-        await prisma_1.default.automationTask.update({
-            where: { id: task.id },
-            data: { lastRunAt: new Date() }
-        });
-        return;
-    }
-    const { dispatchToPlatform } = await Promise.resolve().then(() => __importStar(require('../lib/dispatch')));
-    for (const platform of platforms) {
         let result;
         try {
-            result = await dispatchToPlatform(platform, {
+            result = await dispatchToPlatform(target.platform, {
                 title: resolved.title,
                 content: resolved.content,
                 imageUrl: resolved.imageUrl,
                 urlTarget: resolved.urlTarget,
                 emailRecipients: task.emailRecipients || undefined,
                 workspaceId: task.workspaceId || undefined,
+                connectionId: target.connectionId > 0 ? target.connectionId : undefined,
             });
         }
         catch (err) {
             result = { success: false, message: `Lỗi thực thi: ${err.message}` };
         }
+        const displayTarget = pageName ? `${target.platform} (${pageName})` : target.platform;
         await prisma_1.default.botLog.create({
             data: {
                 taskId: task.id,
-                action: `POST_${platform.toUpperCase()}`,
-                message: result.message,
+                action: `POST_${target.platform.toUpperCase()}`,
+                message: pageName ? `[Trang: ${pageName}] ${result.message}` : result.message,
                 status: result.success ? 'SUCCESS' : 'ERROR'
             }
         });
-        console.log(`  -> [${platform}] ${result.message}`);
+        console.log(`  -> [${displayTarget}] ${result.message}`);
     }
     await prisma_1.default.automationTask.update({
         where: { id: task.id },

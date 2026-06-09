@@ -35,15 +35,17 @@ export default function ProductsPage() {
       const data = await apiJson<Product[]>('/orders/products');
       setProducts(Array.isArray(data) ? data : []);
       setError('');
-    } catch (err: any) {
-      setError(err.message || 'Không thể tải danh sách sản phẩm.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Không thể tải danh sách sản phẩm.');
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadProducts();
+    setTimeout(() => {
+      loadProducts();
+    }, 0);
   }, [loadProducts]);
 
   const handleOpenCreate = () => {
@@ -86,8 +88,8 @@ export default function ProductsPage() {
       }
       setShowEditor(false);
       loadProducts();
-    } catch (err: any) {
-      setError(err.message || 'Lỗi khi lưu sản phẩm.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Lỗi khi lưu sản phẩm.');
     }
   };
 
@@ -97,8 +99,8 @@ export default function ProductsPage() {
       await apiJson(`/orders/products/${id}`, { method: 'DELETE' });
       setSuccess('Đã xóa sản phẩm thành công.');
       loadProducts();
-    } catch (err: any) {
-      setError(err.message || 'Lỗi khi xóa sản phẩm.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Lỗi khi xóa sản phẩm.');
     }
   };
 

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { getAiConfig } from '../lib/ai';
+import { getAiConfig, parseAiJson, fetchWithRetry } from '../lib/ai';
 
 
 export type GeneratedPost = {
@@ -29,14 +29,45 @@ Quy tắc viết bài:
    - Luôn chèn placeholder '{url}' ở vị trí tự nhiên nhất để hướng người đọc click vào liên kết.
    - Có lời kêu gọi hành động (CTA) rõ ràng ở cuối.
    - Thêm 3-5 hashtag liên quan ở dưới cùng.
-3. TRẢ VỀ KẾT QUẢ DƯỚI DẠNG JSON HỢP LỆ với 2 thuộc tính duy nhất: "title" và "content".
-4. KHÔNG bao bọc chuỗi JSON bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô để có thể chạy JSON.parse() trực tiếp.`;
+3. BẮT BUỘC: Chỉ trả về DUY NHẤT một đối tượng JSON hợp lệ (KHÔNG có bất kỳ text nào khác trước hoặc sau), với đúng 2 thuộc tính:
+   {"title": "tiêu đề bài viết", "content": "nội dung bài viết"}
+4. TUYỆT ĐỐI KHÔNG viết lời giải thích, lời dẫn, markdown, hay bất kỳ ký tự nào ngoài đối tượng JSON.`;
 
-  const userPrompt = `URL đích: ${urlTarget}
+  let urlMetadataText = '';
+  try {
+    console.log(`[AI Scraper] Fetching metadata for: ${urlTarget}`);
+    const fetchRes = await fetch(urlTarget, {
+      headers: { 'User-Agent': 'FreeTrafficBot/1.0 AI-Content-Generator' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (fetchRes.ok) {
+      const html = await fetchRes.text();
+      const pageTitle = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
+      
+      // Match description or og:description
+      const metaDesc = html.match(
+        /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["']/i
+      )?.[1]?.trim() || html.match(
+        /<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description)["']/i
+      )?.[1]?.trim();
+      
+      const parts = [];
+      if (pageTitle) parts.push(`Tiêu đề website: "${pageTitle}"`);
+      if (metaDesc) parts.push(`Mô tả website: "${metaDesc}"`);
+      
+      if (parts.length > 0) {
+        urlMetadataText = `\n\nThông tin thực tế từ nội dung website:\n${parts.join('\n')}`;
+      }
+    }
+  } catch (err) {
+    console.warn(`[AI Scraper] Không thể tải thông tin từ URL ${urlTarget}:`, err);
+  }
+
+  const userPrompt = `URL đích: ${urlTarget}${urlMetadataText}
 ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy nghĩ chủ đề thu hút nhất liên quan đến URL đích.'}`;
 
   try {
-    const res = await fetch(ai.url, {
+    const res = await fetchWithRetry(ai.url, {
       method: 'POST',
       headers: ai.headers,
       body: JSON.stringify({
@@ -46,14 +77,14 @@ ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy 
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.8,
-        max_tokens: 600,
+        max_tokens: 4000,
       }),
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`OpenAI API returned status ${res.status}: ${errText}`);
+      throw new Error(`AI API returned status ${res.status}: ${errText}`);
     }
 
     const data = (await res.json()) as {
@@ -61,25 +92,117 @@ ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy 
     };
     const contentText = data.choices?.[0]?.message?.content?.trim() || '';
 
-    // Parse JSON
-    try {
-      const parsed = JSON.parse(contentText) as { title: string; content: string };
-      return {
-        title: parsed.title || 'Bài viết tự động',
-        content: parsed.content || 'Khám phá ngay tại {url}',
-      };
-    } catch {
-      // Fallback if AI didn't return clean JSON
-      console.warn('AI did not return valid JSON, using raw text fallback:', contentText);
-      return {
-        title: 'Bài viết tự sinh',
-        content: contentText || 'Khám phá thêm tại {url}',
-      };
-    }
+    // === CHIẾN LƯỢC PARSE ĐA TẦNG (Multi-strategy parsing) ===
+    return extractTitleContent(contentText);
   } catch (err: any) {
-    console.error('Lỗi khi gọi OpenAI GPT:', err);
+    console.error('Lỗi khi gọi AI:', err);
     throw err;
   }
+}
+
+/**
+ * Resiliently extracts a Post Title and Post Content from various AI completion formats.
+ * 
+ * Progressive parsing strategies:
+ * 1. Direct JSON parse (optimal case).
+ * 2. Substring extraction bounded by curly braces { } (handles wrapper preamble/text).
+ * 3. Markdown code block cleanup (strips ```json wrapper).
+ * 4. Regex extraction (rescues fully valid fields or repairs truncated content strings).
+ * 5. Line-based split (assumes first line is the title, and the rest is the content).
+ * 
+ * @param raw The raw output string from the AI model.
+ * @returns An object containing the extracted post `title` and `content`.
+ */
+function extractTitleContent(raw: string): { title: string; content: string } {
+  if (!raw) {
+    return { title: 'Bài viết tự động', content: 'Khám phá ngay tại {url}' };
+  }
+
+  const cleanRaw = raw.trim();
+
+  // Chiến lược 1: Parse JSON trực tiếp
+  try {
+    const parsed = JSON.parse(cleanRaw);
+    if (parsed.title && parsed.content) return { title: parsed.title.trim(), content: parsed.content.trim() };
+  } catch {}
+
+  // Chiến lược 2: Tìm JSON object nằm giữa { } trong text
+  const objStart = cleanRaw.indexOf('{');
+  const objEnd = cleanRaw.lastIndexOf('}');
+  if (objStart !== -1 && objEnd > objStart) {
+    try {
+      const parsed = JSON.parse(cleanRaw.slice(objStart, objEnd + 1));
+      if (parsed.title && parsed.content) return { title: parsed.title.trim(), content: parsed.content.trim() };
+    } catch {}
+  }
+
+  // Chiến lược 3: Loại bỏ markdown code block rồi parse lại
+  const mdCleaned = cleanRaw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  try {
+    const parsed = JSON.parse(mdCleaned);
+    if (parsed.title && parsed.content) return { title: parsed.title.trim(), content: parsed.content.trim() };
+  } catch {}
+
+  // Chiến lược 4: Dùng regex trích xuất "title" và "content" (hỗ trợ cả JSON bị cắt cụt/thiếu dấu ngoặc đóng)
+  let title = '';
+  let content = '';
+
+  // Tìm title hoàn chỉnh trước
+  const titleMatch = cleanRaw.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (titleMatch) {
+    title = titleMatch[1];
+  } else {
+    // Nếu bị cụt giữa chừng trong phần title
+    const truncatedTitleMatch = cleanRaw.match(/"title"\s*:\s*"([^"\\]*)/);
+    if (truncatedTitleMatch) title = truncatedTitleMatch[1];
+  }
+
+  // Tìm content hoàn chỉnh trước
+  const contentMatch = cleanRaw.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (contentMatch) {
+    content = contentMatch[1];
+  } else {
+    // Nếu phần content bị cắt cụt (thiếu dấu ngoặc kép đóng ở cuối), lấy toàn bộ từ lúc bắt đầu content đến hết chuỗi
+    const contentStartMatch = cleanRaw.match(/"content"\s*:\s*"\s*(.*)/s);
+    if (contentStartMatch) {
+      content = contentStartMatch[1];
+      // Loại bỏ các ký tự rác của cú pháp JSON bị dính ở cuối nếu có
+      content = content.replace(/\s*"\s*\}\s*$/, '');
+      content = content.replace(/\s*\}\s*$/, '');
+      content = content.replace(/\s*"\s*$/, '');
+    }
+  }
+
+  // Giải mã các ký tự escape JSON nếu có
+  const unescapeJson = (str: string) => {
+    return str
+      .replace(/\\n/g, '\n')
+      .replace(/\\"/g, '"')
+      .replace(/\\'/g, "'")
+      .replace(/\\\\/g, '\\')
+      .replace(/\\t/g, '\t');
+  };
+
+  title = unescapeJson(title).trim();
+  content = unescapeJson(content).trim();
+
+  if (title || content) {
+    return {
+      title: title || 'Bài viết tự động',
+      content: content || 'Khám phá ngay tại {url}',
+    };
+  }
+
+  // Chiến lược 5: Nếu là text thuần túy - dùng dòng đầu tiên làm tiêu đề
+  const lines = cleanRaw.split('\n').filter(l => l.trim());
+  if (lines.length >= 2) {
+    return {
+      title: lines[0].replace(/^#+\s*/, '').replace(/^\*+/, '').trim(),
+      content: lines.slice(1).join('\n').trim(),
+    };
+  }
+
+  return { title: 'Bài viết tự động', content: cleanRaw };
 }
 
 async function translateToEnglishImagePrompt(prompt: string): Promise<string> {
@@ -87,7 +210,7 @@ async function translateToEnglishImagePrompt(prompt: string): Promise<string> {
     const ai = getAiConfig('/chat/completions');
     if (!ai.apiKey) return prompt;
 
-    const res = await fetch(ai.url, {
+    const res = await fetchWithRetry(ai.url, {
       method: 'POST',
       headers: ai.headers,
       body: JSON.stringify({
@@ -210,8 +333,8 @@ export async function generateAiImage(imagePrompt: string): Promise<string | nul
     const englishPrompt = await translateToEnglishImagePrompt(imagePrompt);
     console.log(`[AI Image] Original: "${imagePrompt}" -> Translated/Optimized: "${englishPrompt}"`);
 
-    // If API key is not set or is an OpenRouter key, route to AI Horde with Flickr+Preset fallbacks!
-    if (!ai.apiKey || ai.apiKey.startsWith('sk-or-')) {
+    // If API key is not set, is an OpenRouter key, or is a Gemini key, route to AI Horde with Flickr+Preset fallbacks!
+    if (!ai.apiKey || ai.apiKey.startsWith('sk-or-') || ai.apiKey.startsWith('AIzaSy')) {
       const stylizedPrompt = `flat minimal vector illustration of ${englishPrompt.slice(0, 200)}, clean minimalist design, professional corporate marketing graphic art, orange and warm color scheme, white background`;
       console.log(`[AI Image] Querying AI Horde with prompt: "${stylizedPrompt}"`);
 
@@ -374,7 +497,7 @@ export async function generateAiImage(imagePrompt: string): Promise<string | nul
         n: 1,
         size: '1024x1024',
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(60000),
     });
 
     if (!res.ok) {
@@ -504,7 +627,7 @@ Ngành nghề: ${industry}
 Giọng điệu: ${tone}`;
 
   try {
-    const res = await fetch(ai.url, {
+    const res = await fetchWithRetry(ai.url, {
       method: 'POST',
       headers: ai.headers,
       body: JSON.stringify({
@@ -514,9 +637,9 @@ Giọng điệu: ${tone}`;
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.8,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(120000),
     });
 
     if (!res.ok) {
@@ -530,7 +653,7 @@ Giọng điệu: ${tone}`;
     const contentText = data.choices?.[0]?.message?.content?.trim() || '[]';
 
     try {
-      return JSON.parse(contentText) as CopilotPlanItem[];
+      return parseAiJson(contentText) as CopilotPlanItem[];
     } catch {
       console.warn('AI plan did not return valid JSON, parsing raw text fallback:', contentText);
       throw new Error('AI không trả về đúng định dạng JSON kế hoạch.');

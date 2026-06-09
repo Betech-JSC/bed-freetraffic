@@ -363,6 +363,46 @@ router.get('/pages/:slug/html', async (req, res) => {
                 }
             }
         }
+        // Inject Facebook Messenger Chat Widget if enabled
+        if (page.enableMessengerChat && page.workspaceId) {
+            const facebookConn = await prisma_1.default.socialConnection.findFirst({
+                where: { platform: 'facebook', workspaceId: page.workspaceId, status: 'CONNECTED' }
+            });
+            if (facebookConn && facebookConn.pageId) {
+                const fbWidgetHtml = `
+<!-- Messenger Plugin Chat SDK -->
+<div id="fb-root"></div>
+<div id="fb-customer-chat" class="fb-customerchat"></div>
+<script>
+  var chatbox = document.getElementById('fb-customer-chat');
+  chatbox.setAttribute("page_id", "${facebookConn.pageId}");
+  chatbox.setAttribute("attribution", "biz_inbox");
+</script>
+<script>
+  window.fbAsyncInit = function() {
+    FB.init({
+      xfbml            : true,
+      version          : 'v21.0'
+    });
+  };
+
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = 'https://connect.facebook.net/vi_VN/sdk/xfbml.customerchat.js';
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+</script>
+`;
+                if (html.includes('</body>')) {
+                    html = html.replace('</body>', `${fbWidgetHtml}\n</body>`);
+                }
+                else {
+                    html = html + '\n' + fbWidgetHtml;
+                }
+            }
+        }
         let theme = 'ocean-breeze';
         try {
             if (page.layoutJson) {

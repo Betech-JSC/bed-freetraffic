@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma';
-import { getAiConfig } from '../lib/ai';
+import { getAiConfig, fetchWithRetry } from '../lib/ai';
 
 
 export type Recommendation = {
@@ -150,7 +150,7 @@ export async function enhanceWithOpenAi(
 
   try {
     const prompt = `Bạn là chuyên gia marketing. Tóm tắt ngắn (3 câu, tiếng Việt) và 1 gợi ý ưu tiên nhất từ danh sách:\n${JSON.stringify(items.slice(0, 8))}`;
-    const res = await fetch(ai.url, {
+    const res = await fetchWithRetry(ai.url, {
       method: 'POST',
       headers: ai.headers,
       body: JSON.stringify({

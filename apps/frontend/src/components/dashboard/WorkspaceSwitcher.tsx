@@ -33,11 +33,11 @@ export default function WorkspaceSwitcher() {
       setWorkspaces(list);
 
       // Determine active workspace ID
-      let activeId = typeof window !== 'undefined' ? localStorage.getItem('workspaceId') : null;
+      const activeId = typeof window !== 'undefined' ? localStorage.getItem('workspaceId') : null;
       
       let current: Workspace | null = null;
       if (activeId) {
-        current = list.find(w => w.id === parseInt(activeId!, 10)) || null;
+        current = list.find(w => w.id === parseInt(activeId, 10)) || null;
       }
 
       // If no valid active workspace, fetch '/workspaces/current' to get/provision one
@@ -50,16 +50,19 @@ export default function WorkspaceSwitcher() {
       }
 
       setCurrentWorkspace(current);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[WorkspaceSwitcher] Error fetching workspaces:', err);
-      setError(err?.message || 'Không thể tải danh sách không gian làm việc.');
+      const msg = err instanceof Error ? err.message : 'Không thể tải danh sách không gian làm việc.';
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    setTimeout(() => {
+      loadData();
+    }, 0);
   }, []);
 
   // Close dropdown if clicked outside
@@ -100,9 +103,10 @@ export default function WorkspaceSwitcher() {
         localStorage.setItem('workspaceId', newWs.id.toString());
         window.location.reload();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[WorkspaceSwitcher] Error creating workspace:', err);
-      setError(err?.message || 'Không thể tạo không gian làm việc mới.');
+      const msg = err instanceof Error ? err.message : 'Không thể tạo không gian làm việc mới.';
+      setError(msg);
     } finally {
       setLoading(false);
     }

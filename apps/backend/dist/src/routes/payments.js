@@ -6,10 +6,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_1 = require("../middleware/auth");
+const workspace_1 = require("../middleware/workspace");
 const node_1 = __importDefault(require("@payos/node"));
+const stripe_1 = __importDefault(require("stripe"));
 const router = (0, express_1.Router)();
 // Load Payment Config
-router.get('/config', auth_1.authenticate, async (req, res) => {
+router.get('/config', auth_1.authenticate, workspace_1.workspaceMiddleware, async (req, res) => {
     try {
         let config = await prisma_1.default.paymentConfig.findUnique({
             where: { workspaceId: req.workspaceId },
@@ -34,7 +36,7 @@ router.get('/config', auth_1.authenticate, async (req, res) => {
     }
 });
 // Save Payment Config
-router.post('/config', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
+router.post('/config', auth_1.authenticate, workspace_1.workspaceMiddleware, auth_1.requireWrite, async (req, res) => {
     try {
         const { payosClientId, payosApiKey, payosChecksumKey, stripeSecretKey, stripeWebhookSecret } = req.body;
         // Find existing config
@@ -74,7 +76,7 @@ router.post('/config', auth_1.authenticate, auth_1.requireWrite, async (req, res
     }
 });
 // Create PayOS Payment Link
-router.post('/payos-link', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
+router.post('/payos-link', auth_1.authenticate, workspace_1.workspaceMiddleware, auth_1.requireWrite, async (req, res) => {
     try {
         const { orderId, returnUrl, cancelUrl } = req.body;
         if (!orderId) {
@@ -215,27 +217,35 @@ router.post('/stripe-webhook', async (req, res) => {
             res.status(400).json({ error: 'Cấu hình Stripe Webhook Secret trống.' });
             return;
         }
+        // Verify webhook signature using Stripe SDK
+        let event;
         try {
-            const eventType = payload.type;
-            if (eventType === 'payment_intent.succeeded') {
-                const paymentIntent = payload.data.object;
-                await prisma_1.default.order.update({
-                    where: { id: order.id },
-                    data: {
-                        status: 'PAID',
-                        paymentMethod: 'STRIPE',
-                        gatewayTxnId: paymentIntent.id,
-                    },
-                });
-                await prisma_1.default.customer.update({
-                    where: { id: order.customerId },
-                    data: { status: 'ACTIVE' },
-                });
-            }
+            const stripe = new stripe_1.default(config.stripeSecretKey || '');
+            // For proper verification, req.body should be the raw body string.
+            // When using express.json(), body is already parsed, so we stringify it back.
+            const rawBody = typeof payload === 'string' ? payload : JSON.stringify(payload);
+            event = stripe.webhooks.constructEvent(rawBody, signature, config.stripeWebhookSecret);
         }
         catch (err) {
-            res.status(400).json({ error: 'Xác minh Stripe webhook thất bại: ' + err.message });
+            console.error('[Stripe Webhook] Signature verification failed:', err.message);
+            res.status(400).json({ error: 'Xác minh chữ ký Stripe webhook thất bại: ' + err.message });
             return;
+        }
+        // Process verified event
+        if (event.type === 'payment_intent.succeeded') {
+            const paymentIntent = event.data.object;
+            await prisma_1.default.order.update({
+                where: { id: order.id },
+                data: {
+                    status: 'PAID',
+                    paymentMethod: 'STRIPE',
+                    gatewayTxnId: paymentIntent.id,
+                },
+            });
+            await prisma_1.default.customer.update({
+                where: { id: order.customerId },
+                data: { status: 'ACTIVE' },
+            });
         }
         res.json({ received: true });
     }
