@@ -13,7 +13,7 @@ router.use(authenticate);
 // 1. Get all lists (audiences)
 router.get('/lists', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const lists = await getMailchimpLists(req.workspaceId!);
+    const lists = await getMailchimpLists(req.workspaceId ?? 0);
     res.json(lists);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Không thể tải danh sách Mailchimp' });
@@ -39,7 +39,7 @@ router.post('/sync', requireWrite, async (req: AuthRequest, res: Response): Prom
       return;
     }
 
-    const result = await syncCustomersToMailchimp(listId, customers, req.workspaceId!);
+    const result = await syncCustomersToMailchimp(listId, customers, req.workspaceId ?? 0);
     res.json({
       message: `Đã hoàn tất đồng bộ: Thành công ${result.successCount} / ${result.total} khách hàng.`,
       ...result,
@@ -59,7 +59,7 @@ router.post('/campaign', requireWrite, async (req: AuthRequest, res: Response): 
   }
 
   try {
-    const result = await sendMailchimpCampaign(listId, subject, htmlContent, req.workspaceId!);
+    const result = await sendMailchimpCampaign(listId, subject, htmlContent, req.workspaceId ?? 0);
 
     // Save to local EmailCampaign log for reporting
     await prisma.emailCampaign.create({

@@ -130,41 +130,42 @@ export default function ProductsPage() {
 
       {/* Editor Modal */}
       {showEditor && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleSave} className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-2">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleSave} className="card p-6 w-full max-w-md space-y-4 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand to-orange-500"></div>
+            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">
               {editingId ? 'Chỉnh sửa sản phẩm' : 'Đăng sản phẩm mới'}
             </h3>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Tên sản phẩm</label>
+              <label className="label">Tên sản phẩm</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Ví dụ: Ebook Hướng Dẫn SEO 2026"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">Giá bán</label>
+                <label className="label">Giá bán</label>
                 <input
                   type="number"
                   value={form.price}
                   onChange={(e) => setForm({ ...form, price: e.target.value })}
                   placeholder="250000"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22]"
+                  className="input"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-slate-400">Tiền tệ</label>
+                <label className="label">Tiền tệ</label>
                 <select
                   value={form.currency}
                   onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none"
+                  className="input"
                 >
                   <option value="VND">VND (đ)</option>
                   <option value="USD">USD ($)</option>
@@ -173,27 +174,27 @@ export default function ProductsPage() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Mô tả sản phẩm</label>
+              <label className="label">Mô tả sản phẩm</label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="Mô tả các giá trị, đặc quyền nhận được khi thanh toán..."
                 rows={3}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22]"
+                className="input"
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowEditor(false)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-sm transition"
+                className="btn-secondary px-4 py-1.5 text-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg text-sm font-semibold transition"
+                className="btn-primary px-4 py-1.5 text-sm"
               >
                 Lưu lại
               </button>
@@ -209,41 +210,41 @@ export default function ProductsPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#f25c22]"></div>
           </div>
         ) : products.length === 0 ? (
-          <div className="col-span-full text-center py-16 bg-slate-900 border border-slate-800 rounded-xl">
-            <h4 className="text-white font-medium mb-1">Chưa có sản phẩm nào</h4>
-            <p className="text-slate-400 text-sm mb-4">Hãy bắt đầu tạo sản phẩm dịch vụ/sản phẩm số đầu tiên để triển khai bán hàng.</p>
+          <div className="col-span-full text-center py-16 card p-8 flex flex-col items-center">
+            <h4 className="text-slate-800 font-bold mb-1 text-base">Chưa có sản phẩm nào</h4>
+            <p className="text-slate-500 text-xs mb-4">Hãy bắt đầu tạo sản phẩm dịch vụ/sản phẩm số đầu tiên để triển khai bán hàng.</p>
             <button
               onClick={handleOpenCreate}
-              className="px-4 py-2 bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] rounded-lg transition text-sm font-semibold"
+              className="px-4 py-2 bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] rounded-lg transition text-xs font-semibold"
             >
               Thêm sản phẩm
             </button>
           </div>
         ) : (
           products.map((p) => (
-            <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg p-5 flex flex-col justify-between hover:border-slate-700 transition">
+            <div key={p.id} className="card card-hover p-5 flex flex-col justify-between">
               <div className="space-y-2">
-                <div className="flex justify-between items-start">
-                  <h4 className="font-bold text-white text-base line-clamp-1">{p.name}</h4>
+                <div className="flex justify-between items-start gap-2">
+                  <h4 className="font-bold text-slate-800 text-base line-clamp-1">{p.name}</h4>
                   <span className="text-[#f25c22] font-extrabold text-sm whitespace-nowrap">
                     {p.price.toLocaleString('vi-VN')} {p.currency}
                   </span>
                 </div>
-                <p className="text-slate-400 text-xs line-clamp-3">
+                <p className="text-slate-500 text-xs leading-relaxed line-clamp-3">
                   {p.description || 'Không có mô tả chi tiết.'}
                 </p>
               </div>
 
-              <div className="flex justify-end gap-3 border-t border-slate-850 pt-3.5 mt-4">
+              <div className="flex justify-end gap-3 border-t border-slate-100 pt-3.5 mt-4">
                 <button
                   onClick={() => handleOpenEdit(p)}
-                  className="text-xs bg-slate-800 hover:bg-slate-750 text-slate-300 px-3 py-1.5 rounded transition"
+                  className="text-xs font-bold bg-white hover:bg-slate-50 border border-slate-200 text-slate-650 px-3 py-1.5 rounded transition-all"
                 >
                   Chỉnh sửa
                 </button>
                 <button
                   onClick={() => handleDelete(p.id)}
-                  className="text-xs bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 px-3 py-1.5 rounded transition"
+                  className="text-xs font-bold text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 px-3 py-1.5 rounded transition-all"
                 >
                   Xóa
                 </button>

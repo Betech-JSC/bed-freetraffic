@@ -1,13 +1,14 @@
 import { Router, Response, Request } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
+import { workspaceMiddleware, WorkspaceRequest } from '../middleware/workspace';
 import PayOS from '@payos/node';
 import Stripe from 'stripe';
 
 const router = Router();
 
 // Load Payment Config
-router.get('/config', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/config', authenticate, workspaceMiddleware, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
     let config = await prisma.paymentConfig.findUnique({
       where: { workspaceId: req.workspaceId },
@@ -32,7 +33,7 @@ router.get('/config', authenticate, async (req: AuthRequest, res: Response): Pro
 });
 
 // Save Payment Config
-router.post('/config', authenticate, requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/config', authenticate, workspaceMiddleware, requireWrite, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
     const { payosClientId, payosApiKey, payosChecksumKey, stripeSecretKey, stripeWebhookSecret } = req.body;
     
@@ -70,7 +71,7 @@ router.post('/config', authenticate, requireWrite, async (req: AuthRequest, res:
 });
 
 // Create PayOS Payment Link
-router.post('/payos-link', authenticate, requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+router.post('/payos-link', authenticate, workspaceMiddleware, requireWrite, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
     const { orderId, returnUrl, cancelUrl } = req.body;
     if (!orderId) {
@@ -234,27 +235,36 @@ router.post('/stripe-webhook', async (req: Request, res: Response): Promise<void
       return;
     }
 
+    // Verify webhook signature using Stripe SDK
+    let event: any;
     try {
-      const eventType = payload.type;
-      if (eventType === 'payment_intent.succeeded') {
-        const paymentIntent = payload.data.object as any;
-        await prisma.order.update({
-          where: { id: order.id },
-          data: {
-            status: 'PAID',
-            paymentMethod: 'STRIPE',
-            gatewayTxnId: paymentIntent.id,
-          },
-        });
-
-        await prisma.customer.update({
-          where: { id: order.customerId },
-          data: { status: 'ACTIVE' },
-        });
-      }
+      const stripe = new Stripe(config.stripeSecretKey || '');
+      // For proper verification, req.body should be the raw body string.
+      // When using express.json(), body is already parsed, so we stringify it back.
+      const rawBody = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      event = stripe.webhooks.constructEvent(rawBody, signature, config.stripeWebhookSecret);
     } catch (err: any) {
-      res.status(400).json({ error: 'Xác minh Stripe webhook thất bại: ' + err.message });
+      console.error('[Stripe Webhook] Signature verification failed:', err.message);
+      res.status(400).json({ error: 'Xác minh chữ ký Stripe webhook thất bại: ' + err.message });
       return;
+    }
+
+    // Process verified event
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object as any;
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          status: 'PAID',
+          paymentMethod: 'STRIPE',
+          gatewayTxnId: paymentIntent.id,
+        },
+      });
+
+      await prisma.customer.update({
+        where: { id: order.customerId },
+        data: { status: 'ACTIVE' },
+      });
     }
 
     res.json({ received: true });

@@ -15,6 +15,121 @@
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
   --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.06);
   --shadow-card-hover: 0 12px 40px rgb(15 23 42 / 0.1);
+
+  /* Force all accent colors to align with the Orange & White brand identity */
+  --color-blue-50: var(--color-brand-light);
+  --color-blue-100: var(--color-brand-muted);
+  --color-blue-200: #ffd8c7;
+  --color-blue-300: #ffb89c;
+  --color-blue-400: #ff916b;
+  --color-blue-500: var(--color-brand);
+  --color-blue-600: var(--color-brand);
+  --color-blue-700: var(--color-brand-hover);
+  --color-blue-800: var(--color-brand-hover);
+  --color-blue-900: #8a2e0a;
+
+  --color-indigo-50: var(--color-brand-light);
+  --color-indigo-100: var(--color-brand-muted);
+  --color-indigo-200: #ffd8c7;
+  --color-indigo-300: #ffb89c;
+  --color-indigo-400: #ff916b;
+  --color-indigo-500: var(--color-brand);
+  --color-indigo-600: var(--color-brand);
+  --color-indigo-700: var(--color-brand-hover);
+  --color-indigo-800: var(--color-brand-hover);
+  --color-indigo-900: #8a2e0a;
+
+  --color-purple-50: var(--color-brand-light);
+  --color-purple-100: var(--color-brand-muted);
+  --color-purple-200: #ffd8c7;
+  --color-purple-300: #ffb89c;
+  --color-purple-400: #ff916b;
+  --color-purple-500: var(--color-brand);
+  --color-purple-600: var(--color-brand);
+  --color-purple-700: var(--color-brand-hover);
+  --color-purple-800: var(--color-brand-hover);
+  --color-purple-900: #8a2e0a;
+
+  --color-violet-50: var(--color-brand-light);
+  --color-violet-100: var(--color-brand-muted);
+  --color-violet-200: #ffd8c7;
+  --color-violet-300: #ffb89c;
+  --color-violet-400: #ff916b;
+  --color-violet-500: var(--color-brand);
+  --color-violet-600: var(--color-brand);
+  --color-violet-700: var(--color-brand-hover);
+  --color-violet-800: var(--color-brand-hover);
+  --color-violet-900: #8a2e0a;
+
+  --color-sky-50: var(--color-brand-light);
+  --color-sky-100: var(--color-brand-muted);
+  --color-sky-200: #ffd8c7;
+  --color-sky-300: #ffb89c;
+  --color-sky-400: #ff916b;
+  --color-sky-500: var(--color-brand);
+  --color-sky-600: var(--color-brand);
+  --color-sky-700: var(--color-brand-hover);
+  --color-sky-800: var(--color-brand-hover);
+  --color-sky-900: #8a2e0a;
+
+  --color-emerald-50: var(--color-brand-light);
+  --color-emerald-100: var(--color-brand-muted);
+  --color-emerald-200: #ffd8c7;
+  --color-emerald-300: #ffb89c;
+  --color-emerald-400: #ff916b;
+  --color-emerald-500: var(--color-brand);
+  --color-emerald-600: var(--color-brand);
+  --color-emerald-700: var(--color-brand-hover);
+  --color-emerald-800: var(--color-brand-hover);
+  --color-emerald-900: #8a2e0a;
+
+  --color-amber-50: var(--color-brand-light);
+  --color-amber-100: var(--color-brand-muted);
+  --color-amber-200: #ffd8c7;
+  --color-amber-300: #ffb89c;
+  --color-amber-400: #ff916b;
+  --color-amber-500: var(--color-brand);
+  --color-amber-600: var(--color-brand);
+  --color-amber-700: var(--color-brand-hover);
+  --color-amber-800: var(--color-brand-hover);
+  --color-amber-900: #8a2e0a;
+
+  /* Destructive action warning colors customized to brand warm red-orange */
+  --color-red-50: #fff5f5;
+  --color-red-100: #ffe3e3;
+  --color-red-500: #df3b20;
+  --color-red-600: #df3b20;
+  --color-red-700: #b9250f;
+  --color-red-800: #b9250f;
+
+  --color-rose-50: #fff5f5;
+  --color-rose-100: #ffe3e3;
+  --color-rose-500: #df3b20;
+  --color-rose-600: #df3b20;
+  --color-rose-700: #b9250f;
+  --color-rose-800: #b9250f;
+
+  --color-teal-50: var(--color-brand-light);
+  --color-teal-100: var(--color-brand-muted);
+  --color-teal-200: #ffd8c7;
+  --color-teal-300: #ffb89c;
+  --color-teal-400: #ff916b;
+  --color-teal-500: var(--color-brand);
+  --color-teal-600: var(--color-brand);
+  --color-teal-700: var(--color-brand-hover);
+  --color-teal-800: var(--color-brand-hover);
+  --color-teal-900: #8a2e0a;
+
+  --color-cyan-50: var(--color-brand-light);
+  --color-cyan-100: var(--color-brand-muted);
+  --color-cyan-200: #ffd8c7;
+  --color-cyan-300: #ffb89c;
+  --color-cyan-400: #ff916b;
+  --color-cyan-500: var(--color-brand);
+  --color-cyan-600: var(--color-brand);
+  --color-cyan-700: var(--color-brand-hover);
+  --color-cyan-800: var(--color-brand-hover);
+  --color-cyan-900: #8a2e0a;
 }
 
 :root {
@@ -29,11 +144,11 @@ body {
 }
 
 .bg-app-mesh {
-  background-color: #f4f7fb;
+  background-color: #fffbf9;
   background-image:
-    radial-gradient(at 0% 0%, rgb(232 93 38 / 0.07) 0, transparent 50%),
-    radial-gradient(at 100% 0%, rgb(59 130 246 / 0.06) 0, transparent 45%),
-    radial-gradient(at 50% 100%, rgb(148 163 184 / 0.08) 0, transparent 50%);
+    radial-gradient(at 0% 0%, rgb(232 93 38 / 0.08) 0, transparent 55%),
+    radial-gradient(at 100% 0%, rgb(245 158 11 / 0.05) 0, transparent 50%),
+    radial-gradient(at 50% 100%, rgb(232 93 38 / 0.03) 0, transparent 60%);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

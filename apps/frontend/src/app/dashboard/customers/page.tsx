@@ -11,6 +11,9 @@ const STATUS_LABELS: Record<string, string> = {
   NEED_FOLLOWUP: 'Cần follow-up',
   VIP: 'VIP',
   INACTIVE: 'Ngừng liên hệ',
+  HOT: '🔥 HOT (AI)',
+  WARM: '💛 WARM (AI)',
+  COLD: '❄️ COLD (AI)',
 };
 
 const DEFAULT_CARE_HTML = `<p>Xin chào {ten},</p>
@@ -457,6 +460,12 @@ export default function CustomersPage() {
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'VIP':
         return 'bg-purple-50 text-purple-700 border-purple-200 font-extrabold shadow-sm';
+      case 'HOT':
+        return 'bg-rose-50 text-rose-700 border-rose-200 font-extrabold shadow-sm animate-pulse';
+      case 'WARM':
+        return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+      case 'COLD':
+        return 'bg-slate-100 text-slate-650 border-slate-200';
       default:
         return 'bg-slate-50 text-slate-600 border-slate-200';
     }

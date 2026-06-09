@@ -51,10 +51,10 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex bg-slate-50 font-sans">
       {/* LEFT PANEL: Brand Info & Testimonial Mockup (Screenshot 1) */}
-      <div className="hidden lg:flex lg:w-[48%] bg-slate-900 text-white p-12 flex-col justify-between relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-[48%] bg-gradient-to-br from-brand to-orange-600 text-white p-12 flex-col justify-between relative overflow-hidden">
         {/* Soft Radial Gradients */}
-        <div className="absolute top-0 right-0 -mt-24 -mr-24 w-96 h-96 bg-brand/10 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-0 left-0 -mb-24 -ml-24 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute top-0 right-0 -mt-24 -mr-24 w-96 h-96 bg-white/10 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-0 left-0 -mb-24 -ml-24 w-96 h-96 bg-white/10 rounded-full blur-[120px] pointer-events-none" />
         
         {/* Top Header Logo */}
         <div className="relative z-10">
@@ -71,7 +71,7 @@ export default function RegisterPage() {
           </h2>
 
           {/* Premium mockup display */}
-          <div className="relative rounded-2xl border border-white/10 bg-slate-950/40 p-1.5 shadow-2xl backdrop-blur-sm group overflow-hidden max-w-xl">
+          <div className="relative rounded-2xl border border-white/20 bg-white/10 p-1.5 shadow-2xl backdrop-blur-sm group overflow-hidden max-w-xl">
             <img 
               src="/dashboard_preview.png" 
               alt="Be Traffic Analytics Dashboard" 

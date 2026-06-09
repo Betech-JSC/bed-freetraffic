@@ -163,43 +163,44 @@ export default function LandingPagesDashboard() {
 
       {/* Creation Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleCreate} className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-white">Tạo Landing Page mới</h3>
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleCreate} className="card p-6 w-full max-w-md space-y-4 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand to-orange-500"></div>
+            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Tạo Landing Page mới</h3>
             
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Tiêu đề trang</label>
+              <label className="label">Tiêu đề trang</label>
               <input
                 type="text"
                 value={createForm.title}
                 onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
                 placeholder="Ví dụ: Landing Page Quà Tặng 8/3"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Đường dẫn trang (URL Slug)</label>
+              <label className="label">Đường dẫn trang (URL Slug)</label>
               <input
                 type="text"
                 value={createForm.slug}
                 onChange={(e) => setCreateForm({ ...createForm, slug: e.target.value })}
                 placeholder="qua-tang-8-3"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowCreate(false)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-sm transition"
+                className="btn-secondary px-4 py-1.5 text-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg text-sm font-semibold transition"
+                className="btn-primary px-4 py-1.5 text-sm"
               >
                 Tạo trang
               </button>
@@ -210,75 +211,76 @@ export default function LandingPagesDashboard() {
 
       {/* Configuration Modal */}
       {showConfigId && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleSaveConfig} className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md space-y-4 shadow-2xl">
-            <h3 className="text-lg font-bold text-white">Cấu hình Landing Page</h3>
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleSaveConfig} className="card p-6 w-full max-w-md space-y-4 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand to-orange-500"></div>
+            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Cấu hình Landing Page</h3>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Tiêu đề</label>
+              <label className="label">Tiêu đề</label>
               <input
                 type="text"
                 value={configForm.title}
                 onChange={(e) => setConfigForm({ ...configForm, title: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Đường dẫn URL Slug</label>
+              <label className="label">Đường dẫn URL Slug</label>
               <input
                 type="text"
                 value={configForm.slug}
                 onChange={(e) => setConfigForm({ ...configForm, slug: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Facebook Pixel ID</label>
+              <label className="label">Facebook Pixel ID</label>
               <input
                 type="text"
                 value={configForm.fbPixelId}
                 onChange={(e) => setConfigForm({ ...configForm, fbPixelId: e.target.value })}
                 placeholder="10029302928392"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Google Analytics / Tag ID</label>
+              <label className="label">Google Analytics / Tag ID</label>
               <input
                 type="text"
                 value={configForm.googleTagId}
                 onChange={(e) => setConfigForm({ ...configForm, googleTagId: e.target.value })}
                 placeholder="G-XXXXXX hoặc GTM-XXXX"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-slate-400">Trạng thái xuất bản</label>
+              <label className="label">Trạng thái xuất bản</label>
               <select
                 value={configForm.status}
                 onChange={(e) => setConfigForm({ ...configForm, status: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               >
                 <option value="DRAFT">Draft (Nháp - Chưa công khai)</option>
                 <option value="PUBLISHED">Published (Công khai ngoài web)</option>
               </select>
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowConfigId(null)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-sm transition"
+                className="btn-secondary px-4 py-1.5 text-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg text-sm font-semibold transition"
+                className="btn-primary px-4 py-1.5 text-sm"
               >
                 Cập nhật
               </button>
@@ -294,49 +296,49 @@ export default function LandingPagesDashboard() {
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#f25c22]"></div>
           </div>
         ) : pages.length === 0 ? (
-          <div className="col-span-full text-center py-16 bg-slate-900 border border-slate-800 rounded-xl">
-            <h4 className="text-white font-medium mb-1">Chưa có Landing Page nào</h4>
-            <p className="text-slate-400 text-sm mb-4">Hãy bắt đầu tạo Landing Page đầu tiên của bạn để chuyển đổi traffic thành lead.</p>
+          <div className="col-span-full text-center py-16 card p-8 flex flex-col items-center">
+            <h4 className="text-slate-800 font-bold mb-1 text-base">Chưa có Landing Page nào</h4>
+            <p className="text-slate-500 text-xs mb-4">Hãy bắt đầu tạo Landing Page đầu tiên của bạn để chuyển đổi traffic thành lead.</p>
             <button
               onClick={() => setShowCreate(true)}
-              className="px-4 py-2 bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] rounded-lg transition text-sm font-semibold"
+              className="px-4 py-2 bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] rounded-lg transition text-xs font-semibold"
             >
               Tạo trang ngay
             </button>
           </div>
         ) : (
           pages.map((page) => (
-            <div key={page.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg hover:border-slate-700 transition flex flex-col justify-between">
+            <div key={page.id} className="card card-hover overflow-hidden flex flex-col justify-between">
               <div className="p-5 space-y-3">
-                <div className="flex justify-between items-start gap-2">
-                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${page.status === 'PUBLISHED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                <div className="flex justify-between items-center gap-2">
+                  <span className={`px-2.5 py-0.5 text-[10px] rounded-full font-bold uppercase tracking-wider ${page.status === 'PUBLISHED' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/10'}`}>
                     {page.status === 'PUBLISHED' ? 'Công khai' : 'Nháp'}
                   </span>
-                  <span className="text-xs text-slate-500">{new Date(page.createdAt).toLocaleDateString('vi-VN')}</span>
+                  <span className="text-[10px] text-slate-400 font-semibold">{new Date(page.createdAt).toLocaleDateString('vi-VN')}</span>
                 </div>
-                <h4 className="font-bold text-white text-base line-clamp-2">{page.title}</h4>
+                <h4 className="font-bold text-slate-850 text-base line-clamp-2">{page.title}</h4>
                 
-                <div className="space-y-1 pt-2">
+                <div className="space-y-1.5 pt-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Slug:</span>
-                    <span className="text-slate-300 font-mono">/p/{page.slug}</span>
+                    <span className="text-slate-400 font-medium">Slug:</span>
+                    <span className="text-slate-700 font-mono font-semibold">/p/{page.slug}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">FB Pixel:</span>
-                    <span className="text-slate-300">{page.fbPixelId ? page.fbPixelId : 'Chưa cấu hình'}</span>
+                    <span className="text-slate-400 font-medium">FB Pixel:</span>
+                    <span className="text-slate-700 font-semibold">{page.fbPixelId ? page.fbPixelId : 'Chưa cấu hình'}</span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-slate-500">Google Tag:</span>
-                    <span className="text-slate-300">{page.googleTagId ? page.googleTagId : 'Chưa cấu hình'}</span>
+                    <span className="text-slate-400 font-medium">Google Tag:</span>
+                    <span className="text-slate-700 font-semibold">{page.googleTagId ? page.googleTagId : 'Chưa cấu hình'}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="px-5 py-3.5 bg-slate-950 border-t border-slate-850 flex justify-between items-center gap-3">
+              <div className="px-5 py-3.5 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center gap-3">
                 <div className="flex gap-1.5">
                   <a
                     href={`/dashboard/landing/${page.id}/builder`}
-                    className="text-xs bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] px-2.5 py-1.5 rounded font-semibold transition"
+                    className="text-xs bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] px-2.5 py-1.5 rounded font-bold transition-all"
                   >
                     Thiết kế
                   </a>
@@ -344,7 +346,7 @@ export default function LandingPagesDashboard() {
                     href={`/api/public/pages/${page.slug}/html${page.status !== 'PUBLISHED' ? '?preview=true' : ''}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs border border-slate-800 hover:bg-slate-900 text-slate-400 px-2.5 py-1.5 rounded transition"
+                    className="text-xs border border-slate-200 hover:bg-slate-50 text-slate-500 px-2.5 py-1.5 rounded font-semibold transition"
                   >
                     Xem
                   </a>
@@ -353,14 +355,14 @@ export default function LandingPagesDashboard() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => openConfig(page)}
-                    className="text-xs bg-slate-800 hover:bg-slate-750 text-slate-300 px-2.5 py-1.5 rounded font-semibold transition"
+                    className="text-xs bg-white border border-slate-200 hover:bg-slate-50 text-slate-650 px-2.5 py-1.5 rounded font-bold transition-all"
                     title="Cài đặt SEO & Pixel"
                   >
                     Cấu hình
                   </button>
                   <button
                     onClick={() => handleDelete(page.id)}
-                    className="text-xs bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 px-2.5 py-1.5 rounded font-semibold transition"
+                    className="text-xs text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 px-2.5 py-1.5 rounded font-bold transition-all"
                     title="Xóa"
                   >
                     Xóa

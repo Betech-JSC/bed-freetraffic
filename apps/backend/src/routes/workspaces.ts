@@ -48,7 +48,11 @@ router.get('/', async (req: WorkspaceRequest, res: Response): Promise<void> => {
 // Get current workspace info
 router.get('/current', workspaceMiddleware, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
-    const workspaceId = req.workspaceId!;
+    if (!req.workspaceId) {
+      res.status(400).json({ error: 'Không xác định được Workspace' });
+      return;
+    }
+    const workspaceId = req.workspaceId;
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       include: {

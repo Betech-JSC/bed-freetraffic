@@ -113,7 +113,7 @@ app.use('/api/backlinks', authenticate, workspaceMiddleware, backlinksRoutes);
 app.use('/api/alerts', authenticate, workspaceMiddleware, alertsRoutes);
 app.use('/api/abtests', abtestsRoutes);
 app.use('/api/customers', authenticate, workspaceMiddleware, customersRoutes);
-app.use('/api/insights', insightsRoutes);
+app.use('/api/insights', authenticate, workspaceMiddleware, insightsRoutes);
 app.use('/api/integrations', authenticate, workspaceMiddleware, integrationsRoutes);
 app.use('/api/integrations/mailchimp', authenticate, workspaceMiddleware, mailchimpRoutes);
 
@@ -121,7 +121,7 @@ app.use('/api/blog', authenticate, workspaceMiddleware, blogRoutes);
 app.use('/api/landing-pages', authenticate, workspaceMiddleware, landingPagesRoutes);
 app.use('/api/forms', authenticate, workspaceMiddleware, formsRoutes);
 app.use('/api/public', publicRoutes);
-app.use('/api/payments', paymentsRoutes);
+app.use('/api/payments', paymentsRoutes); // auth handled internally per-route (webhooks are public)
 app.use('/api/orders', authenticate, workspaceMiddleware, ordersRoutes);
 app.use('/api/cskh', authenticate, workspaceMiddleware, cskhRoutes);
 

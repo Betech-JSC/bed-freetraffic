@@ -10,18 +10,18 @@ type StatCardProps = {
 
 const iconBg: Record<string, string> = {
   brand: 'bg-brand/10 text-brand',
-  blue: 'bg-blue-50 text-blue-600',
-  emerald: 'bg-emerald-50 text-emerald-600',
-  violet: 'bg-violet-50 text-violet-600',
-  slate: 'bg-slate-100 text-slate-600',
+  blue: 'bg-brand-light text-brand',
+  emerald: 'bg-orange-100/45 text-orange-600',
+  violet: 'bg-brand/5 text-orange-500',
+  slate: 'bg-slate-100 text-slate-500',
 };
 
 const glow: Record<string, string> = {
   brand: 'bg-brand/20',
-  blue: 'bg-blue-400/20',
-  emerald: 'bg-emerald-400/20',
-  violet: 'bg-violet-400/20',
-  slate: 'bg-slate-400/15',
+  blue: 'bg-brand/15',
+  emerald: 'bg-orange-500/10',
+  violet: 'bg-brand/10',
+  slate: 'bg-slate-400/10',
 };
 
 export function StatCard({ label, value, icon, trend, accent = 'brand' }: StatCardProps) {

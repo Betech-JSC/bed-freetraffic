@@ -600,6 +600,8 @@ model CskhConfig {
   liveChatEnabled      Boolean    @default(false)
   aiChatbotEnabled     Boolean    @default(false)
   knowledgeBaseText    String?
+  knowledgeFiles       String?    @db.Text
+  knowledgeUrls        String?    @db.Text
   notificationChannels String?
   // Cấu hình AI Auto-Followup
   followUpDelayHours   Int?       @default(0)   // Số giờ chờ trước khi gửi mail (0 = tắt)

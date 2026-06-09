@@ -14,6 +14,15 @@ import { WorkspaceRequest } from '../middleware/workspace';
 
 const router = Router();
 
+/** Safe accessor — trả về workspaceId hoặc throw lỗi 400 nếu thiếu */
+function requireWorkspaceId(req: WorkspaceRequest, res: Response): number | null {
+  if (!req.workspaceId) {
+    res.status(400).json({ error: 'Không xác định được Workspace. Vui lòng đăng nhập lại.' });
+    return null;
+  }
+  return req.workspaceId;
+}
+
 // ==================== CHUNG ====================
 
 // Lấy danh sách tất cả kết nối
@@ -52,7 +61,7 @@ router.delete('/:platform', async (req: WorkspaceRequest, res: Response): Promis
 
 router.get('/facebook/status', async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
-    const status = await getFacebookBotStatus(req.workspaceId!);
+    const status = await getFacebookBotStatus(req.workspaceId ?? 0);
     res.json(status);
   } catch {
     res.status(500).json({ error: 'Lỗi máy chủ' });
@@ -104,7 +113,7 @@ router.post('/facebook/list-pages', async (req: WorkspaceRequest, res: Response)
 router.post('/facebook/connect', async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
     const { pageId, accessToken } = req.body;
-    const verified = await saveFacebookConnection(pageId, accessToken, req.workspaceId!);
+    const verified = await saveFacebookConnection(pageId, accessToken, req.workspaceId ?? 0);
     res.json({
       success: true,
       pageName: verified.pageName,
@@ -121,7 +130,7 @@ router.post('/facebook/connect', async (req: WorkspaceRequest, res: Response): P
 
 router.post('/facebook/test-bot', async (req: WorkspaceRequest, res: Response): Promise<void> => {
   try {
-    const status = await getFacebookBotStatus(req.workspaceId!);
+    const status = await getFacebookBotStatus(req.workspaceId ?? 0);
     if (!status.botReady) {
       res.status(400).json({ success: false, error: status.issues.join(' ') });
       return;
@@ -222,7 +231,7 @@ router.post('/facebook/callback', async (req: WorkspaceRequest, res: Response): 
       const want = String(preferredPageId).trim();
       const matched = pages.find((p: FbPageRow) => p.id === want);
       if (matched) {
-        await saveFacebookPage(matched, req.workspaceId!);
+        await saveFacebookPage(matched, req.workspaceId ?? 0);
         res.json({
           success: true,
           pages,
@@ -240,7 +249,7 @@ router.post('/facebook/callback', async (req: WorkspaceRequest, res: Response): 
     // Một Page → lưu luôn; nhiều Page → để frontend chọn
     if (pages.length === 1) {
       const page = pages[0];
-      await saveFacebookPage(page, req.workspaceId!);
+      await saveFacebookPage(page, req.workspaceId ?? 0);
 
       res.json({
         success: true,
@@ -276,7 +285,7 @@ router.post('/facebook/bind-page', async (req: WorkspaceRequest, res: Response):
       return;
     }
 
-    const verified = await saveFacebookConnection(pageId, token, req.workspaceId!);
+    const verified = await saveFacebookConnection(pageId, token, req.workspaceId ?? 0);
     res.json({ success: true, pageName: verified.pageName, pageId: verified.pageId, fanCount: verified.fanCount });
   } catch (error) {
     res.status(500).json({ error: 'Lỗi máy chủ' });
@@ -291,7 +300,7 @@ router.post('/facebook/select-page', async (req: WorkspaceRequest, res: Response
       where: {
         platform_workspaceId: {
           platform: 'facebook',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: { accessToken: pageAccessToken, pageName, pageId, status: 'CONNECTED' },
@@ -354,7 +363,7 @@ router.post('/email/connect', async (req: WorkspaceRequest, res: Response): Prom
       where: {
         platform_workspaceId: {
           platform: 'email',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: { accessToken: config, pageName: email, status: 'CONNECTED' },
@@ -455,7 +464,7 @@ router.post('/zalo/callback', async (req: WorkspaceRequest, res: Response): Prom
       where: {
         platform_workspaceId: {
           platform: 'zalo',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: {
@@ -503,7 +512,7 @@ router.post('/zalo/quick-connect', async (req: WorkspaceRequest, res: Response):
       where: {
         platform_workspaceId: {
           platform: 'zalo',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: { accessToken, pageName: oaName, pageId: oaData.data?.oa_id?.toString(), status: 'CONNECTED' },
@@ -561,7 +570,7 @@ router.post('/mailchimp/connect', async (req: WorkspaceRequest, res: Response): 
       where: {
         platform_workspaceId: {
           platform: 'mailchimp',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: {
@@ -619,7 +628,7 @@ router.post('/telegram/connect', async (req: WorkspaceRequest, res: Response): P
       where: {
         platform_workspaceId: {
           platform: 'telegram',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: {
@@ -688,7 +697,7 @@ router.post('/reddit/connect', async (req: WorkspaceRequest, res: Response): Pro
       where: {
         platform_workspaceId: {
           platform: 'reddit',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: {
@@ -744,7 +753,7 @@ router.post('/moz/connect', async (req: WorkspaceRequest, res: Response): Promis
       where: {
         platform_workspaceId: {
           platform: 'moz',
-          workspaceId: req.workspaceId!
+          workspaceId: req.workspaceId ?? 0
         }
       },
       update: {

@@ -20,6 +20,8 @@ type CskhConfig = {
   autoCareEmailSubject?: string | null;
   autoCareEmailBody?: string | null;
   autoCareChannels?: string | null;
+  knowledgeFiles?: string | null;
+  knowledgeUrls?: string | null;
 };
 
 type ChatMessage = {
@@ -63,6 +65,14 @@ export default function CskhSettingsPage() {
   const [followUpDelayHours, setFollowUpDelayHours] = useState(0);
   const [followUpEmailSubject, setFollowUpEmailSubject] = useState('');
   const [followUpEmailBody, setFollowUpEmailBody] = useState('');
+
+  const [knowledgeFiles, setKnowledgeFiles] = useState<any[]>([]);
+  const [knowledgeUrls, setKnowledgeUrls] = useState<any[]>([]);
+  const [urlInput, setUrlInput] = useState('');
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [crawlingUrl, setCrawlingUrl] = useState(false);
+  const [resettingKnowledge, setResettingKnowledge] = useState(false);
+
 
   // AI CRM Auto-care states
   const [autoCareEnabled, setAutoCareEnabled] = useState(false);
@@ -125,6 +135,19 @@ export default function CskhSettingsPage() {
         setFollowUpDelayHours(data.followUpDelayHours || 0);
         setFollowUpEmailSubject(data.followUpEmailSubject || '');
         setFollowUpEmailBody(data.followUpEmailBody || '');
+        
+        // Parse knowledge files & urls
+        try {
+          setKnowledgeFiles(data.knowledgeFiles ? JSON.parse(data.knowledgeFiles) : []);
+        } catch (e) {
+          setKnowledgeFiles([]);
+        }
+
+        try {
+          setKnowledgeUrls(data.knowledgeUrls ? JSON.parse(data.knowledgeUrls) : []);
+        } catch (e) {
+          setKnowledgeUrls([]);
+        }
         
         // Parse channels
         const chString = data.notificationChannels || '';
@@ -287,6 +310,89 @@ export default function CskhSettingsPage() {
     setChannels(prev => ({ ...prev, [key]: val }));
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingFile(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem('token');
+      const workspaceId = localStorage.getItem('workspaceId');
+      
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `${window.location.origin.replace(':3000', ':4000')}/api` : 'http://localhost:4000/api');
+      const res = await fetch(`${baseUrl}/cskh/knowledge/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'x-workspace-id': workspaceId || '',
+        },
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'Lỗi tải tệp tin tri thức');
+      }
+
+      setSuccess(result.message || 'Tải lên tài liệu thành công.');
+      loadConfig();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi tải tài liệu lên.');
+    } finally {
+      setUploadingFile(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleCrawlWebsite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!urlInput.trim() || crawlingUrl) return;
+
+    setCrawlingUrl(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const result = await apiJson<any>('/cskh/knowledge/crawl', {
+        method: 'POST',
+        body: JSON.stringify({ url: urlInput.trim() }),
+      });
+
+      setSuccess(result.message || 'Cào dữ liệu website thành công.');
+      setUrlInput('');
+      loadConfig();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi cào dữ liệu từ URL.');
+    } finally {
+      setCrawlingUrl(false);
+    }
+  };
+
+  const handleResetKnowledge = async () => {
+    if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ tri thức hiện tại không? Hành động này sẽ xóa sạch tài liệu và liên kết website đã học.')) return;
+    
+    setResettingKnowledge(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      await apiJson('/cskh/knowledge/reset', { method: 'POST' });
+      setSuccess('Đã đặt lại và xóa sạch tri thức doanh nghiệp.');
+      loadConfig();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi xóa tri thức.');
+    } finally {
+      setResettingKnowledge(false);
+    }
+  };
+
+
   const filteredSessions = sessions.filter(session => {
     const text = searchTerm.toLowerCase();
     const customerName = session.customer?.name?.toLowerCase() || '';
@@ -377,18 +483,114 @@ export default function CskhSettingsPage() {
 
           {/* AI Chatbot Knowledge Base */}
           {aiChatbotEnabled && (
-            <div className="space-y-2.5 animate-fadeIn">
-              <h4 className="font-bold text-[#f25c22] text-sm uppercase tracking-wider">Tài liệu tri thức doanh nghiệp (Knowledge Base)</h4>
-              <textarea
-                value={knowledgeBaseText}
-                onChange={(e) => setKnowledgeBaseText(e.target.value)}
-                placeholder="Nhập thông tin sản phẩm, chính sách hoàn tiền, giờ mở cửa... AI sẽ dựa vào thông tin này để tư vấn khách hàng tự động."
-                rows={6}
-                className="w-full bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-lg p-4 text-slate-800 text-sm focus:outline-none transition placeholder-slate-400"
-              />
-              <p className="text-[10px] text-slate-400">Mẹo: Tài liệu viết càng chi tiết, chatbot trả lời khách hàng càng chính xác và tự nhiên.</p>
+            <div className="space-y-4 animate-fadeIn border-b border-orange-100/50 pb-6">
+              <div className="flex justify-between items-center">
+                <h4 className="font-bold text-[#f25c22] text-sm uppercase tracking-wider flex items-center gap-1.5">
+                  📚 Kho tri thức đa kênh (Knowledge Base)
+                </h4>
+                <button
+                  type="button"
+                  onClick={handleResetKnowledge}
+                  disabled={resettingKnowledge}
+                  className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 transition"
+                >
+                  {resettingKnowledge ? 'Đang xóa...' : 'Xóa toàn bộ tri thức'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Cột Trái: Text Area nhập thủ công */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase">Soạn thảo văn bản thủ công</label>
+                  <textarea
+                    value={knowledgeBaseText}
+                    onChange={(e) => setKnowledgeBaseText(e.target.value)}
+                    placeholder="Nhập thông tin sản phẩm, chính sách hoàn tiền, giờ mở cửa... AI sẽ dựa vào thông tin này để tư vấn khách hàng tự động."
+                    rows={12}
+                    className="w-full bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-xl p-4 text-slate-800 text-sm focus:outline-none transition placeholder-slate-400"
+                  />
+                  <p className="text-[10px] text-slate-400">Bạn có thể tự do chỉnh sửa văn bản này bất kỳ lúc nào.</p>
+                </div>
+
+                {/* Cột Phải: Upload File và Crawl Website URL */}
+                <div className="space-y-6">
+                  {/* Tải lên File */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">Tải lên tệp tài liệu (PDF, DOCX, TXT)</label>
+                    <div className="relative border-2 border-dashed border-orange-200 hover:border-[#f25c22] rounded-xl p-4 transition bg-orange-50/5 flex flex-col items-center justify-center cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={handleFileUpload}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        disabled={uploadingFile}
+                      />
+                      <span className="text-2xl mb-1">📄</span>
+                      <span className="text-xs font-bold text-slate-600">
+                        {uploadingFile ? 'Đang trích xuất tri thức...' : 'Nhấp hoặc kéo thả tệp tin vào đây'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-1">Hỗ trợ PDF, Word (.docx) và Văn bản (.txt) tối đa 5MB</span>
+                    </div>
+
+                    {/* Danh sách file đã tải lên */}
+                    {knowledgeFiles.length > 0 && (
+                      <div className="space-y-1 mt-2 max-h-[110px] overflow-y-auto pr-1">
+                        <div className="text-[10px] font-bold text-slate-500">Tài liệu đã học ({knowledgeFiles.length}):</div>
+                        {knowledgeFiles.map((f, idx) => (
+                          <div key={idx} className="flex justify-between items-center text-[11px] bg-slate-50 border border-slate-100 rounded-lg p-2">
+                            <span className="font-semibold text-slate-700 truncate max-w-[200px]" title={f.name}>{f.name}</span>
+                            <span className="text-slate-400 font-mono text-[9px]">
+                              {(f.size / 1024).toFixed(1)} KB • {new Date(f.learnedAt).toLocaleDateString('vi-VN')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cào URL Website */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">Cào tri thức từ liên kết trang web (Website URL)</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        placeholder="https://example.com/chinh-sach-mua-hang"
+                        className="flex-1 bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-lg px-3 py-2 text-slate-800 text-xs focus:outline-none transition placeholder-slate-400"
+                        disabled={crawlingUrl}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCrawlWebsite}
+                        disabled={crawlingUrl || !urlInput.trim()}
+                        className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-lg text-xs transition shadow flex items-center gap-1"
+                      >
+                        {crawlingUrl ? 'Đang cào...' : 'Cào dữ liệu'}
+                      </button>
+                    </div>
+
+                    {/* Danh sách URL đã học */}
+                    {knowledgeUrls.length > 0 && (
+                      <div className="space-y-1 mt-2 max-h-[110px] overflow-y-auto pr-1">
+                        <div className="text-[10px] font-bold text-slate-500">Liên kết đã học ({knowledgeUrls.length}):</div>
+                        {knowledgeUrls.map((u, idx) => (
+                          <div key={idx} className="flex flex-col bg-slate-50 border border-slate-100 rounded-lg p-2 text-[11px]">
+                            <div className="font-semibold text-slate-700 truncate" title={u.title}>{u.title}</div>
+                            <div className="flex justify-between items-center text-slate-400 text-[9px] mt-1 font-mono">
+                              <span className="truncate max-w-[200px]">{u.url}</span>
+                              <span>{new Date(u.learnedAt).toLocaleDateString('vi-VN')}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
+
 
           {/* AI CRM Auto-Care Settings */}
           <div className="space-y-4 pt-4 border-t border-orange-100/50">

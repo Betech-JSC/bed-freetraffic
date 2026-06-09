@@ -1,13 +1,14 @@
 import { Router, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { AuthRequest } from '../middleware/auth';
+import { WorkspaceRequest } from '../middleware/workspace';
 import { buildRecommendations, enhanceWithOpenAi } from '../services/aiRecommendations';
 
 const router = Router();
-router.use(authenticate);
+// authenticate + workspaceMiddleware are applied at index.ts level
 
-router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/', async (req: WorkspaceRequest, res: Response): Promise<void> => {
   const withAi = req.query.ai === '1' || req.query.ai === 'true';
-  const items = await buildRecommendations();
+  const items = await buildRecommendations(req.workspaceId);
   if (!withAi) {
     res.json({ items, summary: null });
     return;

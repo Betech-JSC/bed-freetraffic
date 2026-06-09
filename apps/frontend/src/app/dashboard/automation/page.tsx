@@ -473,27 +473,27 @@ export default function AutomationPage() {
             </div>
           </div>
           
-          <div className="rounded-2xl bg-slate-950 border border-orange-500/25 shadow-lg shadow-orange-500/5 p-4 h-[420px] flex flex-col">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
+          <div className="rounded-2xl bg-white border border-orange-200/60 shadow-sm p-4 h-[420px] flex flex-col">
+            <div className="flex items-center justify-between border-b border-orange-100 pb-2.5 mb-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 font-mono tracking-wider ml-1">betech_bot_stream.log</span>
+                <span className="text-[10px] text-slate-500 font-mono tracking-wider ml-1">betech_bot_stream.log</span>
               </div>
-              <span className="text-[9px] text-orange-500 font-mono tracking-widest animate-pulse font-bold">LIVE</span>
+              <span className="text-[9px] text-brand font-mono tracking-widest animate-pulse font-bold">LIVE</span>
             </div>
             
-            <div className="flex-1 overflow-y-auto font-mono text-[10px] space-y-2 pr-1 custom-scrollbar text-white">
+            <div className="flex-1 overflow-y-auto font-mono text-[10px] space-y-2 pr-1 custom-scrollbar text-slate-700">
               {visibleLogs.length === 0 && (
-                <div className="text-slate-500 text-center mt-12 italic">
+                <div className="text-slate-400 text-center mt-12 italic">
                   {t('Đang đợi hoạt động của hệ thống bot...')}
-                  <span className="inline-block w-1.5 h-3 bg-orange-500 ml-1 align-middle animate-cursor-blink"></span>
+                  <span className="inline-block w-1.5 h-3 bg-brand ml-1 align-middle animate-cursor-blink"></span>
                 </div>
               )}
               {visibleLogs.map(log => (
-                <div key={log.id} className="flex gap-1.5 items-start leading-relaxed border-b border-slate-850/30 pb-1">
+                <div key={log.id} className="flex gap-1.5 items-start leading-relaxed border-b border-slate-100 pb-1">
                   <span className="text-slate-400 shrink-0 select-none">[{new Date(log.createdAt).toLocaleTimeString()}]</span>
                   <div className="flex-1">
-                    <span className="text-orange-400 font-bold">[{log.task?.name ?? 'Bot'}]</span>{' '}
-                    <span className={log.status === 'SUCCESS' ? 'text-white' : 'text-red-400 font-bold'}>
+                    <span className="text-brand font-bold">[{log.task?.name ?? 'Bot'}]</span>{' '}
+                    <span className={log.status === 'SUCCESS' ? 'text-slate-700' : 'text-rose-600 font-bold'}>
                       {log.message}
                     </span>
                   </div>

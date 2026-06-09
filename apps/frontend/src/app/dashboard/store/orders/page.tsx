@@ -103,26 +103,26 @@ export default function OrdersPage() {
 
       {/* Revenue Widget */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-900 border border-slate-850 p-5 rounded-xl space-y-2 shadow-lg">
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Tổng doanh thu thực tế</span>
+        <div className="card p-5 space-y-2">
+          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Tổng doanh thu thực tế</span>
           <h2 className="text-2xl font-extrabold text-[#f25c22]">
             {totalRevenue.toLocaleString('vi-VN')} VND
           </h2>
-          <p className="text-[10px] text-slate-500">Tính từ các đơn hàng có trạng thái ĐÃ THANH TOÁN (PAID).</p>
+          <p className="text-[10px] text-slate-400">Tính từ các đơn hàng có trạng thái ĐÃ THANH TOÁN (PAID).</p>
         </div>
-        <div className="bg-slate-900 border border-slate-850 p-5 rounded-xl space-y-2 shadow-lg">
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Số đơn hàng đã bán</span>
-          <h2 className="text-2xl font-extrabold text-emerald-400">
+        <div className="card p-5 space-y-2">
+          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Số đơn hàng đã bán</span>
+          <h2 className="text-2xl font-extrabold text-brand">
             {orders.filter(o => o.status === 'PAID').length} đơn
           </h2>
-          <p className="text-[10px] text-slate-500">Tổng số lượng đơn chuyển khoản/thẻ tín dụng thành công.</p>
+          <p className="text-[10px] text-slate-400">Tổng số lượng đơn chuyển khoản/thẻ tín dụng thành công.</p>
         </div>
-        <div className="bg-slate-900 border border-slate-850 p-5 rounded-xl space-y-2 shadow-lg">
-          <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Số đơn đang chờ xử lý</span>
-          <h2 className="text-2xl font-extrabold text-amber-400">
+        <div className="card p-5 space-y-2">
+          <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Số đơn đang chờ xử lý</span>
+          <h2 className="text-2xl font-extrabold text-amber-600">
             {orders.filter(o => o.status === 'PENDING').length} đơn
           </h2>
-          <p className="text-[10px] text-slate-500">Khách đặt hàng nhưng chưa quét QR/thanh toán thẻ.</p>
+          <p className="text-[10px] text-slate-400">Khách đặt hàng nhưng chưa quét QR/thanh toán thẻ.</p>
         </div>
       </div>
 
@@ -134,9 +134,10 @@ export default function OrdersPage() {
 
       {/* Gateway credentials setup modal */}
       {showConfig && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleSaveConfig} className="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-lg space-y-4 shadow-2xl overflow-y-auto max-h-[85vh]">
-            <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-2 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleSaveConfig} className="card p-6 w-full max-w-lg space-y-4 shadow-2xl relative overflow-y-auto max-h-[85vh]">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand to-orange-500"></div>
+            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
               Kết nối cổng thanh toán Web All-in-One
             </h3>
 
@@ -152,75 +153,75 @@ export default function OrdersPage() {
             )}
 
             <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[#f25c22]">1. Cấu hình Cổng PayOS (VietQR ngân hàng Việt Nam)</h4>
-              <div className="space-y-2 pl-3 border-l-2 border-slate-800">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-brand">1. Cấu hình Cổng PayOS (VietQR ngân hàng Việt Nam)</h4>
+              <div className="space-y-2 pl-3 border-l-2 border-slate-100">
                 <div className="space-y-1">
-                  <label className="text-[11px] text-slate-400">PayOS Client ID</label>
+                  <label className="label mb-0.5 text-[11px]">PayOS Client ID</label>
                   <input
                     type="text"
                     value={configForm.payosClientId}
                     onChange={(e) => setConfigForm({ ...configForm, payosClientId: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-white"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] text-slate-400">PayOS API Key</label>
+                  <label className="label mb-0.5 text-[11px]">PayOS API Key</label>
                   <input
                     type="password"
                     value={configForm.payosApiKey}
                     onChange={(e) => setConfigForm({ ...configForm, payosApiKey: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-white"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] text-slate-400">PayOS Checksum Key</label>
+                  <label className="label mb-0.5 text-[11px]">PayOS Checksum Key</label>
                   <input
                     type="password"
                     value={configForm.payosChecksumKey}
                     onChange={(e) => setConfigForm({ ...configForm, payosChecksumKey: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-white"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
                   />
                 </div>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[#f25c22]">2. Cấu hình Cổng Stripe (Thẻ tín dụng Quốc tế)</h4>
-              <div className="space-y-2 pl-3 border-l-2 border-slate-800">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-brand">2. Cấu hình Cổng Stripe (Thẻ tín dụng Quốc tế)</h4>
+              <div className="space-y-2 pl-3 border-l-2 border-slate-100">
                 <div className="space-y-1">
-                  <label className="text-[11px] text-slate-400">Stripe Secret Key</label>
+                  <label className="label mb-0.5 text-[11px]">Stripe Secret Key</label>
                   <input
                     type="password"
                     value={configForm.stripeSecretKey}
                     onChange={(e) => setConfigForm({ ...configForm, stripeSecretKey: e.target.value })}
                     placeholder="sk_test_..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-white"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[11px] text-slate-400">Stripe Webhook Secret</label>
+                  <label className="label mb-0.5 text-[11px]">Stripe Webhook Secret</label>
                   <input
                     type="password"
                     value={configForm.stripeWebhookSecret}
                     onChange={(e) => setConfigForm({ ...configForm, stripeWebhookSecret: e.target.value })}
                     placeholder="whsec_..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-white"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowConfig(false)}
-                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-sm transition"
+                className="btn-secondary px-4 py-1.5 text-sm"
               >
                 Hủy
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg text-sm font-semibold transition"
+                className="btn-primary px-4 py-1.5 text-sm"
               >
                 Lưu cấu hình
               </button>
@@ -230,21 +231,21 @@ export default function OrdersPage() {
       )}
 
       {/* Orders Table */}
-      <div className="bg-slate-900 border border-slate-850 rounded-xl overflow-hidden shadow-lg">
+      <div className="card overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#f25c22]"></div>
           </div>
         ) : orders.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
-            <p className="text-sm">Chưa có giao dịch phát sinh nào.</p>
-            <p className="text-xs text-slate-655 mt-1">Đơn đặt hàng sẽ tự xuất hiện sau khi khách quét mã QR/thanh toán thẻ.</p>
+            <p className="text-sm font-semibold">Chưa có giao dịch phát sinh nào.</p>
+            <p className="text-xs text-slate-400 mt-1">Đơn đặt hàng sẽ tự xuất hiện sau khi khách quét mã QR/thanh toán thẻ.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold">
+                <tr className="border-b border-slate-100 bg-slate-50 text-slate-650 uppercase tracking-wider font-bold">
                   <th className="py-3.5 px-4">Mã đơn hàng</th>
                   <th className="py-3.5 px-4">Thời gian</th>
                   <th className="py-3.5 px-4">Khách hàng</th>
@@ -254,20 +255,20 @@ export default function OrdersPage() {
                   <th className="py-3.5 px-4 text-center">Trạng thái</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-850">
+              <tbody className="divide-y divide-slate-100">
                 {orders.map((o) => (
-                  <tr key={o.id} className="hover:bg-slate-950/20 text-slate-300">
-                    <td className="py-3.5 px-4 font-bold text-white font-mono whitespace-nowrap">
+                  <tr key={o.id} className="hover:bg-brand-light/30 text-slate-700 transition-colors duration-150">
+                    <td className="py-3.5 px-4 font-bold text-slate-800 font-mono whitespace-nowrap">
                       {o.orderNumber}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
                       {new Date(o.createdAt).toLocaleString('vi-VN')}
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="font-semibold text-slate-200">{o.customer?.name}</div>
-                      <div className="text-[10px] text-slate-500">{o.customer?.email}</div>
+                      <div className="font-bold text-slate-700">{o.customer?.name}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold">{o.customer?.email}</div>
                     </td>
-                    <td className="py-3.5 px-4 font-extrabold text-slate-200 whitespace-nowrap">
+                    <td className="py-3.5 px-4 font-extrabold text-slate-800 whitespace-nowrap">
                       {o.totalAmount.toLocaleString('vi-VN')} VND
                     </td>
                     <td className="py-3.5 px-4 font-semibold text-xs whitespace-nowrap">
@@ -277,7 +278,7 @@ export default function OrdersPage() {
                       {o.gatewayTxnId || '—'}
                     </td>
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${o.status === 'PAID' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : o.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${o.status === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : o.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
                         {o.status === 'PAID' ? 'Đã thanh toán' : o.status === 'PENDING' ? 'Chờ thanh toán' : 'Đã hủy'}
                       </span>
                     </td>

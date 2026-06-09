@@ -113,27 +113,36 @@ export default function WorkspaceSwitcher() {
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-left text-white hover:bg-white/10 active:scale-[0.98] transition-all duration-200 group"
+        className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-orange-50/40 border border-orange-100/80 text-left text-slate-800 hover:bg-orange-50 active:scale-[0.98] transition-all duration-200 group"
       >
         <div className="flex items-center gap-2 overflow-hidden">
-          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-md">
+          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-brand to-orange-500 flex items-center justify-center font-bold text-xs text-white shrink-0 shadow-md">
             {currentWorkspace?.name ? currentWorkspace.name.substring(0, 2).toUpperCase() : 'WS'}
           </div>
           <div className="flex flex-col truncate">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
               {t('workspace')}
             </span>
-            <span className="text-sm font-medium truncate leading-tight">
+            <span className="text-sm font-semibold text-slate-700 truncate leading-tight">
               {currentWorkspace?.name || t('loading')}
             </span>
           </div>
         </div>
+        <svg
+          className={`w-4 h-4 text-slate-400 transition-transform duration-200 group-hover:text-brand ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute left-0 right-0 mt-2 z-50 rounded-xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2.5 py-1.5 border-b border-white/5">
+        <div className="absolute left-0 right-0 mt-2 z-50 rounded-xl bg-white border border-orange-100 shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2.5 py-1.5 border-b border-slate-100">
             {t('workspaceSelect')}
           </div>
 
@@ -147,7 +156,7 @@ export default function WorkspaceSwitcher() {
                   className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-all text-left ${
                     isSelected
                       ? 'bg-brand/10 text-brand font-medium'
-                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                      : 'text-slate-600 hover:bg-orange-50 hover:text-brand'
                   }`}
                 >
                   <span className="truncate">{ws.name}</span>
@@ -160,7 +169,7 @@ export default function WorkspaceSwitcher() {
           </div>
 
           {error && (
-            <div className="px-2.5 py-1.5 text-xs text-red-400 bg-red-500/10 rounded-lg mb-2">
+            <div className="px-2.5 py-1.5 text-xs text-red-500 bg-red-50 rounded-lg mb-2">
               {error}
             </div>
           )}
@@ -169,12 +178,12 @@ export default function WorkspaceSwitcher() {
           {!showNewForm ? (
             <button
               onClick={() => setShowNewForm(true)}
-              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-brand hover:text-brand-light hover:bg-white/5 rounded-lg transition-all text-left"
+              className="w-full flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-brand hover:text-brand-hover hover:bg-orange-50 rounded-lg transition-all text-left"
             >
               {t('workspaceCreate')}
             </button>
           ) : (
-            <form onSubmit={handleCreateWorkspace} className="p-2 border-t border-white/5 space-y-2 mt-2">
+            <form onSubmit={handleCreateWorkspace} className="p-2 border-t border-slate-100 space-y-2 mt-2">
               <input
                 type="text"
                 value={newWorkspaceName}
@@ -182,14 +191,14 @@ export default function WorkspaceSwitcher() {
                 placeholder={t('workspacePlaceholder')}
                 required
                 disabled={loading}
-                className="w-full bg-slate-950 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand transition-all"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand transition-all"
               />
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => setShowNewForm(false)}
                   disabled={loading}
-                  className="px-2.5 py-1 text-[10px] font-semibold text-slate-400 hover:text-white transition-colors"
+                  className="px-2.5 py-1 text-[10px] font-semibold text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   {t('cancel')}
                 </button>

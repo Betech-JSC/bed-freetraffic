@@ -39,6 +39,31 @@ export default function AbTestsPage() {
   const [landingPageAId, setLandingPageAId] = useState('');
   const [landingPageBId, setLandingPageBId] = useState('');
   const [error, setError] = useState('');
+  const [selectedTestStats, setSelectedTestStats] = useState<any>(null);
+
+  const fetchStats = async (id: number) => {
+    try {
+      const data = await apiJson<any>(`/abtests/${id}/stats`);
+      setSelectedTestStats(data);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t('Không tải được thống kê chi tiết'));
+    }
+  };
+
+  const forceSelectWinner = async (id: number, winner: 'A' | 'B') => {
+    setError('');
+    try {
+      await apiJson(`/abtests/${id}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winner }),
+      });
+      setSelectedTestStats(null);
+      load();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : t('Không chốt được Winner'));
+    }
+  };
 
   const load = async () => {
     setError('');
@@ -251,7 +276,14 @@ export default function AbTestsPage() {
               
               return (
                 <tr key={test.id}>
-                  <td className="font-semibold text-white">{test.name}</td>
+                  <td className="font-semibold text-white">
+                    <button
+                      onClick={() => fetchStats(test.id)}
+                      className="hover:underline text-left text-[#f25c22] font-extrabold hover:text-[#d94d1a]"
+                    >
+                      {test.name}
+                    </button>
+                  </td>
                   <td>
                     <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${isLp ? 'bg-sky-900/30 text-sky-400 border border-sky-800/40' : 'bg-purple-900/30 text-purple-400 border border-purple-800/40'}`}>
                       {isLp ? 'Landing Page' : 'Social Post'}
@@ -295,27 +327,37 @@ export default function AbTestsPage() {
                     )}
                   </td>
                   <td className="space-y-1 whitespace-nowrap">
-                    {test.status === 'RUNNING' && (
-                      <div className="flex flex-col gap-1.5">
-                        {/* Simulation triggers for debugging/manual testing */}
-                        {!isLp && (
-                          <div className="flex gap-1 flex-wrap">
-                            <button type="button" className="btn-secondary text-[10px] px-2 py-0.5" onClick={() => track(test.id, 'impression', 'A')}>
-                              +imp A
-                            </button>
-                            <button type="button" className="btn-secondary text-[10px] px-2 py-0.5" onClick={() => track(test.id, 'impression', 'B')}>
-                              +imp B
-                            </button>
-                            <button type="button" className="text-[10px] text-brand border border-slate-800 hover:bg-slate-900 rounded px-1.5 py-0.5" onClick={() => track(test.id, 'click', 'A')}>
-                              +click A
-                            </button>
-                            <button type="button" className="text-[10px] text-brand border border-slate-800 hover:bg-slate-900 rounded px-1.5 py-0.5" onClick={() => track(test.id, 'click', 'B')}>
-                              +click B
-                            </button>
-                          </div>
-                        )}
-                        <button type="button" className="btn-primary text-xs w-full py-1 text-center" onClick={() => complete(test.id)}>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs px-2.5 py-1"
+                        onClick={() => fetchStats(test.id)}
+                      >
+                        {t('Chi tiết')}
+                      </button>
+                      {test.status === 'RUNNING' && (
+                        <button
+                          type="button"
+                          className="btn-primary text-xs px-2.5 py-1"
+                          onClick={() => complete(test.id)}
+                        >
                           {t('Kết thúc')}
+                        </button>
+                      )}
+                    </div>
+                    {test.status === 'RUNNING' && !isLp && (
+                      <div className="flex gap-1 flex-wrap mt-1.5">
+                        <button type="button" className="btn-secondary text-[9px] px-1 py-0.5" onClick={() => track(test.id, 'impression', 'A')}>
+                          +imp A
+                        </button>
+                        <button type="button" className="btn-secondary text-[9px] px-1 py-0.5" onClick={() => track(test.id, 'impression', 'B')}>
+                          +imp B
+                        </button>
+                        <button type="button" className="text-[9px] text-[#f25c22] border border-orange-200 hover:bg-orange-50 rounded px-1.5 py-0.5 font-bold transition-all" onClick={() => track(test.id, 'click', 'A')}>
+                          +click A
+                        </button>
+                        <button type="button" className="text-[9px] text-[#f25c22] border border-orange-200 hover:bg-orange-50 rounded px-1.5 py-0.5 font-bold transition-all" onClick={() => track(test.id, 'click', 'B')}>
+                          +click B
                         </button>
                       </div>
                     )}
@@ -326,6 +368,125 @@ export default function AbTestsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Modal báo cáo A/B Test chi tiết */}
+      {selectedTestStats && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-700 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand to-orange-500"></div>
+            <button
+              onClick={() => setSelectedTestStats(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 text-lg font-bold"
+            >
+              ✕
+            </button>
+            
+            <h3 className="text-lg font-black text-slate-800 mb-1">{selectedTestStats.test.name}</h3>
+            <p className="text-slate-500 text-xs mb-6">Thống kê chi tiết & Phân tích độ tin cậy từ hệ thống</p>
+            
+            {/* Cards so sánh */}
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Variant A Card */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 relative overflow-hidden">
+                <span className="absolute top-0 right-0 bg-slate-200 text-slate-600 px-2.5 py-0.5 text-[9px] font-bold rounded-bl-lg">BIẾN THỂ A</span>
+                <h4 className="font-extrabold text-slate-700 text-sm mb-3 truncate">
+                  {selectedTestStats.test.landingPageA?.title || selectedTestStats.test.templateA?.title || 'Variant A'}
+                </h4>
+                <div className="grid grid-cols-3 gap-1.5 text-center mt-2">
+                  <div>
+                    <div className="text-slate-500 text-[9px] font-bold uppercase">Lượt xem</div>
+                    <div className="text-sm font-bold text-slate-800 font-mono mt-0.5">{selectedTestStats.test.impressionsA}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500 text-[9px] font-bold uppercase">Click</div>
+                    <div className="text-sm font-bold text-slate-800 font-mono mt-0.5">{selectedTestStats.test.clicksA}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500 text-[9px] font-bold uppercase">Tỉ lệ CR</div>
+                    <div className="text-sm font-black text-[#f25c22] font-mono mt-0.5">{(selectedTestStats.stats.crA * 100).toFixed(2)}%</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Variant B Card */}
+              <div className="bg-brand-light/30 border border-orange-100/80 rounded-xl p-5 relative overflow-hidden">
+                <span className="absolute top-0 right-0 bg-[#f25c22]/10 text-[#f25c22] px-2.5 py-0.5 text-[9px] font-bold rounded-bl-lg">BIẾN THỂ B</span>
+                <h4 className="font-extrabold text-slate-700 text-sm mb-3 truncate">
+                  {selectedTestStats.test.landingPageB?.title || selectedTestStats.test.templateB?.title || 'Variant B'}
+                </h4>
+                <div className="grid grid-cols-3 gap-1.5 text-center mt-2">
+                  <div>
+                    <div className="text-slate-500 text-[9px] font-bold uppercase">Lượt xem</div>
+                    <div className="text-sm font-bold text-slate-800 font-mono mt-0.5">{selectedTestStats.test.impressionsB}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500 text-[9px] font-bold uppercase">Click</div>
+                    <div className="text-sm font-bold text-slate-800 font-mono mt-0.5">{selectedTestStats.test.clicksB}</div>
+                  </div>
+                  <div>
+                    <div className="text-slate-500 text-[9px] font-bold uppercase">Tỉ lệ CR</div>
+                    <div className="text-sm font-black text-[#f25c22] font-mono mt-0.5">{(selectedTestStats.stats.crB * 100).toFixed(2)}%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Phân tích khoa học */}
+            <div className="mt-4 bg-orange-50/20 border border-orange-100/50 rounded-xl p-4 space-y-3">
+              <h4 className="font-bold text-slate-500 text-[10px] uppercase tracking-wider">Báo cáo kiểm thử thống kê Chi-Square (χ²)</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-1 text-center md:text-left">
+                <div>
+                  <div className="text-slate-500 text-[10px]">Tỷ lệ cải thiện</div>
+                  <div className={`text-base font-black font-mono mt-0.5 ${selectedTestStats.stats.improvement >= 0 ? 'text-[#f25c22]' : 'text-rose-500'}`}>
+                    {selectedTestStats.stats.improvement >= 0 ? '+' : ''}{selectedTestStats.stats.improvement.toFixed(1)}%
+                  </div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-[10px]">Độ tin cậy</div>
+                  <div className="text-base font-black text-brand mt-0.5">{selectedTestStats.stats.confidenceLevel}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-[10px]">Trị số Chi-Square</div>
+                  <div className="text-base font-black font-mono text-slate-700 mt-0.5">{selectedTestStats.stats.chiSquare.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div className="text-slate-500 text-[10px]">Ý nghĩa thống kê</div>
+                  <div className={`text-xs font-bold mt-1 ${selectedTestStats.stats.isSignificant ? 'text-brand' : 'text-slate-500'}`}>
+                    {selectedTestStats.stats.isSignificant ? 'Có ý nghĩa (p < 0.05)' : 'Không đáng kể'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 text-xs text-slate-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                <div>
+                  Trạng thái hiện tại: {selectedTestStats.test.winner ? (
+                    <span className="text-brand font-bold uppercase">Đã chốt (Winner: {selectedTestStats.test.winner === 'tie' ? 'Hòa' : `Mẫu ${selectedTestStats.test.winner}`})</span>
+                  ) : (
+                    <span>Đang chạy {selectedTestStats.stats.isSignificant ? `— AI khuyên dùng Biến thể ${selectedTestStats.stats.currentLeader}` : ''}</span>
+                  )}
+                </div>
+                
+                {selectedTestStats.test.status === 'RUNNING' && (
+                  <div className="flex gap-2 w-full md:w-auto">
+                    <button
+                      onClick={() => forceSelectWinner(selectedTestStats.test.id, 'A')}
+                      className="btn-secondary text-[10px] py-1 px-2.5 font-bold"
+                    >
+                      Chốt Winner A
+                    </button>
+                    <button
+                      onClick={() => forceSelectWinner(selectedTestStats.test.id, 'B')}
+                      className="btn-primary text-[10px] py-1 px-2.5 font-bold"
+                    >
+                      Chốt Winner B
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

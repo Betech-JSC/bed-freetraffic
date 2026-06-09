@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiJson } from '@/lib/api';
@@ -170,6 +170,8 @@ export default function LandingPageBuilder() {
   const [useCase, setUseCase] = useState<string>('saas');
 
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -1250,6 +1252,110 @@ export default function LandingPageBuilder() {
     setBlocks(blocks.map(b => (b.id === updated.id ? updated : b)));
   };
 
+  const moveBlock = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === blocks.length - 1) return;
+    const nextIdx = direction === 'up' ? index - 1 : index + 1;
+    const updated = [...blocks];
+    const temp = updated[index];
+    updated[index] = updated[nextIdx];
+    updated[nextIdx] = temp;
+    setBlocks(updated);
+  };
+
+  const duplicateBlock = (blockId: string) => {
+    const targetIdx = blocks.findIndex(b => b.id === blockId);
+    if (targetIdx === -1) return;
+    const target = blocks[targetIdx];
+    const duplicated: PageBlock = {
+      ...target,
+      id: `block-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      title: `${target.title} (Bản sao)`,
+    };
+    const updated = [...blocks];
+    updated.splice(targetIdx + 1, 0, duplicated);
+    setBlocks(updated);
+    setSelectedBlockId(duplicated.id);
+  };
+
+  const handleDragStart = (index: number) => {
+    setDraggedIdx(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIdx(index);
+  };
+
+  const handleDrop = (index: number) => {
+    if (draggedIdx === null || draggedIdx === index) return;
+    const updated = [...blocks];
+    const draggedBlock = updated[draggedIdx];
+    updated.splice(draggedIdx, 1);
+    updated.splice(index, 0, draggedBlock);
+    setBlocks(updated);
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+  };
+
+  const renderEditableText = (
+    block: PageBlock,
+    field: keyof PageBlock,
+    text: string,
+    className: string,
+    nestedIndex?: number,
+    nestedField?: string
+  ) => {
+    return (
+      <span
+        contentEditable
+        suppressContentEditableWarning
+        className={`${className} outline-none focus:ring-2 focus:ring-[#f25c22] focus:bg-orange-500/10 rounded px-1 transition-all cursor-text`}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+        onBlur={(e) => {
+          const newText = e.currentTarget.innerText;
+          if (newText === text) return;
+          
+          const updated = { ...block };
+          if (nestedIndex !== undefined) {
+            if (field === 'items' && Array.isArray(updated.items)) {
+              const newItems = [...updated.items];
+              newItems[nestedIndex] = newText;
+              updated.items = newItems;
+            } else if (field === 'reviews' && Array.isArray(updated.reviews) && nestedField) {
+              const newReviews = [...updated.reviews];
+              newReviews[nestedIndex] = {
+                ...newReviews[nestedIndex],
+                [nestedField]: newText
+              };
+              updated.reviews = newReviews;
+            } else if (field === 'faqs' && Array.isArray(updated.faqs) && nestedField) {
+              const newFaqs = [...updated.faqs];
+              newFaqs[nestedIndex] = {
+                ...newFaqs[nestedIndex],
+                [nestedField]: newText
+              };
+              updated.faqs = newFaqs;
+            }
+          } else {
+            (updated as any)[field] = newText;
+          }
+          updateBlock(updated);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+      >
+        {text}
+      </span>
+    );
+  };
+
   // Use Case 3: Call AI Generation Endpoint
   const handleGenerateAiLayout = async () => {
     if (!aiPromptInput.trim()) {
@@ -1374,18 +1480,51 @@ export default function LandingPageBuilder() {
                       {blocks.map((block, index) => (
                         <div
                           key={block.id}
+                          draggable
+                          onDragStart={() => handleDragStart(index)}
+                          onDragOver={(e) => handleDragOver(e, index)}
+                          onDrop={() => handleDrop(index)}
+                          onDragEnd={() => {
+                            setDraggedIdx(null);
+                            setDragOverIdx(null);
+                          }}
                           onClick={() => setSelectedBlockId(block.id)}
-                          className={`flex justify-between items-center px-3 py-2 rounded-lg border cursor-pointer transition ${selectedBlockId === block.id ? 'bg-orange-50 border-[#f25c22] text-[#f25c22]' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'}`}
+                          className={`flex justify-between items-center px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing transition ${selectedBlockId === block.id ? 'bg-orange-50 border-[#f25c22] text-[#f25c22]' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'} ${draggedIdx === index ? 'opacity-40 border-dashed border-[#f25c22]' : ''}`}
                         >
-                          <span className="text-xs font-medium capitalize">
-                            {index + 1}. Khối {block.type === 'countdown' ? 'Đếm ngược' : block.type === 'testimonials' ? 'Đánh giá' : block.type === 'faq' ? 'FAQ' : block.type}
-                          </span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
-                            className="text-slate-400 hover:text-rose-600 text-xs font-semibold"
-                          >
-                            Xóa
-                          </button>
+                          <div className="flex items-center gap-1.5 overflow-hidden">
+                            <span className="text-slate-400 select-none text-xs font-mono">⋮⋮</span>
+                            <span className="text-xs font-medium capitalize truncate">
+                              {index + 1}. {block.type === 'countdown' ? 'Đếm ngược' : block.type === 'testimonials' ? 'Đánh giá' : block.type === 'faq' ? 'FAQ' : block.type}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={(e) => { e.stopPropagation(); moveBlock(index, 'up'); }}
+                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent text-slate-500 hover:text-slate-900"
+                              title="Di chuyển lên"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === blocks.length - 1}
+                              onClick={(e) => { e.stopPropagation(); moveBlock(index, 'down'); }}
+                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent text-slate-500 hover:text-slate-900"
+                              title="Di chuyển xuống"
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
+                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition"
+                              title="Xóa khối"
+                            >
+                              &times;
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -2282,7 +2421,7 @@ export default function LandingPageBuilder() {
                 'w-[375px] border-x-4 border-slate-300'
               }`}
             >
-              {blocks.map((block) => {
+              {blocks.map((block, index) => {
                 const isMobileHidden = block.hiddenOnMobile;
                 
                 // Hide block completely in Mobile View if toggled
@@ -2291,10 +2430,71 @@ export default function LandingPageBuilder() {
                 return (
                   <div
                     key={block.id}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={() => handleDrop(index)}
                     onClick={() => setSelectedBlockId(block.id)}
                     style={{ backgroundColor: block.backgroundColor, color: block.textColor }}
-                    className={`relative p-8 cursor-pointer group border-2 ${selectedBlockId === block.id ? 'border-[#f25c22]' : 'border-transparent hover:border-slate-205'} ${isMobileHidden ? 'opacity-40 bg-slate-100/30' : ''} transition duration-205`}
+                    className={`relative p-8 cursor-pointer group border-2 ${selectedBlockId === block.id ? 'border-[#f25c22] ring-2 ring-[#f25c22]/10 shadow-lg' : dragOverIdx === index ? 'border-dashed border-2 border-orange-500' : 'border-transparent hover:border-slate-300'} ${isMobileHidden ? 'opacity-40 bg-slate-100/30' : ''} transition duration-205`}
                   >
+                    {/* Action Bar */}
+                    <div className="absolute -top-3.5 right-4 z-20 hidden group-hover:flex items-center gap-1.5 bg-white border border-slate-200 shadow-md rounded-lg px-2 py-1 select-none text-slate-700 animate-in fade-in duration-150">
+                      {/* Drag Handle */}
+                      <div
+                        draggable
+                        onDragStart={() => handleDragStart(index)}
+                        onDragEnd={() => {
+                          setDraggedIdx(null);
+                          setDragOverIdx(null);
+                        }}
+                        className="cursor-grab active:cursor-grabbing hover:bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 text-slate-500 hover:text-slate-800"
+                        title="Kéo thả sắp xếp"
+                      >
+                        ⋮⋮ Kéo
+                      </div>
+                      
+                      {/* Move Up */}
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={(e) => { e.stopPropagation(); moveBlock(index, 'up'); }}
+                        className="hover:bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold disabled:opacity-30 text-slate-500 hover:text-slate-850"
+                        title="Di chuyển lên"
+                      >
+                        ↑
+                      </button>
+
+                      {/* Move Down */}
+                      <button
+                        type="button"
+                        disabled={index === blocks.length - 1}
+                        onClick={(e) => { e.stopPropagation(); moveBlock(index, 'down'); }}
+                        className="hover:bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold disabled:opacity-30 text-slate-500 hover:text-slate-850"
+                        title="Di chuyển xuống"
+                      >
+                        ↓
+                      </button>
+
+                      {/* Duplicate */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); duplicateBlock(block.id); }}
+                        className="hover:bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-bold text-indigo-600 hover:text-indigo-700"
+                        title="Nhân bản khối"
+                      >
+                        🗐 Nhân bản
+                      </button>
+
+                      {/* Delete */}
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
+                        className="hover:bg-rose-50 px-1.5 py-0.5 rounded text-[10px] font-bold text-rose-600 hover:text-rose-700"
+                        title="Xóa khối"
+                      >
+                        🗑 Xóa
+                      </button>
+                    </div>
+
                     {/* Block Info Badge */}
                     <span className="absolute top-2 left-2 text-[8px] bg-white border border-slate-200 text-slate-500 px-1.5 py-0.5 rounded font-bold uppercase shadow-xs">
                       {block.type}
@@ -2308,7 +2508,7 @@ export default function LandingPageBuilder() {
                     )}
 
                     {/* Edit label overlay */}
-                    <span className="absolute top-2 right-2 text-[8px] bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition z-10 shadow-xs">
+                    <span className="absolute top-2 right-2 text-[8px] bg-white border border-slate-200 text-slate-650 px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition z-10 shadow-xs">
                       Click to edit
                     </span>
 
@@ -2317,10 +2517,14 @@ export default function LandingPageBuilder() {
                         {block.imageUrl && block.imageAlignment !== 'center' ? (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
                             <div className={`space-y-4 ${block.imageAlignment === 'left' ? 'md:order-2' : ''}`}>
-                              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">{block.title}</h1>
-                              <p className="text-xs md:text-sm leading-relaxed opacity-90">{block.subtitle}</p>
+                              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">
+                                {renderEditableText(block, 'title', block.title, "block")}
+                              </h1>
+                              <p className="text-xs md:text-sm leading-relaxed opacity-90">
+                                {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                              </p>
                               <button className="px-5 py-2.5 bg-[#f25c22] text-white text-xs font-bold rounded-lg mt-2">
-                                {block.buttonText || 'Bấm đăng ký'}
+                                {renderEditableText(block, 'buttonText', block.buttonText || 'Bấm đăng ký', "")}
                               </button>
                             </div>
                             <div className={`${block.imageAlignment === 'left' ? 'md:order-1' : ''} flex justify-center`}>
@@ -2329,15 +2533,19 @@ export default function LandingPageBuilder() {
                           </div>
                         ) : (
                           <div className="text-center space-y-4">
-                            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">{block.title}</h1>
-                            <p className="text-xs md:text-sm max-w-xl mx-auto leading-relaxed opacity-90">{block.subtitle}</p>
+                            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">
+                              {renderEditableText(block, 'title', block.title, "block")}
+                            </h1>
+                            <p className="text-xs md:text-sm max-w-xl mx-auto leading-relaxed opacity-90">
+                              {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                            </p>
                             {block.imageUrl && (
                               <div className="my-4 flex justify-center">
                                 <img src={block.imageUrl} alt="preview" className="rounded-lg shadow-lg border border-slate-200 max-h-[220px] object-cover" />
                               </div>
                             )}
                             <button className="px-5 py-2.5 bg-[#f25c22] text-white text-xs font-bold rounded-lg mt-2">
-                              {block.buttonText || 'Bấm đăng ký'}
+                              {renderEditableText(block, 'buttonText', block.buttonText || 'Bấm đăng ký', "")}
                             </button>
                           </div>
                         )}
@@ -2346,12 +2554,14 @@ export default function LandingPageBuilder() {
 
                     {block.type === 'features' && (
                       <div className="space-y-6">
-                        <h2 className="text-md md:text-lg font-bold text-center">{block.title}</h2>
+                        <h2 className="text-md md:text-lg font-bold text-center">
+                          {renderEditableText(block, 'title', block.title, "block")}
+                        </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {(block.items || []).map((item, idx) => (
                             <div key={idx} className="flex items-start gap-2 bg-white/20 p-3 rounded border border-white/10">
                               <span className="text-indigo-400 text-xs">✓</span>
-                              <span className="text-xs font-medium">{item}</span>
+                              {renderEditableText(block, 'items', item, "text-xs font-medium block flex-1", idx)}
                             </div>
                           ))}
                         </div>
@@ -2360,12 +2570,16 @@ export default function LandingPageBuilder() {
 
                     {block.type === 'form' && (
                       <div className="max-w-xs mx-auto bg-white border border-slate-200 rounded-lg p-6 space-y-4 text-slate-800 shadow-md">
-                        <h3 className="font-bold text-sm text-center text-slate-900">{block.title}</h3>
-                        <p className="text-[10px] text-slate-500 text-center">{block.subtitle}</p>
+                        <h3 className="font-bold text-sm text-center text-slate-900">
+                          {renderEditableText(block, 'title', block.title, "block")}
+                        </h3>
+                        <p className="text-[10px] text-slate-505 text-center">
+                          {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                        </p>
                         
                         {!block.formId ? (
                           <div className="p-3 bg-amber-50 border border-amber-250 rounded-lg text-center space-y-2">
-                            <p className="text-xs text-amber-800 font-bold">⚠️ Chưa liên kết biểu mẫu</p>
+                            <p className="text-xs text-amber-805 font-bold">⚠️ Chưa liên kết biểu mẫu</p>
                             <p className="text-[10px] text-amber-600 leading-normal">Bạn cần liên kết Custom Form để thu thập thông tin khách hàng.</p>
                             <select
                               value={block.formId || ''}
@@ -2456,8 +2670,12 @@ export default function LandingPageBuilder() {
                           <div className="space-y-6">
                             <div className="text-center max-w-xl mx-auto mb-4">
                               <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-bold rounded-full uppercase tracking-wider">Đặc Sản</span>
-                              <h2 className="text-md md:text-lg font-bold text-white mt-1">{block.title}</h2>
-                              <p className="text-xs text-slate-400 mt-1">{block.subtitle || 'Chọn những sản phẩm đặc sản chất lượng được giao trong ngày.'}</p>
+                              <h2 className="text-md md:text-lg font-bold text-white mt-1">
+                                {renderEditableText(block, 'title', block.title, "block")}
+                              </h2>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                              </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
                               {displayProducts.map((p, index) => {
@@ -2493,8 +2711,12 @@ export default function LandingPageBuilder() {
                           <div className="space-y-6">
                             <div className="text-center max-w-xl mx-auto mb-4">
                               <span className="px-2 py-0.5 bg-orange-100 text-orange-850 text-[9px] font-bold rounded-full uppercase tracking-wider">Lộ Trình Bài Bản</span>
-                              <h2 className="text-md md:text-lg font-bold text-white mt-1">{block.title}</h2>
-                              <p className="text-xs text-slate-400 mt-1">{block.subtitle || 'Khóa học chất lượng cao học trực tuyến hiệu quả cao.'}</p>
+                              <h2 className="text-md md:text-lg font-bold text-white mt-1">
+                                {renderEditableText(block, 'title', block.title, "block")}
+                              </h2>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                              </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
                               {displayProducts.map((p, index) => {
@@ -2529,9 +2751,13 @@ export default function LandingPageBuilder() {
                         return (
                           <div className="space-y-6">
                             <div className="text-center max-w-xl mx-auto mb-4">
-                              <span className="px-2 py-0.5 bg-sky-100 text-sky-800 text-[9px] font-bold rounded-full uppercase tracking-wider">Hành Trình Mơ Ước</span>
-                              <h2 className="text-md md:text-lg font-bold text-white mt-1">{block.title}</h2>
-                              <p className="text-xs text-slate-400 mt-1">{block.subtitle || 'Đặt hàng giá tốt nhất, an tâm hỗ trợ 24/7.'}</p>
+                              <span className="px-2 py-0.5 bg-sky-100 text-sky-850 text-[9px] font-bold rounded-full uppercase tracking-wider">Hành Trình Mơ Ước</span>
+                              <h2 className="text-md md:text-lg font-bold text-white mt-1">
+                                {renderEditableText(block, 'title', block.title, "block")}
+                              </h2>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                              </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
                               {displayProducts.map((p, index) => {
@@ -2565,12 +2791,19 @@ export default function LandingPageBuilder() {
 
                       return (
                         <div className="text-center space-y-4">
-                          <h2 className="text-md md:text-lg font-bold text-white">{block.title}</h2>
-                          <p className="text-xs text-slate-400">{block.subtitle}</p>
+                          <h2 className="text-md md:text-lg font-bold text-white">
+                            {renderEditableText(block, 'title', block.title, "block")}
+                          </h2>
+                          <p className="text-xs text-slate-400">
+                            {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                          </p>
                           <div className="max-w-xs mx-auto bg-slate-950/80 border border-slate-850 rounded-lg p-6 space-y-3 mt-4 relative">
                             <span className="absolute top-0 right-0 bg-[#f25c22] text-[9px] font-bold text-white px-2 py-0.5 rounded-bl">Phổ biến</span>
                             <h4 className="text-xs font-bold text-white">Gói Ưu Đãi</h4>
-                            <p className="text-2xl font-extrabold text-white">{block.priceVal || '499.000đ'}<span className="text-[10px] font-normal text-slate-500">/tháng</span></p>
+                            <p className="text-2xl font-extrabold text-white">
+                              {renderEditableText(block, 'priceVal', block.priceVal || '499.000đ', "")}
+                              <span className="text-[10px] font-normal text-slate-500">/tháng</span>
+                            </p>
                             <button disabled className="w-full py-2 bg-[#f25c22] text-white font-bold text-xs rounded cursor-not-allowed">
                               {block.productId ? `Thanh toán (${block.paymentMethod || 'PAYOS'})` : (block.buttonText || 'Mua ngay')}
                             </button>
@@ -2581,8 +2814,12 @@ export default function LandingPageBuilder() {
 
                     {block.type === 'countdown' && (
                       <div className="text-center space-y-3">
-                        <h2 className="text-md md:text-lg font-bold text-white">{block.title}</h2>
-                        <p className="text-xs text-slate-400">{block.subtitle}</p>
+                        <h2 className="text-md md:text-lg font-bold text-white">
+                          {renderEditableText(block, 'title', block.title, "block")}
+                        </h2>
+                        <p className="text-xs text-slate-400">
+                          {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                        </p>
                         <div className="flex justify-center gap-3 mt-4 text-white font-mono">
                           <div className="bg-slate-950 border border-slate-850 rounded p-2.5 min-w-[50px]">
                             <span className="text-lg font-extrabold block text-[#f25c22]">02</span>
@@ -2607,21 +2844,29 @@ export default function LandingPageBuilder() {
 
                     {block.type === 'testimonials' && (
                       <div className="space-y-4">
-                        <h2 className="text-md md:text-lg font-bold text-white text-center">{block.title}</h2>
+                        <h2 className="text-md md:text-lg font-bold text-white text-center">
+                          {renderEditableText(block, 'title', block.title, "block")}
+                        </h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           {(block.reviews || []).map((r, idx) => (
                             <div key={idx} className="bg-slate-950/50 border border-slate-850 p-4 rounded-lg flex flex-col justify-between">
                               <div className="space-y-1">
                                 <span className="text-[#f25c22] text-[10px]">{'★'.repeat(r.rating || 5)}{'☆'.repeat(5 - (r.rating || 5))}</span>
-                                <p className="text-slate-300 italic text-[11px] leading-relaxed">"{r.quote}"</p>
+                                <p className="text-slate-300 italic text-[11px] leading-relaxed">
+                                  "{renderEditableText(block, 'reviews', r.quote, "", idx, 'quote')}"
+                                </p>
                               </div>
                               <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-850">
                                 <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-[#f25c22] text-xs">
                                   {r.name.charAt(0)}
                                 </div>
                                 <div>
-                                  <h4 className="font-bold text-white text-xs">{r.name}</h4>
-                                  <p className="text-[8px] text-slate-500">{r.role}</p>
+                                  <h4 className="font-bold text-white text-xs">
+                                    {renderEditableText(block, 'reviews', r.name, "block", idx, 'name')}
+                                  </h4>
+                                  <p className="text-[8px] text-slate-500">
+                                    {renderEditableText(block, 'reviews', r.role, "block", idx, 'role')}
+                                  </p>
                                 </div>
                               </div>
                             </div>
@@ -2632,16 +2877,20 @@ export default function LandingPageBuilder() {
 
                     {block.type === 'faq' && (
                       <div className="space-y-4">
-                        <h2 className="text-md md:text-lg font-bold text-white text-center">{block.title}</h2>
+                        <h2 className="text-md md:text-lg font-bold text-white text-center">
+                          {renderEditableText(block, 'title', block.title, "block")}
+                        </h2>
                         <div className="max-w-2xl mx-auto space-y-2">
                           {(block.faqs || []).map((faq, idx) => (
                             <div key={idx} className="bg-slate-950/40 border border-slate-850 rounded-lg overflow-hidden">
                               <div className="px-4 py-2.5 flex justify-between items-center text-left hover:bg-slate-800/20">
-                                <span className="font-semibold text-white text-xs">{faq.question}</span>
-                                <span className="text-slate-500 text-[10px]">▼</span>
+                                <span className="font-semibold text-white text-xs">
+                                  {renderEditableText(block, 'faqs', faq.question, "block flex-1", idx, 'question')}
+                                </span>
+                                <span className="text-slate-550 text-[10px]">▼</span>
                               </div>
                               <div className="px-4 py-2 bg-slate-950/20 border-t border-slate-850 text-slate-400 text-xs">
-                                {faq.answer}
+                                {renderEditableText(block, 'faqs', faq.answer, "block", idx, 'answer')}
                               </div>
                             </div>
                           ))}
@@ -2652,8 +2901,12 @@ export default function LandingPageBuilder() {
                     {block.type === 'footer' && (
                       <div className="flex justify-between items-center text-xs text-slate-400">
                         <div>
-                          <h4 className="text-white font-bold">{block.title}</h4>
-                          <p className="text-[10px]">{block.subtitle}</p>
+                          <h4 className="text-white font-bold">
+                            {renderEditableText(block, 'title', block.title, "block")}
+                          </h4>
+                          <p className="text-[10px]">
+                            {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
+                          </p>
                         </div>
                         <p className="text-[9px]">© {new Date().getFullYear()} {block.title}.</p>
                       </div>

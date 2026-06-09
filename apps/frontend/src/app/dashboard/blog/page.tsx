@@ -179,80 +179,80 @@ export default function BlogPage() {
       )}
 
       {isEditing ? (
-        <form onSubmit={handleSave} className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6 shadow-xl">
-          <h3 className="text-lg font-bold text-white border-b border-slate-800 pb-3">
+        <form onSubmit={handleSave} className="card p-6 space-y-6">
+          <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">
             {selectedPostId ? 'Chỉnh sửa bài viết' : 'Viết bài mới'}
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Tiêu đề bài viết</label>
+            <div className="space-y-1">
+              <label className="label">Tiêu đề bài viết</label>
               <input
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="Nhập tiêu đề hấp dẫn..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Đường dẫn thân thiện (URL Slug)</label>
+            <div className="space-y-1">
+              <label className="label">Đường dẫn thân thiện (URL Slug)</label>
               <input
                 type="text"
                 value={form.slug}
                 onChange={(e) => setForm({ ...form, slug: e.target.value })}
                 placeholder="vi-du-duong-dan-bai-viet"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Tác giả</label>
+            <div className="space-y-1">
+              <label className="label">Tác giả</label>
               <input
                 type="text"
                 value={form.authorName}
                 onChange={(e) => setForm({ ...form, authorName: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Tags (ngăn cách bởi dấu phẩy)</label>
+            <div className="space-y-1">
+              <label className="label">Tags (ngăn cách bởi dấu phẩy)</label>
               <input
                 type="text"
                 value={form.tags}
                 onChange={(e) => setForm({ ...form, tags: e.target.value })}
                 placeholder="seo, marketing, traffic"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#f25c22] transition"
+                className="input"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">Mô tả tóm tắt (SEO Meta Description)</label>
+          <div className="space-y-1">
+            <label className="label">Mô tả tóm tắt (SEO Meta Description)</label>
             <textarea
               value={form.summary}
               onChange={(e) => setForm({ ...form, summary: e.target.value })}
               placeholder="Nhập mô tả tóm tắt bài viết giúp thu hút người đọc trên Google Search..."
               rows={2}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#f25c22] transition"
+              className="input"
             />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <label className="text-sm font-medium text-slate-300">Nội dung bài viết (Hỗ trợ Markdown)</label>
-              <span className="text-xs text-slate-500">Mẹo: Sử dụng # cho Heading, * cho In nghiêng, ** cho In đậm</span>
+          <div className="space-y-1">
+            <div className="flex justify-between items-center mb-1">
+              <label className="label mb-0">Nội dung bài viết (Hỗ trợ Markdown)</label>
+              <span className="text-[10px] text-slate-400">Mẹo: Sử dụng # cho Heading, * cho In nghiêng, ** cho In đậm</span>
             </div>
             <textarea
               value={form.content}
               onChange={(e) => setForm({ ...form, content: e.target.value })}
               placeholder="Nhập nội dung bài viết bằng Markdown..."
               rows={12}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-4 text-white font-mono text-sm focus:outline-none focus:border-[#f25c22] transition"
+              className="input font-mono text-xs"
             />
           </div>
 
@@ -262,24 +262,24 @@ export default function BlogPage() {
               id="published"
               checked={form.published}
               onChange={(e) => setForm({ ...form, published: e.target.checked })}
-              className="h-4 w-4 bg-slate-950 border-slate-800 rounded accent-[#f25c22]"
+              className="h-4 w-4 border-slate-350 rounded accent-[#f25c22] cursor-pointer"
             />
-            <label htmlFor="published" className="text-sm text-slate-300 select-none cursor-pointer">
+            <label htmlFor="published" className="text-xs font-semibold text-slate-600 select-none cursor-pointer">
               Xuất bản bài viết này lên trang chủ ngay lập tức
             </label>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsEditing(false)}
-              className="px-5 py-2 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg transition"
+              className="btn-secondary px-5 py-2"
             >
               Hủy bỏ
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white rounded-lg font-semibold shadow-md transition"
+              className="btn-primary px-6 py-2"
             >
               Lưu bài viết
             </button>
@@ -292,36 +292,36 @@ export default function BlogPage() {
               Đang tải bài viết...
             </div>
           ) : posts.length === 0 ? (
-            <div className="col-span-full text-center py-16 bg-slate-900 border border-slate-800 rounded-xl">
-              <h4 className="text-white font-medium mb-1">Chưa có bài viết nào</h4>
-              <p className="text-slate-400 text-sm mb-4">Hãy bắt đầu tạo bài viết blog đầu tiên chuẩn SEO của bạn.</p>
+            <div className="col-span-full text-center py-16 bg-white border border-orange-100 rounded-2xl p-8 flex flex-col items-center shadow-sm">
+              <h4 className="text-slate-800 font-bold mb-1 text-base">Chưa có bài viết nào</h4>
+              <p className="text-slate-500 text-xs mb-4">Hãy bắt đầu tạo bài viết blog đầu tiên chuẩn SEO của bạn.</p>
               <button
                 onClick={handleCreateNew}
-                className="px-4 py-2 bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] rounded-lg transition text-sm font-semibold"
+                className="px-4 py-2 bg-[#f25c22]/10 hover:bg-[#f25c22]/20 border border-[#f25c22]/30 text-[#f25c22] rounded-lg transition text-xs font-semibold"
               >
                 Tạo bài viết
               </button>
             </div>
           ) : (
             posts.map((post) => (
-              <div key={post.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg hover:border-slate-700 transition flex flex-col justify-between">
+              <div key={post.id} className="card card-hover overflow-hidden flex flex-col justify-between">
                 <div className="p-5 space-y-3">
-                  <div className="flex justify-between items-start gap-2">
-                    <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${post.published ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                  <div className="flex justify-between items-center gap-2">
+                    <span className={`px-2.5 py-0.5 text-[10px] rounded-full font-bold uppercase tracking-wider ${post.published ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/10' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/10'}`}>
                       {post.published ? 'Đã xuất bản' : 'Bản nháp'}
                     </span>
-                    <span className="text-xs text-slate-500">{new Date(post.createdAt).toLocaleDateString('vi-VN')}</span>
+                    <span className="text-[10px] text-slate-400 font-semibold">{new Date(post.createdAt).toLocaleDateString('vi-VN')}</span>
                   </div>
-                  <h4 className="font-bold text-white text-base line-clamp-2 hover:text-[#f25c22] cursor-pointer" onClick={() => handleEdit(post)}>
+                  <h4 className="font-bold text-slate-850 text-base line-clamp-2 hover:text-[#f25c22] cursor-pointer transition-colors" onClick={() => handleEdit(post)}>
                     {post.title}
                   </h4>
-                  <p className="text-slate-400 text-xs line-clamp-3">
+                  <p className="text-slate-500 text-xs leading-relaxed line-clamp-3">
                     {post.summary || 'Không có mô tả tóm tắt.'}
                   </p>
                   {post.tags && (
-                    <div className="flex flex-wrap gap-1.5 pt-2">
+                    <div className="flex flex-wrap gap-1.5 pt-1">
                       {post.tags.split(',').map((tag, idx) => (
-                        <span key={idx} className="bg-slate-850 text-slate-400 text-[10px] px-2 py-0.5 rounded border border-slate-800">
+                        <span key={idx} className="bg-orange-50 text-brand text-[10px] px-2 py-0.5 rounded border border-orange-100/50 font-bold">
                           #{tag.trim()}
                         </span>
                       ))}
@@ -329,11 +329,11 @@ export default function BlogPage() {
                   )}
                 </div>
 
-                <div className="px-5 py-3.5 bg-slate-950 border-t border-slate-850 flex justify-between items-center gap-3">
+                <div className="px-5 py-3.5 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => togglePublish(post)}
-                      className={`text-xs px-2.5 py-1 rounded border transition ${post.published ? 'hover:bg-amber-500/10 border-amber-500/20 text-amber-400' : 'hover:bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}
+                      className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded border transition-all ${post.published ? 'hover:bg-amber-100/50 border-amber-200 text-amber-700 bg-amber-50/40' : 'hover:bg-emerald-100/50 border-emerald-200 text-emerald-700 bg-emerald-50/40'}`}
                       title={post.published ? 'Gỡ xuất bản' : 'Xuất bản'}
                     >
                       {post.published ? 'Gỡ' : 'Đăng'}
@@ -342,7 +342,7 @@ export default function BlogPage() {
                       href={`/api/public/blog/posts/${post.slug}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs border border-slate-800 hover:bg-slate-900 text-slate-400 px-2.5 py-1 rounded transition"
+                      className="text-[10px] font-bold uppercase border border-slate-200 hover:bg-slate-50 text-slate-500 px-2.5 py-1 rounded transition-all"
                     >
                       Xem
                     </a>
@@ -350,14 +350,14 @@ export default function BlogPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleEdit(post)}
-                      className="text-slate-400 hover:text-white text-xs font-semibold px-2 py-1 bg-slate-800 rounded hover:bg-slate-750 transition"
+                      className="text-slate-600 hover:text-slate-900 text-[10px] font-bold uppercase px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-50 transition-all"
                       title="Sửa"
                     >
                       Sửa
                     </button>
                     <button
                       onClick={() => handleDelete(post.id)}
-                      className="text-slate-400 hover:text-rose-400 text-xs font-semibold px-2 py-1 bg-slate-800 rounded hover:bg-slate-750 transition"
+                      className="text-rose-600 hover:bg-rose-50 text-[10px] font-bold uppercase px-2.5 py-1 rounded transition-all border border-transparent hover:border-rose-100"
                       title="Xóa"
                     >
                       Xóa
