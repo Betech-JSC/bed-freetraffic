@@ -1439,511 +1439,524 @@ export default function LandingPageBuilder() {
             {/* Tab 1: Blocks builder */}
             {activeTab === 'blocks' && (
               <>
-                {/* Add Blocks */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Thêm khối mới</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button onClick={() => addBlock('hero')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      Banner (Hero)
+                {selectedBlock ? (
+                  <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBlockId(null)}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 hover:text-[#f25c22] text-xs font-bold rounded-lg border border-slate-200 transition shadow-sm"
+                    >
+                      ← Quay lại Cấu trúc trang
                     </button>
-                    <button onClick={() => addBlock('features')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      Lợi ích (Features)
-                    </button>
-                    <button onClick={() => addBlock('form')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      Biểu mẫu (Form)
-                    </button>
-                    <button onClick={() => addBlock('pricing')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      Bảng giá (Pricing)
-                    </button>
-                    <button onClick={() => addBlock('countdown')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      ⏳ Đếm ngược
-                    </button>
-                    <button onClick={() => addBlock('testimonials')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      ★ Đánh giá
-                    </button>
-                    <button onClick={() => addBlock('faq')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      ❓ Câu hỏi FAQ
-                    </button>
-                    <button onClick={() => addBlock('footer')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm">
-                      Chân trang (Footer)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Block List / Navigation */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Cấu trúc trang</label>
-                  {blocks.length === 0 ? (
-                    <p className="text-slate-400 text-xs text-center py-4">Trang chưa có khối nào.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {blocks.map((block, index) => (
-                        <div
-                          key={block.id}
-                          draggable
-                          onDragStart={() => handleDragStart(index)}
-                          onDragOver={(e) => handleDragOver(e, index)}
-                          onDrop={() => handleDrop(index)}
-                          onDragEnd={() => {
-                            setDraggedIdx(null);
-                            setDragOverIdx(null);
-                          }}
-                          onClick={() => setSelectedBlockId(block.id)}
-                          className={`flex justify-between items-center px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing transition ${selectedBlockId === block.id ? 'bg-orange-50 border-[#f25c22] text-[#f25c22]' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'} ${draggedIdx === index ? 'opacity-40 border-dashed border-[#f25c22]' : ''}`}
-                        >
-                          <div className="flex items-center gap-1.5 overflow-hidden">
-                            <span className="text-slate-400 select-none text-xs font-mono">⋮⋮</span>
-                            <span className="text-xs font-medium capitalize truncate">
-                              {index + 1}. {block.type === 'countdown' ? 'Đếm ngược' : block.type === 'testimonials' ? 'Đánh giá' : block.type === 'faq' ? 'FAQ' : block.type}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              disabled={index === 0}
-                              onClick={(e) => { e.stopPropagation(); moveBlock(index, 'up'); }}
-                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent text-slate-500 hover:text-slate-900"
-                              title="Di chuyển lên"
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              disabled={index === blocks.length - 1}
-                              onClick={(e) => { e.stopPropagation(); moveBlock(index, 'down'); }}
-                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent text-slate-500 hover:text-slate-900"
-                              title="Di chuyển xuống"
-                            >
-                              ↓
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
-                              className="w-5 h-5 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition"
-                              title="Xóa khối"
-                            >
-                              &times;
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Properties Panel of Selected Block */}
-                {selectedBlock && (
-                  <div className="border-t border-slate-200 pt-4 space-y-4">
-                    <div className="flex justify-between items-center">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-[#f25c22]">Cấu hình Khối</h4>
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          id="block-hidden-mobile"
-                          checked={!!selectedBlock.hiddenOnMobile}
-                          onChange={(e) => updateBlock({ ...selectedBlock, hiddenOnMobile: e.target.checked })}
-                          className="rounded border-slate-200 bg-white text-[#f25c22] focus:ring-0"
-                        />
-                        <label htmlFor="block-hidden-mobile" className="text-[10px] text-slate-500 font-bold uppercase cursor-pointer">Ẩn trên Mobile</label>
-                      </div>
-                    </div>
                     
-                    <div className="space-y-1">
-                      <label className="text-[11px] text-slate-500 font-semibold">Tiêu đề</label>
-                      <input
-                        type="text"
-                        value={selectedBlock.title}
-                        onChange={(e) => updateBlock({ ...selectedBlock, title: e.target.value })}
-                        className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                      />
-                    </div>
-
-                    {/* Subtitle / Description */}
-                    {(selectedBlock.type === 'hero' || selectedBlock.type === 'form' || selectedBlock.type === 'pricing' || selectedBlock.type === 'footer' || selectedBlock.type === 'countdown') && (
+                    <div className="pt-2 space-y-4">
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-[#f25c22] flex items-center gap-1">
+                          ⚙️ Cấu hình {selectedBlock.type === 'hero' ? 'Banner' : selectedBlock.type === 'features' ? 'Lợi ích' : selectedBlock.type === 'form' ? 'Biểu mẫu' : selectedBlock.type === 'pricing' ? 'Bảng giá' : selectedBlock.type === 'countdown' ? 'Đếm ngược' : selectedBlock.type === 'testimonials' ? 'Đánh giá' : selectedBlock.type === 'faq' ? 'FAQ' : selectedBlock.type}
+                        </h4>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            id="block-hidden-mobile"
+                            checked={!!selectedBlock.hiddenOnMobile}
+                            onChange={(e) => updateBlock({ ...selectedBlock, hiddenOnMobile: e.target.checked })}
+                            className="rounded border-slate-200 bg-white text-[#f25c22] focus:ring-0 w-3.5 h-3.5"
+                          />
+                          <label htmlFor="block-hidden-mobile" className="text-[10px] text-slate-500 font-bold uppercase cursor-pointer select-none">Ẩn trên Mobile</label>
+                        </div>
+                      </div>
+                      
                       <div className="space-y-1">
-                        <label className="text-[11px] text-slate-550 font-semibold">Mô tả phụ</label>
-                        <textarea
-                          value={selectedBlock.subtitle || ''}
-                          onChange={(e) => updateBlock({ ...selectedBlock, subtitle: e.target.value })}
-                          rows={2}
+                        <label className="text-[11px] text-slate-500 font-semibold">Tiêu đề</label>
+                        <input
+                          type="text"
+                          value={selectedBlock.title}
+                          onChange={(e) => updateBlock({ ...selectedBlock, title: e.target.value })}
                           className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
                         />
                       </div>
-                    )}
 
-                    {/* Button Text & Button Link */}
-                    {(selectedBlock.type === 'hero' || selectedBlock.type === 'pricing') && (
-                      <>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-slate-550 font-semibold">Chữ trên nút</label>
-                            <input
-                              type="text"
-                              value={selectedBlock.buttonText || ''}
-                              onChange={(e) => updateBlock({ ...selectedBlock, buttonText: e.target.value })}
-                              className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-slate-550 font-semibold">Đường dẫn nút</label>
-                            <input
-                              type="text"
-                              disabled={!!selectedBlock.productId}
-                              value={selectedBlock.productId ? 'Thanh toán trực tiếp' : (selectedBlock.buttonLink || '')}
-                              onChange={(e) => updateBlock({ ...selectedBlock, buttonLink: e.target.value })}
-                              placeholder="#register-form"
-                              className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22] disabled:opacity-50"
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Image URL & Alignment for Hero block */}
-                    {selectedBlock.type === 'hero' && (
-                      <>
+                      {/* Subtitle / Description */}
+                      {(selectedBlock.type === 'hero' || selectedBlock.type === 'form' || selectedBlock.type === 'pricing' || selectedBlock.type === 'footer' || selectedBlock.type === 'countdown') && (
                         <div className="space-y-1">
-                          <label className="text-[11px] text-slate-550 font-semibold">Đường dẫn hình ảnh (URL)</label>
-                          <input
-                            type="text"
-                            value={selectedBlock.imageUrl || ''}
-                            onChange={(e) => updateBlock({ ...selectedBlock, imageUrl: e.target.value })}
-                            placeholder="https://example.com/image.png"
+                          <label className="text-[11px] text-slate-550 font-semibold">Mô tả phụ</label>
+                          <textarea
+                            value={selectedBlock.subtitle || ''}
+                            onChange={(e) => updateBlock({ ...selectedBlock, subtitle: e.target.value })}
+                            rows={3}
                             className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
                           />
-                          {/* Suggested Images */}
-                          <div className="pt-1.5 space-y-1">
-                            <label className="text-[9px] text-slate-400 uppercase font-bold">Ảnh gợi ý mẫu:</label>
-                            <div className="grid grid-cols-4 gap-1">
-                              <button
-                                type="button"
-                                onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60' })}
-                                className="h-8 bg-white border border-slate-200 hover:border-[#f25c22] rounded overflow-hidden"
-                                title="SaaS Chart"
-                              >
-                                <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 1" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60' })}
-                                className="h-8 bg-white border border-slate-200 hover:border-[#f25c22] rounded overflow-hidden"
-                                title="Dashboard Layout"
-                              >
-                                <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 2" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=60' })}
-                                className="h-8 bg-white border border-slate-200 hover:border-[#f25c22] rounded overflow-hidden"
-                                title="Team Collab"
-                              >
-                                <img src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateBlock({ ...selectedBlock, imageUrl: '' })}
-                                className="h-8 bg-white border border-slate-200 hover:border-rose-500 rounded text-[9px] text-slate-500 font-semibold"
-                              >
-                                Xóa ảnh
-                              </button>
+                        </div>
+                      )}
+
+                      {/* Button Text & Button Link */}
+                      {(selectedBlock.type === 'hero' || selectedBlock.type === 'pricing') && (
+                        <>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-slate-555 font-semibold">Chữ trên nút</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.buttonText || ''}
+                                onChange={(e) => updateBlock({ ...selectedBlock, buttonText: e.target.value })}
+                                className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-slate-555 font-semibold">Đường dẫn nút</label>
+                              <input
+                                type="text"
+                                disabled={!!selectedBlock.productId}
+                                value={selectedBlock.productId ? 'Thanh toán trực tiếp' : (selectedBlock.buttonLink || '')}
+                                onChange={(e) => updateBlock({ ...selectedBlock, buttonLink: e.target.value })}
+                                placeholder="#register-form"
+                                className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22] disabled:opacity-50"
+                              />
                             </div>
                           </div>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[11px] text-slate-550 font-semibold">Vị trí ảnh</label>
-                          <select
-                            value={selectedBlock.imageAlignment || 'right'}
-                            onChange={(e) => updateBlock({ ...selectedBlock, imageAlignment: e.target.value as any })}
-                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                          >
-                            <option value="left">Bên trái văn bản</option>
-                            <option value="right">Bên phải văn bản</option>
-                            <option value="center">Ở giữa (phía dưới văn bản)</option>
-                          </select>
-                        </div>
-                      </>
-                    )}
+                        </>
+                      )}
 
-                    {/* Pricing direct checkout link (Use Case 1) */}
-                    {selectedBlock.type === 'pricing' && (
-                      <>
-                        <div className="space-y-1">
-                          <label className="text-[11px] text-slate-550 font-semibold">Giá trị hiển thị</label>
-                          <input
-                            type="text"
-                            value={selectedBlock.priceVal || ''}
-                            onChange={(e) => updateBlock({ ...selectedBlock, priceVal: e.target.value })}
-                            placeholder="499.000đ"
-                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[11px] text-slate-550 font-semibold">Mua nhanh & Thanh toán trực tiếp</label>
-                          <select
-                            value={selectedBlock.productId || ''}
-                            onChange={(e) => {
-                              const pId = e.target.value;
-                              const prod = products.find(p => String(p.id) === pId);
-                              updateBlock({
-                                ...selectedBlock,
-                                productId: pId,
-                                priceVal: prod ? `${prod.price.toLocaleString('vi-VN')} ${prod.currency}` : selectedBlock.priceVal
-                              });
-                            }}
-                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                          >
-                            <option value="">-- Dùng liên kết thường (Không checkout) --</option>
-                            {products.map(p => (
-                              <option key={p.id} value={String(p.id)}>{p.name} ({p.price.toLocaleString('vi-VN')} {p.currency})</option>
-                            ))}
-                          </select>
-                        </div>
-                        {selectedBlock.productId && (
+                      {/* Image URL & Alignment for Hero block */}
+                      {selectedBlock.type === 'hero' && (
+                        <>
                           <div className="space-y-1">
-                            <label className="text-[11px] text-slate-550 font-semibold">Cổng thanh toán mặc định</label>
+                            <label className="text-[11px] text-slate-550 font-semibold">Đường dẫn hình ảnh (URL)</label>
+                            <input
+                              type="text"
+                              value={selectedBlock.imageUrl || ''}
+                              onChange={(e) => updateBlock({ ...selectedBlock, imageUrl: e.target.value })}
+                              placeholder="https://example.com/image.png"
+                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                            />
+                            {/* Suggested Images */}
+                            <div className="pt-1.5 space-y-1">
+                              <label className="text-[9px] text-slate-400 uppercase font-bold">Ảnh gợi ý mẫu:</label>
+                              <div className="grid grid-cols-4 gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=800&auto=format&fit=crop&q=80' })}
+                                  className="h-8 bg-white border border-slate-200 hover:border-[#f25c22] rounded overflow-hidden"
+                                  title="Honey Jar"
+                                >
+                                  <img src="https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=100&auto=format&fit=crop&q=80" className="object-cover w-full h-full" alt="honey" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&auto=format&fit=crop&q=60' })}
+                                  className="h-8 bg-white border border-slate-200 hover:border-[#f25c22] rounded overflow-hidden"
+                                  title="SaaS Chart"
+                                >
+                                  <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 1" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock({ ...selectedBlock, imageUrl: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=60' })}
+                                  className="h-8 bg-white border border-slate-200 hover:border-[#f25c22] rounded overflow-hidden"
+                                  title="Dashboard Layout"
+                                >
+                                  <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=100&auto=format&fit=crop&q=60" className="object-cover w-full h-full" alt="suggested 2" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateBlock({ ...selectedBlock, imageUrl: '' })}
+                                  className="h-8 bg-white border border-slate-200 hover:border-rose-500 rounded text-[9px] text-slate-500 font-semibold"
+                                >
+                                  Xóa ảnh
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-slate-550 font-semibold">Vị trí ảnh</label>
                             <select
-                              value={selectedBlock.paymentMethod || 'PAYOS'}
-                              onChange={(e) => updateBlock({ ...selectedBlock, paymentMethod: e.target.value as any })}
-                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                              value={selectedBlock.imageAlignment || 'right'}
+                              onChange={(e) => updateBlock({ ...selectedBlock, imageAlignment: e.target.value as any })}
+                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
                             >
-                              <option value="PAYOS">VietQR chuyển khoản nhanh (PayOS)</option>
-                              <option value="STRIPE">Thẻ Quốc Tế (Stripe)</option>
+                              <option value="left">Bên trái văn bản</option>
+                              <option value="right">Bên phải văn bản</option>
+                              <option value="center">Ở giữa (phía dưới văn bản)</option>
                             </select>
                           </div>
-                        )}
-                      </>
-                    )}
+                        </>
+                      )}
 
-                    {/* Form and Workflow link (Use Case 2) */}
-                    {selectedBlock.type === 'form' && (
-                      <div className="space-y-2.5">
-                        <div className="space-y-1">
-                          <label className="text-[11px] text-slate-550 font-semibold">Liên kết Custom Form</label>
-                          <select
-                            value={selectedBlock.formId || ''}
-                            onChange={(e) => updateBlock({ ...selectedBlock, formId: e.target.value })}
-                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                          >
-                            <option value="">-- Chọn form thu lead --</option>
-                            {forms.map(f => (
-                              <option key={f.id} value={String(f.id)}>{f.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[11px] text-slate-550 font-semibold">Kích hoạt Email Drip Workflow</label>
-                          <select
-                            value={selectedBlock.workflowId || ''}
-                            onChange={(e) => updateBlock({ ...selectedBlock, workflowId: e.target.value })}
-                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-855 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                          >
-                            <option value="">-- Không kích hoạt (Chỉ lưu CRM) --</option>
-                            {workflows.map(w => (
-                              <option key={w.id} value={String(w.id)}>{w.name} {w.isActive ? '(Đang chạy)' : '(Nháp)'}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Features list */}
-                    {selectedBlock.type === 'features' && (
-                      <div className="space-y-2">
-                        <label className="text-[11px] text-slate-555 font-semibold">Các mục lợi ích</label>
-                        {(selectedBlock.items || []).map((item, idx) => (
-                          <input
-                            key={idx}
-                            type="text"
-                            value={item}
-                            onChange={(e) => {
-                              const newItems = [...(selectedBlock.items || [])];
-                              newItems[idx] = e.target.value;
-                              updateBlock({ ...selectedBlock, items: newItems });
-                            }}
-                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                          />
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newItems = [...(selectedBlock.items || []), 'Lợi ích mới'];
-                            updateBlock({ ...selectedBlock, items: newItems });
-                          }}
-                          className="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded font-semibold transition"
-                        >
-                          + Thêm mục lợi ích
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Countdown block Settings (Use Case 6) */}
-                    {selectedBlock.type === 'countdown' && (
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-slate-550 font-semibold">Hạn đếm ngược (End Date)</label>
-                        <input
-                          type="datetime-local"
-                          value={selectedBlock.countdownEnd || ''}
-                          onChange={(e) => updateBlock({ ...selectedBlock, countdownEnd: e.target.value })}
-                          className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
-                        />
-                      </div>
-                    )}
-
-                    {/* Testimonials block Settings (Use Case 6) */}
-                    {selectedBlock.type === 'testimonials' && (
-                      <div className="space-y-4">
-                        <label className="text-[11px] text-slate-550 font-bold">Danh sách Đánh giá</label>
-                        {(selectedBlock.reviews || []).map((r, idx) => (
-                          <div key={idx} className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-2 relative">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newReviews = (selectedBlock.reviews || []).filter((_, i) => i !== idx);
-                                updateBlock({ ...selectedBlock, reviews: newReviews });
-                              }}
-                              className="absolute top-1 right-2 text-rose-500 hover:text-rose-600 text-[10px] font-bold"
-                            >
-                              Xóa
-                            </button>
-                            <div className="grid grid-cols-2 gap-2">
-                              <input
-                                type="text"
-                                placeholder="Họ tên"
-                                value={r.name}
-                                onChange={(e) => {
-                                  const newReviews = [...(selectedBlock.reviews || [])];
-                                  newReviews[idx] = { ...newReviews[idx], name: e.target.value };
-                                  updateBlock({ ...selectedBlock, reviews: newReviews });
-                                }}
-                                className="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
-                              />
-                              <input
-                                type="text"
-                                placeholder="Chức vụ"
-                                value={r.role}
-                                onChange={(e) => {
-                                  const newReviews = [...(selectedBlock.reviews || [])];
-                                  newReviews[idx] = { ...newReviews[idx], role: e.target.value };
-                                  updateBlock({ ...selectedBlock, reviews: newReviews });
-                                }}
-                                className="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
-                              />
-                            </div>
-                            <textarea
-                              placeholder="Nhận xét của khách hàng..."
-                              value={r.quote}
-                              onChange={(e) => {
-                                const newReviews = [...(selectedBlock.reviews || [])];
-                                newReviews[idx] = { ...newReviews[idx], quote: e.target.value };
-                                updateBlock({ ...selectedBlock, reviews: newReviews });
-                              }}
-                              rows={2}
-                              className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
-                            />
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] text-slate-500 font-semibold">Đánh giá (1-5 sao):</span>
-                              <input
-                                type="number"
-                                min={1}
-                                max={5}
-                                value={r.rating}
-                                onChange={(e) => {
-                                  const newReviews = [...(selectedBlock.reviews || [])];
-                                  newReviews[idx] = { ...newReviews[idx], rating: parseInt(e.target.value) || 5 };
-                                  updateBlock({ ...selectedBlock, reviews: newReviews });
-                                }}
-                                className="w-12 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none"
-                              />
-                            </div>
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newReviews = [...(selectedBlock.reviews || []), { name: 'Tên Khách Hàng', role: 'Khách hàng', rating: 5, quote: 'Dịch vụ vô cùng chuyên nghiệp và tuyệt vời!' }];
-                            updateBlock({ ...selectedBlock, reviews: newReviews });
-                          }}
-                          className="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded font-semibold transition"
-                        >
-                          + Thêm đánh giá mới
-                        </button>
-                      </div>
-                    )}
-
-                    {/* FAQ block Settings (Use Case 6) */}
-                    {selectedBlock.type === 'faq' && (
-                      <div className="space-y-4">
-                        <label className="text-[11px] text-slate-550 font-bold">Danh sách FAQ</label>
-                        {(selectedBlock.faqs || []).map((faq, idx) => (
-                          <div key={idx} className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-2 relative">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newFaqs = (selectedBlock.faqs || []).filter((_, i) => i !== idx);
-                                updateBlock({ ...selectedBlock, faqs: newFaqs });
-                              }}
-                              className="absolute top-1 right-2 text-rose-500 hover:text-rose-600 text-[10px] font-bold"
-                            >
-                              Xóa
-                            </button>
+                      {/* Pricing direct checkout link (Use Case 1) */}
+                      {selectedBlock.type === 'pricing' && (
+                        <>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-slate-550 font-semibold">Giá trị hiển thị</label>
                             <input
                               type="text"
-                              placeholder="Câu hỏi?"
-                              value={faq.question}
-                              onChange={(e) => {
-                                const newFaqs = [...(selectedBlock.faqs || [])];
-                                newFaqs[idx] = { ...newFaqs[idx], question: e.target.value };
-                                updateBlock({ ...selectedBlock, faqs: newFaqs });
-                              }}
-                              className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
-                            />
-                            <textarea
-                              placeholder="Câu trả lời..."
-                              value={faq.answer}
-                              onChange={(e) => {
-                                const newFaqs = [...(selectedBlock.faqs || [])];
-                                newFaqs[idx] = { ...newFaqs[idx], answer: e.target.value };
-                                updateBlock({ ...selectedBlock, faqs: newFaqs });
-                              }}
-                              rows={2}
-                              className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
+                              value={selectedBlock.priceVal || ''}
+                              onChange={(e) => updateBlock({ ...selectedBlock, priceVal: e.target.value })}
+                              placeholder="499.000đ"
+                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
                             />
                           </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newFaqs = [...(selectedBlock.faqs || []), { question: 'Câu hỏi của khách?', answer: 'Nhập câu trả lời giải đáp thắc mắc.' }];
-                            updateBlock({ ...selectedBlock, faqs: newFaqs });
-                          }}
-                          className="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded font-semibold transition"
-                        >
-                          + Thêm câu hỏi mới
-                        </button>
-                      </div>
-                    )}
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-slate-550 font-semibold">Mua nhanh & Thanh toán trực tiếp</label>
+                            <select
+                              value={selectedBlock.productId || ''}
+                              onChange={(e) => {
+                                const pId = e.target.value;
+                                const prod = products.find(p => String(p.id) === pId);
+                                updateBlock({
+                                  ...selectedBlock,
+                                  productId: pId,
+                                  priceVal: prod ? `${prod.price.toLocaleString('vi-VN')} ${prod.currency}` : selectedBlock.priceVal
+                                });
+                              }}
+                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                            >
+                              <option value="">-- Dùng liên kết thường (Không checkout) --</option>
+                              {products.map(p => (
+                                <option key={p.id} value={String(p.id)}>{p.name} ({p.price.toLocaleString('vi-VN')} {p.currency})</option>
+                              ))}
+                            </select>
+                          </div>
+                          {selectedBlock.productId && (
+                            <div className="space-y-1">
+                              <label className="text-[11px] text-slate-550 font-semibold">Cổng thanh toán mặc định</label>
+                              <select
+                                value={selectedBlock.paymentMethod || 'PAYOS'}
+                                onChange={(e) => updateBlock({ ...selectedBlock, paymentMethod: e.target.value as any })}
+                                className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                              >
+                                <option value="PAYOS">VietQR chuyển khoản nhanh (PayOS)</option>
+                                <option value="STRIPE">Thẻ Quốc Tế (Stripe)</option>
+                              </select>
+                            </div>
+                          )}
+                        </>
+                      )}
 
-                    <div className="grid grid-cols-2 gap-2 pt-2">
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-slate-500 font-semibold">Màu nền</label>
-                        <input
-                          type="color"
-                          value={selectedBlock.backgroundColor || '#0f172a'}
-                          onChange={(e) => updateBlock({ ...selectedBlock, backgroundColor: e.target.value })}
-                          className="w-full bg-transparent border-0 h-8 cursor-pointer rounded"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] text-slate-500 font-semibold">Màu chữ</label>
-                        <input
-                          type="color"
-                          value={selectedBlock.textColor || '#ffffff'}
-                          onChange={(e) => updateBlock({ ...selectedBlock, textColor: e.target.value })}
-                          className="w-full bg-transparent border-0 h-8 cursor-pointer rounded"
-                        />
+                      {/* Form and Workflow link (Use Case 2) */}
+                      {selectedBlock.type === 'form' && (
+                        <div className="space-y-2.5">
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-slate-550 font-semibold">Liên kết Custom Form</label>
+                            <select
+                              value={selectedBlock.formId || ''}
+                              onChange={(e) => updateBlock({ ...selectedBlock, formId: e.target.value })}
+                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                            >
+                              <option value="">-- Chọn form thu lead --</option>
+                              {forms.map(f => (
+                                <option key={f.id} value={String(f.id)}>{f.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-slate-550 font-semibold">Kích hoạt Email Drip Workflow</label>
+                            <select
+                              value={selectedBlock.workflowId || ''}
+                              onChange={(e) => updateBlock({ ...selectedBlock, workflowId: e.target.value })}
+                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-855 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                            >
+                              <option value="">-- Không kích hoạt (Chỉ lưu CRM) --</option>
+                              {workflows.map(w => (
+                                <option key={w.id} value={String(w.id)}>{w.name} {w.isActive ? '(Đang chạy)' : '(Nháp)'}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Features list */}
+                      {selectedBlock.type === 'features' && (
+                        <div className="space-y-2">
+                          <label className="text-[11px] text-slate-555 font-semibold">Các mục lợi ích</label>
+                          {(selectedBlock.items || []).map((item, idx) => (
+                            <input
+                              key={idx}
+                              type="text"
+                              value={item}
+                              onChange={(e) => {
+                                const newItems = [...(selectedBlock.items || [])];
+                                newItems[idx] = e.target.value;
+                                updateBlock({ ...selectedBlock, items: newItems });
+                              }}
+                              className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                            />
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newItems = [...(selectedBlock.items || []), 'Lợi ích mới'];
+                              updateBlock({ ...selectedBlock, items: newItems });
+                            }}
+                            className="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded font-semibold transition"
+                          >
+                            + Thêm mục lợi ích
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Countdown block Settings (Use Case 6) */}
+                      {selectedBlock.type === 'countdown' && (
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-slate-550 font-semibold">Hạn đếm ngược (End Date)</label>
+                          <input
+                            type="datetime-local"
+                            value={selectedBlock.countdownEnd || ''}
+                            onChange={(e) => updateBlock({ ...selectedBlock, countdownEnd: e.target.value })}
+                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                          />
+                        </div>
+                      )}
+
+                      {/* Testimonials block Settings (Use Case 6) */}
+                      {selectedBlock.type === 'testimonials' && (
+                        <div className="space-y-4">
+                          <label className="text-[11px] text-slate-550 font-bold">Danh sách Đánh giá</label>
+                          {(selectedBlock.reviews || []).map((r, idx) => (
+                            <div key={idx} className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-2 relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newReviews = (selectedBlock.reviews || []).filter((_, i) => i !== idx);
+                                  updateBlock({ ...selectedBlock, reviews: newReviews });
+                                }}
+                                className="absolute top-1 right-2 text-rose-500 hover:text-rose-600 text-[10px] font-bold"
+                              >
+                                Xóa
+                              </button>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Họ tên"
+                                  value={r.name}
+                                  onChange={(e) => {
+                                    const newReviews = [...(selectedBlock.reviews || [])];
+                                    newReviews[idx] = { ...newReviews[idx], name: e.target.value };
+                                    updateBlock({ ...selectedBlock, reviews: newReviews });
+                                  }}
+                                  className="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Chức vụ"
+                                  value={r.role}
+                                  onChange={(e) => {
+                                    const newReviews = [...(selectedBlock.reviews || [])];
+                                    newReviews[idx] = { ...newReviews[idx], role: e.target.value };
+                                    updateBlock({ ...selectedBlock, reviews: newReviews });
+                                  }}
+                                  className="bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
+                                />
+                              </div>
+                              <textarea
+                                placeholder="Nhận xét của khách hàng..."
+                                value={r.quote}
+                                onChange={(e) => {
+                                  const newReviews = [...(selectedBlock.reviews || [])];
+                                  newReviews[idx] = { ...newReviews[idx], quote: e.target.value };
+                                  updateBlock({ ...selectedBlock, reviews: newReviews });
+                                }}
+                                rows={2}
+                                className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
+                              />
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] text-slate-500 font-semibold">Đánh giá (1-5 sao):</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={5}
+                                  value={r.rating}
+                                  onChange={(e) => {
+                                    const newReviews = [...(selectedBlock.reviews || [])];
+                                    newReviews[idx] = { ...newReviews[idx], rating: parseInt(e.target.value) || 5 };
+                                    updateBlock({ ...selectedBlock, reviews: newReviews });
+                                  }}
+                                  className="w-12 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newReviews = [...(selectedBlock.reviews || []), { name: 'Tên Khách Hàng', role: 'Khách hàng', rating: 5, quote: 'Dịch vụ vô cùng chuyên nghiệp và tuyệt vời!' }];
+                              updateBlock({ ...selectedBlock, reviews: newReviews });
+                            }}
+                            className="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded font-semibold transition"
+                          >
+                            + Thêm đánh giá mới
+                          </button>
+                        </div>
+                      )}
+
+                      {/* FAQ block Settings (Use Case 6) */}
+                      {selectedBlock.type === 'faq' && (
+                        <div className="space-y-4">
+                          <label className="text-[11px] text-slate-550 font-bold">Danh sách FAQ</label>
+                          {(selectedBlock.faqs || []).map((faq, idx) => (
+                            <div key={idx} className="bg-slate-50 p-2.5 rounded border border-slate-200 space-y-2 relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newFaqs = (selectedBlock.faqs || []).filter((_, i) => i !== idx);
+                                  updateBlock({ ...selectedBlock, faqs: newFaqs });
+                                }}
+                                className="absolute top-1 right-2 text-rose-500 hover:text-rose-600 text-[10px] font-bold"
+                              >
+                                Xóa
+                              </button>
+                              <input
+                                type="text"
+                                placeholder="Câu hỏi?"
+                                value={faq.question}
+                                onChange={(e) => {
+                                  const newFaqs = [...(selectedBlock.faqs || [])];
+                                  newFaqs[idx] = { ...newFaqs[idx], question: e.target.value };
+                                  updateBlock({ ...selectedBlock, faqs: newFaqs });
+                                }}
+                                className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
+                              />
+                              <textarea
+                                placeholder="Câu trả lời..."
+                                value={faq.answer}
+                                onChange={(e) => {
+                                  const newFaqs = [...(selectedBlock.faqs || [])];
+                                  newFaqs[idx] = { ...newFaqs[idx], answer: e.target.value };
+                                  updateBlock({ ...selectedBlock, faqs: newFaqs });
+                                }}
+                                rows={2}
+                                className="w-full bg-white border border-slate-200 rounded px-2 py-1 text-xs text-slate-800 focus:outline-none"
+                              />
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newFaqs = [...(selectedBlock.faqs || []), { question: 'Câu hỏi của khách?', answer: 'Nhập câu trả lời giải đáp thắc mắc.' }];
+                              updateBlock({ ...selectedBlock, faqs: newFaqs });
+                            }}
+                            className="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded font-semibold transition"
+                          >
+                            + Thêm câu hỏi mới
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-2 pt-2">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-slate-500 font-semibold">Màu nền</label>
+                          <input
+                            type="color"
+                            value={selectedBlock.backgroundColor || '#0f172a'}
+                            onChange={(e) => updateBlock({ ...selectedBlock, backgroundColor: e.target.value })}
+                            className="w-full bg-transparent border-0 h-8 cursor-pointer rounded"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-slate-500 font-semibold">Màu chữ</label>
+                          <input
+                            type="color"
+                            value={selectedBlock.textColor || '#ffffff'}
+                            onChange={(e) => updateBlock({ ...selectedBlock, textColor: e.target.value })}
+                            className="w-full bg-transparent border-0 h-8 cursor-pointer rounded"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <>
+                    {/* Add Blocks */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Thêm khối mới</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => addBlock('hero')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          Banner (Hero)
+                        </button>
+                        <button onClick={() => addBlock('features')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          Lợi ích (Features)
+                        </button>
+                        <button onClick={() => addBlock('form')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          Biểu mẫu (Form)
+                        </button>
+                        <button onClick={() => addBlock('pricing')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          Bảng giá (Pricing)
+                        </button>
+                        <button onClick={() => addBlock('countdown')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          ⏳ Đếm ngược
+                        </button>
+                        <button onClick={() => addBlock('testimonials')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          ★ Đánh giá
+                        </button>
+                        <button onClick={() => addBlock('faq')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          ❓ Câu hỏi FAQ
+                        </button>
+                        <button onClick={() => addBlock('footer')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
+                          Chân trang (Footer)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Block List / Navigation */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Cấu trúc trang</label>
+                      {blocks.length === 0 ? (
+                        <p className="text-slate-400 text-xs text-center py-4">Trang chưa có khối nào.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {blocks.map((block, index) => (
+                            <div
+                              key={block.id}
+                              draggable
+                              onDragStart={() => handleDragStart(index)}
+                              onDragOver={(e) => handleDragOver(e, index)}
+                              onDrop={() => handleDrop(index)}
+                              onDragEnd={() => {
+                                setDraggedIdx(null);
+                                setDragOverIdx(null);
+                              }}
+                              onClick={() => setSelectedBlockId(block.id)}
+                              className={`flex justify-between items-center px-3 py-2 rounded-lg border cursor-grab active:cursor-grabbing transition ${selectedBlockId === block.id ? 'bg-orange-50 border-[#f25c22] text-[#f25c22]' : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'} ${draggedIdx === index ? 'opacity-40 border-dashed border-[#f25c22]' : ''}`}
+                            >
+                              <div className="flex items-center gap-1.5 overflow-hidden">
+                                <span className="text-slate-400 select-none text-xs font-mono">⋮⋮</span>
+                                <span className="text-xs font-medium capitalize truncate">
+                                  {index + 1}. {block.type === 'countdown' ? 'Đếm ngược' : block.type === 'testimonials' ? 'Đánh giá' : block.type === 'faq' ? 'FAQ' : block.type}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={(e) => { e.stopPropagation(); moveBlock(index, 'up'); }}
+                                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent text-slate-500 hover:text-slate-900"
+                                  title="Di chuyển lên"
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={index === blocks.length - 1}
+                                  onClick={(e) => { e.stopPropagation(); moveBlock(index, 'down'); }}
+                                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent text-slate-500 hover:text-slate-900"
+                                  title="Di chuyển xuống"
+                                >
+                                  ↓
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); deleteBlock(block.id); }}
+                                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition"
+                                  title="Xóa khối"
+                                >
+                                  &times;
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </>
             )}
