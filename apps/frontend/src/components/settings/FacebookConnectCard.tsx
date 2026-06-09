@@ -240,6 +240,41 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
     }, 1000);
   };
 
+  const handleUnifiedConnect = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const workspaceId = localStorage.getItem('workspaceId') || '0';
+      const data = await apiJson<{ url: string }>(`/auth/social/facebook/url?action=connect&workspaceId=${workspaceId}`);
+      if (data.url) {
+        const popup = window.open(data.url, 'fb_oauth', 'width=600,height=700,scrollbars=yes');
+        const handleMessage = (event: MessageEvent) => {
+          if (event.data?.type === 'social_connected' && event.data?.platform === 'facebook') {
+            onConnectionChange();
+            void loadStatus();
+            window.removeEventListener('message', handleMessage);
+          }
+        };
+        window.addEventListener('message', handleMessage);
+
+        const check = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(check);
+            setLoading(false);
+            onConnectionChange();
+            void loadStatus();
+          }
+        }, 1000);
+      } else {
+        setError('Không tạo được đường dẫn kết nối Facebook.');
+        setLoading(false);
+      }
+    } catch (e: any) {
+      setError(e.message || 'Lỗi kết nối máy chủ.');
+      setLoading(false);
+    }
+  };
+
   const botReady = status?.botReady ?? false;
 
   return (
@@ -359,18 +394,26 @@ export function FacebookConnectCard({ connection, onConnectionChange }: Props) {
             <div className="flex flex-wrap gap-2.5 sm:flex-nowrap">
               <button
                 type="button"
-                onClick={() => setWizardOpen(true)}
+                onClick={handleUnifiedConnect}
+                disabled={loading}
                 className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-white rounded-xl shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
                 style={{ background: 'linear-gradient(135deg, #1877F2 0%, #0c5dc7 100%)' }}
+              >
+                {loading ? 'Đang kết nối...' : 'Kết nối Một chạm (OAuth)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setWizardOpen(true)}
+                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-xl hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
               >
                 Kết nối bằng Token
               </button>
               <button
                 type="button"
                 onClick={() => setAdvancedOpen(true)}
-                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 rounded-xl hover:bg-slate-50 transition-all active:scale-95 shadow-sm"
+                className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-slate-400 bg-white border border-slate-100 rounded-xl hover:bg-slate-50 transition-all active:scale-95"
               >
-                Cấu hình OAuth App
+                Cấu hình thủ công
               </button>
             </div>
           </div>

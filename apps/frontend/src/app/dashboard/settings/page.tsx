@@ -222,6 +222,70 @@ export default function SettingsPage() {
     } catch { setZaloError(t('Lỗi tạo URL đăng nhập')); setZaloLoading(false); }
   };
 
+  const handleZaloUnifiedConnect = async () => {
+    setZaloLoading(true); setZaloError(''); setZaloSuccess('');
+    try {
+      const workspaceId = localStorage.getItem('workspaceId') || '0';
+      const data = await apiJson<{ url: string }>(`/auth/social/zalo/url?action=connect&workspaceId=${workspaceId}`);
+      if (data.url) {
+        const popup = window.open(data.url, 'zalo_oauth', 'width=600,height=700,scrollbars=yes');
+        const handleMessage = (event: MessageEvent) => {
+          if (event.data?.type === 'social_connected' && event.data?.platform === 'zalo') {
+            fetchConnections();
+            window.removeEventListener('message', handleMessage);
+          }
+        };
+        window.addEventListener('message', handleMessage);
+
+        const check = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(check);
+            setZaloLoading(false);
+            fetchConnections();
+          }
+        }, 1000);
+      } else {
+        setZaloError(t('Không tạo được đường dẫn kết nối Zalo.'));
+        setZaloLoading(false);
+      }
+    } catch (e: any) {
+      setZaloError(e.message || t('Lỗi kết nối máy chủ.'));
+      setZaloLoading(false);
+    }
+  };
+
+  const handleGoogleUnifiedConnect = async () => {
+    setEmailLoading(true); setEmailError(''); setEmailSuccess('');
+    try {
+      const workspaceId = localStorage.getItem('workspaceId') || '0';
+      const data = await apiJson<{ url: string }>(`/auth/social/google/url?action=connect&workspaceId=${workspaceId}`);
+      if (data.url) {
+        const popup = window.open(data.url, 'google_oauth', 'width=600,height=700,scrollbars=yes');
+        const handleMessage = (event: MessageEvent) => {
+          if (event.data?.type === 'social_connected' && event.data?.platform === 'google') {
+            fetchConnections();
+            window.removeEventListener('message', handleMessage);
+          }
+        };
+        window.addEventListener('message', handleMessage);
+
+        const check = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(check);
+            setEmailLoading(false);
+            fetchConnections();
+          }
+        }, 1000);
+      } else {
+        setEmailError(t('Không tạo được đường dẫn kết nối Google.'));
+        setEmailLoading(false);
+      }
+    } catch (e: any) {
+      setEmailError(e.message || t('Lỗi kết nối máy chủ.'));
+      setEmailLoading(false);
+    }
+  };
+
   // ===== MAILCHIMP =====
   const handleMailchimpConnect = async () => {
     setMcLoading(true); setMcError(''); setMcSuccess('');
@@ -467,9 +531,22 @@ export default function SettingsPage() {
                 </button>
               </div>
             ) : (
-              <button onClick={() => { setEmailMode('form'); setEmailError(''); setEmailSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#EA4335' }}>
-                {t('Kết nối Email')}
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleGoogleUnifiedConnect}
+                  disabled={emailLoading}
+                  className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                  style={{ background: '#EA4335' }}
+                >
+                  {emailLoading ? t('Đang kết nối...') : t('Google OAuth (Một chạm)')}
+                </button>
+                <button 
+                  onClick={() => { setEmailMode('form'); setEmailError(''); setEmailSuccess(''); }} 
+                  className="px-4 py-2 text-sm font-medium text-[#EA4335] bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                >
+                  {t('SMTP Thủ công')}
+                </button>
+              </div>
             )}
           </div>
 
@@ -528,11 +605,25 @@ export default function SettingsPage() {
               </button>
             ) : (
               <div className="flex gap-2">
-                <button onClick={() => { setZaloMode('quick'); setZaloError(''); setZaloSuccess(''); }} className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors" style={{ background: '#0068FF' }}>
-                  {t('Kết nối nhanh')}
+                <button 
+                  onClick={handleZaloUnifiedConnect}
+                  disabled={zaloLoading}
+                  className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                  style={{ background: '#0068FF' }}
+                >
+                  {zaloLoading ? t('Đang kết nối...') : t('Zalo OA (Một chạm)')}
                 </button>
-                <button onClick={() => { setZaloMode('oauth'); setZaloError(''); setZaloSuccess(''); }} className="px-4 py-2 text-sm font-medium text-[#0068FF] bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                  {t('Đăng nhập OAuth')}
+                <button 
+                  onClick={() => { setZaloMode('quick'); setZaloError(''); setZaloSuccess(''); }} 
+                  className="px-4 py-2 text-sm font-medium text-[#0068FF] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                >
+                  {t('Token thủ công')}
+                </button>
+                <button 
+                  onClick={() => { setZaloMode('oauth'); setZaloError(''); setZaloSuccess(''); }} 
+                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-650 transition-colors"
+                >
+                  {t('Cấu hình ứng dụng')}
                 </button>
               </div>
             )}

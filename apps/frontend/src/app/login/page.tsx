@@ -17,6 +17,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const handleSocialLogin = async (platform: string) => {
+    setError('');
+    try {
+      const res = await fetch(apiUrl(`/api/auth/social/${platform}/url?action=login`));
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError('Không tạo được đường dẫn đăng nhập mạng xã hội.');
+      }
+    } catch {
+      setError('Lỗi kết nối máy chủ.');
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -176,14 +191,33 @@ export default function LoginPage() {
                 <div className="flex-grow border-t border-slate-150"></div>
               </div>
 
-              {/* Google OAuth Button */}
-              <button 
-                type="button" 
-                className="flex items-center justify-center gap-2 py-3 rounded-xl bg-[#f0f4f9] hover:bg-[#e2e8f0] text-xs font-bold text-slate-700 transition-colors shadow-sm w-full border border-slate-200/50 cursor-pointer"
-                onClick={() => alert('Đăng nhập qua Google chưa được cấu hình Client ID.')}
-              >
-                Tiếp tục với Google
-              </button>
+              {/* Social OAuth Buttons */}
+              <div className="grid grid-cols-3 gap-2.5">
+                <button 
+                  type="button" 
+                  className="flex items-center justify-center flex-col gap-1 py-2.5 rounded-xl bg-[#ea4335]/5 hover:bg-[#ea4335]/10 border border-[#ea4335]/15 text-[#ea4335] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  onClick={() => handleSocialLogin('google')}
+                >
+                  <span className="text-base">🔴</span>
+                  <span>Google</span>
+                </button>
+                <button 
+                  type="button" 
+                  className="flex items-center justify-center flex-col gap-1 py-2.5 rounded-xl bg-[#1877f2]/5 hover:bg-[#1877f2]/10 border border-[#1877f2]/15 text-[#1877f2] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  onClick={() => handleSocialLogin('facebook')}
+                >
+                  <span className="text-base">📘</span>
+                  <span>Facebook</span>
+                </button>
+                <button 
+                  type="button" 
+                  className="flex items-center justify-center flex-col gap-1 py-2.5 rounded-xl bg-[#0068ff]/5 hover:bg-[#0068ff]/10 border border-[#0068ff]/15 text-[#0068ff] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  onClick={() => handleSocialLogin('zalo')}
+                >
+                  <span className="text-base">💬</span>
+                  <span>Zalo</span>
+                </button>
+              </div>
             </div>
 
             {/* Footer Registration text */}

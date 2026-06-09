@@ -32,6 +32,7 @@ import formsRoutes from './routes/forms';
 import paymentsRoutes from './routes/payments';
 import ordersRoutes from './routes/orders';
 import cskhRoutes from './routes/cskh';
+import socialAuthRoutes from './routes/socialAuth';
 import { workspaceMiddleware } from './middleware/workspace';
 import { authenticate } from './middleware/auth';
 import { API_FEATURES, API_VERSION } from './lib/apiMeta';
@@ -92,6 +93,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/auth/social', socialAuthRoutes);
 app.use('/api/workspaces', workspacesRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/email-campaigns', emailCampaignsRoutes);

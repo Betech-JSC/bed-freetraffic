@@ -17,6 +17,21 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const handleSocialLogin = async (platform: string) => {
+    setError('');
+    try {
+      const res = await fetch(apiUrl(`/api/auth/social/${platform}/url?action=login`));
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError('Không tạo được đường dẫn đăng ký mạng xã hội.');
+      }
+    } catch {
+      setError('Lỗi kết nối máy chủ.');
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!agree) {
@@ -128,20 +143,30 @@ export default function RegisterPage() {
           {success && <p className="alert-info text-xs sm:text-sm py-2.5">{success}</p>}
 
           {/* Social signup OAuth */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2.5">
             <button 
               type="button" 
-              className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-sm"
-              onClick={() => alert('Đăng ký qua Google chưa được cấu hình Client ID.')}
+              className="flex items-center justify-center flex-col gap-1 py-2 rounded-xl bg-[#ea4335]/5 hover:bg-[#ea4335]/10 border border-[#ea4335]/15 text-[#ea4335] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              onClick={() => handleSocialLogin('google')}
             >
-              Google
+              <span className="text-sm">🔴</span>
+              <span>Google</span>
             </button>
             <button 
               type="button" 
-              className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-colors shadow-sm"
-              onClick={() => alert('Đăng ký qua GitHub chưa được cấu hình Client ID.')}
+              className="flex items-center justify-center flex-col gap-1 py-2 rounded-xl bg-[#1877f2]/5 hover:bg-[#1877f2]/10 border border-[#1877f2]/15 text-[#1877f2] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              onClick={() => handleSocialLogin('facebook')}
             >
-              GitHub
+              <span className="text-sm">📘</span>
+              <span>Facebook</span>
+            </button>
+            <button 
+              type="button" 
+              className="flex items-center justify-center flex-col gap-1 py-2 rounded-xl bg-[#0068ff]/5 hover:bg-[#0068ff]/10 border border-[#0068ff]/15 text-[#0068ff] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              onClick={() => handleSocialLogin('zalo')}
+            >
+              <span className="text-sm">💬</span>
+              <span>Zalo</span>
             </button>
           </div>
 
