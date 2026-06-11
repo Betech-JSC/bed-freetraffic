@@ -355,7 +355,7 @@ export const translations = {
     'Bản tin tuần 24': 'Weekly Newsletter 24',
     'Danh sách Email nhận (cách nhau bởi dấu phẩy) *': 'Recipient email list (comma-separated) *',
     'Hẹn giờ gửi (Để trống để lưu nháp)': 'Schedule Send Time (Leave blank for draft)',
-    'Nội dung Email (HTML) *': 'Email Content (HTML) *',
+     'Nội dung Email *': 'Email Content *',
     'Danh sách các chiến dịch': 'Campaign List',
     'Tên chiến dịch': 'Campaign Name',
     'Lịch gửi': 'Schedule',

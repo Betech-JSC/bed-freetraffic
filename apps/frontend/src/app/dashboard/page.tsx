@@ -151,7 +151,18 @@ export default function DashboardPage() {
 
           {!data.stats.gscConnected && (
             <p className="alert-info mt-4 text-xs leading-relaxed">
-              Thêm <code className="font-mono text-brand">GSC_SITE_URL</code> trong backend .env để bật dữ liệu Search Console thật.
+              {data.stats.ga4Connected ? (
+                <span>
+                  Đã kết nối tài khoản Google. Để bật dữ liệu Search Console, vui lòng đảm bảo website của bạn đã được xác minh quyền sở hữu trong{' '}
+                  <a href="https://search.google.com/search-console" target="_blank" rel="noreferrer" className="underline hover:text-brand font-semibold">
+                    Google Search Console
+                  </a>.
+                </span>
+              ) : (
+                <span>
+                  Kết nối Google OAuth trong phần <strong>Cài đặt</strong> để bắt đầu đồng bộ dữ liệu Search Console và Analytics.
+                </span>
+              )}
             </p>
           )}
 

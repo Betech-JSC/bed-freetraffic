@@ -1,7 +1,9 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
+import dotenv from 'dotenv'; // Reloader trigger comment
 import path from 'path';
+import { createServer } from 'http';
+import { initSocket } from './lib/socket';
 import authRoutes from './routes/auth';
 import channelRoutes from './routes/channel';
 import keywordRoutes from './routes/keyword';
@@ -150,7 +152,10 @@ app.use(errorHandler);
 import { initVectorDb } from './lib/embeddings';
 import { initAuditLogDb } from './lib/auditInit';
 
-app.listen(port, () => {
+const server = createServer(app);
+initSocket(server);
+
+server.listen(port, () => {
   console.log(`Backend is running at http://localhost:${port}`);
   console.log(`✅ API ${API_VERSION} — Quét backlink: GET/POST /api/backlinks/scan`);
   

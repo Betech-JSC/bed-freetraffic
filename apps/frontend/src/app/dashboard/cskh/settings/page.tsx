@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { io } from 'socket.io-client';
 import Link from 'next/link';
 
 type CskhConfig = {
@@ -27,8 +28,10 @@ type CskhConfig = {
 
 type ChatMessage = {
   id: number;
+  sessionId: string;
   sender: 'visitor' | 'bot' | 'agent';
   content: string;
+  imageUrl?: string | null;
   createdAt: string;
 };
 
@@ -49,6 +52,17 @@ type ChatSession = {
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
+};
+
+const getFullImageUrl = (url: string | null | undefined) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const apiHost = process.env.NEXT_PUBLIC_API_URL 
+    ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '') 
+    : 'http://localhost:4000';
+  return `${apiHost}${url}`;
 };
 
 export default function CskhSettingsPage() {
@@ -108,20 +122,52 @@ export default function CskhSettingsPage() {
   const [agentReplyInput, setAgentReplyInput] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
-  // Poll active session messages in real-time
+  // Real-time socket message synchronization
   useEffect(() => {
-    if (!activeSession || activeTab !== 'history') return;
-    const interval = setInterval(async () => {
-      try {
-        const data = await apiJson<ChatMessage[]>(`/cskh/sessions/${activeSession.id}/messages`);
-        if (data) {
-          setSessionMessages(data);
-        }
-      } catch (e) {
-        // ignore
+    if (activeTab !== 'history') return;
+
+    const wsIdStr = typeof window !== 'undefined' ? localStorage.getItem('workspaceId') : null;
+    const workspaceId = wsIdStr ? parseInt(wsIdStr, 10) : null;
+    if (!workspaceId) return;
+
+    const socketHost = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const socket = io(socketHost);
+
+    socket.emit('join_workspace', workspaceId);
+
+    if (activeSession) {
+      socket.emit('join_session', activeSession.id);
+    }
+
+    socket.on('new_message', (msg: ChatMessage) => {
+      // If we are currently viewing the session this message belongs to, append/update it
+      if (activeSession && msg.sessionId === activeSession.id) {
+        setSessionMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
       }
-    }, 4000);
-    return () => clearInterval(interval);
+
+      // Also update the activeSession's last message or notify the session list!
+      setSessions((prevSessions) => {
+        return prevSessions
+          .map((s) => {
+            if (s.id === msg.sessionId) {
+              return {
+                ...s,
+                updatedAt: new Date().toISOString(),
+                messages: [msg], // Replace last message
+              };
+            }
+            return s;
+          })
+          .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
   }, [activeSession, activeTab]);
 
   const loadConfig = useCallback(async () => {
@@ -911,6 +957,16 @@ export default function CskhSettingsPage() {
                           key={msg.id}
                           className={`max-w-[80%] p-3 rounded-2xl text-xs leading-relaxed shadow-sm ${cardClass}`}
                         >
+                          {msg.imageUrl && (
+                            <div className="mb-2 max-w-xs overflow-hidden rounded-lg border border-slate-200/20">
+                              <img 
+                                src={getFullImageUrl(msg.imageUrl)} 
+                                alt="Hình ảnh đính kèm" 
+                                className="object-cover max-h-48 rounded-lg cursor-zoom-in"
+                                onClick={() => window.open(getFullImageUrl(msg.imageUrl), '_blank')}
+                              />
+                            </div>
+                          )}
                           <p className="whitespace-pre-wrap">{msg.content}</p>
                           <span className={`block text-[8px] text-right mt-1.5 ${labelColor}`}>
                             {labelName} • {new Date(msg.createdAt).toLocaleTimeString('vi-VN')}

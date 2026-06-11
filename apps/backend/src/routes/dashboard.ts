@@ -30,7 +30,7 @@ async function getLiveDashboard(days: number, workspaceId?: number) {
   let chartData: { name: string; traffic: number; keywords: number; pageviews?: number }[] = [];
 
   const gscByDate = new Map<string, number>();
-  const gsc = await fetchGscSummary(days);
+  const gsc = await fetchGscSummary(days, workspaceId);
   if (gsc.connected) {
     gscConnected = true;
     organicSearch = gsc.clicks;
@@ -40,7 +40,10 @@ async function getLiveDashboard(days: number, workspaceId?: number) {
 
   const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
   const ga4PropertyId = integration?.ga4PropertyId || getGa4PropertyId();
-  const analyticsDataClient = await getGa4Client();
+  const analyticsDataClient = await getGa4Client(workspaceId);
+
+  ga4Connected = integration?.syncStatus === 'CONNECTED';
+  gscConnected = gscConnected || !!integration?.gscSiteUrl || !!getGscSiteUrl();
 
   if (analyticsDataClient) {
     try {
@@ -51,7 +54,6 @@ async function getLiveDashboard(days: number, workspaceId?: number) {
       });
       if (response?.rows?.length) {
         totalTraffic = parseInt(response.rows[0].metricValues![0].value!) || 0;
-        ga4Connected = true;
       }
 
       const chartDays = Math.min(days, 30);

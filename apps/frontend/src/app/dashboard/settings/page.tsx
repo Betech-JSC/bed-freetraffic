@@ -128,6 +128,17 @@ export default function SettingsPage() {
     fetchGoogle();
   };
 
+  const disconnectGoogle = async () => {
+    if (!confirm(t('Bạn có chắc chắn muốn ngắt kết nối tài khoản Google không?'))) return;
+    try {
+      await apiFetch('/google', { method: 'DELETE' });
+      setGoogleSyncMsg('');
+      fetchGoogle();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const getConn = (platform: string) => connections.find(c => c.platform === platform && c.status === 'CONNECTED');
 
   const handleDisconnect = async (platform: string) => {
@@ -447,11 +458,6 @@ export default function SettingsPage() {
 
       <div className="card p-6 border-2 border-violet-100">
         <h2 className="font-bold text-slate-900 mb-2">Google Analytics &amp; Search Console</h2>
-        <p className="text-sm text-slate-500 mb-4">
-          {t('Admin kết nối')} <strong>{t('một lần')}</strong> {t('bằng Gmail có quyền GA4/GSC (OAuth). Không cần thêm service account trong GA4 nếu Google không chấp nhận email')}{' '}
-          <code className="text-xs bg-slate-100 px-1 rounded">@iam.gserviceaccount.com</code>.
-          {t('File')} <code className="text-xs bg-slate-100 px-1 rounded">google-credentials.json</code> {t('là tùy chọn dự phòng.')}
-        </p>
         <div className="flex flex-wrap gap-3 items-center">
           <span
             className={`text-xs font-semibold px-2 py-1 rounded-full ${
@@ -466,13 +472,28 @@ export default function SettingsPage() {
             </span>
           )}
           {googleStatus?.oauthAvailable && (
-            <button type="button" className="btn-primary text-sm" onClick={connectGoogle}>
-              {t('Kết nối Google OAuth')}
+            <button 
+              type="button" 
+              className={googleStatus?.connected ? "btn-secondary text-sm" : "btn-primary text-sm"} 
+              onClick={connectGoogle}
+            >
+              {googleStatus?.connected ? t('Kết nối lại (Đổi tài khoản)') : t('Kết nối Google OAuth')}
             </button>
           )}
-          <button type="button" className="btn-secondary text-sm" onClick={syncGoogle}>
-            {t('Đồng bộ ngay')}
-          </button>
+          {googleStatus?.connected && (
+            <>
+              <button type="button" className="btn-secondary text-sm" onClick={syncGoogle}>
+                {t('Đồng bộ ngay')}
+              </button>
+              <button 
+                type="button" 
+                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors" 
+                onClick={disconnectGoogle}
+              >
+                {t('Ngắt kết nối')}
+              </button>
+            </>
+          )}
         </div>
         {googleSyncMsg && <p className="text-sm text-slate-600 mt-3">{googleSyncMsg}</p>}
       </div>

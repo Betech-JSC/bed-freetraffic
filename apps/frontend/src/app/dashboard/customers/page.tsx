@@ -554,23 +554,23 @@ export default function CustomersPage() {
         <div>
           <h4 className="font-bold text-slate-800 text-sm">Hướng dẫn chăm sóc khách hàng</h4>
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Chọn một khách hàng ở danh sách bên trái để xem hồ sơ chi tiết. Khi soạn email gửi hàng loạt hoặc cá nhân, bạn có thể bấm vào để chèn nhanh: 
+            Chọn một khách hàng ở danh sách bên trái để xem hồ sơ chi tiết. Khi soạn email gửi hàng loạt hoặc cá nhân, bạn có thể bấm vào nút 
             <button
               type="button"
-              className="mx-1 bg-brand/10 border border-brand/20 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
-              title="Click để chèn {ten}"
+              className="mx-1 bg-brand/10 border border-brand/20 px-2 py-0.5 rounded text-brand text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              title="Click để chèn tên khách hàng"
               onClick={() => insertPlaceholder('{ten}')}
             >
-              {'{ten}'}
+              Chèn Tên
             </button>
-            để gọi tên khách, hoặc 
+            để gọi tên khách, hoặc nút
             <button
               type="button"
-              className="mx-1 bg-brand/10 border border-brand/20 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
-              title="Click để chèn {ghi_chu}"
+              className="mx-1 bg-brand/10 border border-brand/20 px-2 py-0.5 rounded text-brand text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              title="Click để chèn ghi chú khách hàng"
               onClick={() => insertPlaceholder('{ghi_chu}')}
             >
-              {'{ghi_chu}'}
+              Chèn Ghi Chú
             </button>
             để đính kèm ghi chú chăm sóc mới nhất của họ. (Yêu cầu cấu hình SMTP trong Cài đặt).
           </p>

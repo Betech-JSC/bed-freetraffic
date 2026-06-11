@@ -46,7 +46,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title={t('Người dùng')} description="Phase 1 — FR-10 RBAC (ADMIN / EDITOR / VIEWER)" />
+      <PageHeader title={t('Người dùng')} description={t('Quản lý danh sách thành viên và phân quyền truy cập hệ thống')} />
       {error && <div className="rounded-xl bg-amber-50 text-amber-800 px-4 py-3 text-sm">{error}</div>}
       <form onSubmit={create} className="card p-6 grid md:grid-cols-4 gap-3">
         <input className="input" placeholder={t('Email')} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />

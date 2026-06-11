@@ -1,6 +1,41 @@
 import prisma from '../lib/prisma';
 import { getAiConfig, fetchWithRetry } from '../lib/ai';
 import { createSmtpTransporter, getSmtpConfig } from '../lib/smtp';
+import { getIo } from '../lib/socket';
+import fs from 'fs';
+import path from 'path';
+
+function getBase64ImageUrl(imageUrl: string): string | null {
+  try {
+    if (imageUrl.startsWith('/uploads/')) {
+      const filePath = path.join(__dirname, '../..', imageUrl);
+      if (fs.existsSync(filePath)) {
+        const fileBuffer = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase().replace('.', '');
+        const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+        return `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+      }
+    } else if (imageUrl.startsWith('data:')) {
+      return imageUrl;
+    }
+  } catch (err) {
+    console.error('[Vision Helper] Error converting image to base64:', err);
+  }
+  return null;
+}
+
+function broadcastSocketMessage(workspaceId: number, sessionId: string, message: any) {
+  try {
+    const io = getIo();
+    if (io) {
+      io.to(`session:${sessionId}`).emit('new_message', message);
+      io.to(`workspace:${workspaceId}`).emit('new_message', message);
+      console.log(`[Socket.io] Broadcasted message ${message.id} to session:${sessionId} and workspace:${workspaceId}`);
+    }
+  } catch (err) {
+    console.error('[Socket.io] Error broadcasting message:', err);
+  }
+}
 
 
 export interface ChatMessageData {
@@ -208,7 +243,7 @@ Yêu cầu trả về kết quả định dạng JSON với các trường sau (
 }
 
 
-function detectTakeoverIntent(message: string): boolean {
+export function detectTakeoverIntent(message: string): boolean {
   const lowerMsg = message.toLowerCase();
   
   // Danh sách từ khóa thể hiện ý định gặp nhân viên hoặc thái độ bực dọc cần can thiệp khẩn cấp
@@ -596,7 +631,8 @@ export async function handleVisitorMessage(
   sessionId: string | undefined,
   message: string,
   ipAddress?: string,
-  userAgent?: string
+  userAgent?: string,
+  imageUrl?: string
 ): Promise<{ sessionId: string; reply: string; customerId: number | null }> {
   // 1. Get or create session
   let session;
@@ -617,13 +653,15 @@ export async function handleVisitorMessage(
   }
 
   // 2. Save visitor message
-  await prisma.chatMessage.create({
+  const visitorMsg = await prisma.chatMessage.create({
     data: {
       sessionId: session.id,
       sender: 'visitor',
       content: message,
+      imageUrl: imageUrl || null,
     }
   });
+  broadcastSocketMessage(workspaceId, session.id, visitorMsg);
 
   const ai = getAiConfig('/chat/completions');
 
@@ -756,13 +794,14 @@ export async function handleVisitorMessage(
 
     // Save bot response
     const replyText = 'Dạ em đã ghi nhận yêu cầu của anh/chị và chuyển tiếp ngay đến chuyên viên tư vấn hỗ trợ trực tiếp. Chuyên viên sẽ phản hồi lại anh/chị ngay trong giây lát ạ!';
-    await prisma.chatMessage.create({
+    const botMsg = await prisma.chatMessage.create({
       data: {
         sessionId: session.id,
         sender: 'bot',
         content: replyText,
       }
     });
+    broadcastSocketMessage(workspaceId, session.id, botMsg);
 
     return {
       sessionId: session.id,
@@ -806,10 +845,25 @@ export async function handleVisitorMessage(
       });
       history.reverse();
 
-      const messagesForAi = history.map(msg => ({
-        role: msg.sender === 'visitor' ? 'user' as const : 'assistant' as const,
-        content: msg.content,
-      }));
+      const messagesForAi = history.map(msg => {
+        const role = msg.sender === 'visitor' ? 'user' as const : 'assistant' as const;
+        if (msg.imageUrl && role === 'user') {
+          const base64Url = getBase64ImageUrl(msg.imageUrl);
+          if (base64Url) {
+            return {
+              role,
+              content: [
+                { type: 'text', text: msg.content || 'Hãy xem hình ảnh này.' },
+                { type: 'image_url', image_url: { url: base64Url } }
+              ] as any
+            };
+          }
+        }
+        return {
+          role,
+          content: msg.content,
+        };
+      });
 
       const defaultKb = `Be Traffic (Growth OS) là một nền tảng tối ưu hóa traffic và bán hàng tự động All-in-One.
 Các tính năng và dịch vụ chính:
@@ -957,13 +1011,14 @@ Nhiệm vụ của bạn:
   }
 
   // Save bot response
-  await prisma.chatMessage.create({
+  const botMsg = await prisma.chatMessage.create({
     data: {
       sessionId: session.id,
       sender: 'bot',
       content: replyText,
     }
   });
+  broadcastSocketMessage(workspaceId, session.id, botMsg);
 
   // 4. Extract Email & Phone from message
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;

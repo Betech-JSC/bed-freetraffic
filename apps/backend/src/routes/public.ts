@@ -6,6 +6,40 @@ import PayOS from '@payos/node';
 import Stripe from 'stripe';
 import { invalidateWorkspaceCache } from '../lib/cache';
 import { publicSpamLimiter } from '../middleware/rateLimiter';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import FormData from 'form-data';
+import { getAiConfig } from '../lib/ai';
+
+const uploadDir = path.join(__dirname, '../../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `cskh-img-${uniqueSuffix}${ext}`);
+  }
+});
+
+const uploadImage = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ cho phép tải lên định dạng hình ảnh (JPEG, PNG, GIF, WEBP).') as any, false);
+    }
+  }
+});
 
 
 const router = Router();
@@ -449,10 +483,116 @@ router.get('/pages/:slug/html', async (req: Request, res: Response): Promise<voi
   }
 });
 
+// Public endpoint to upload images for chat widget
+router.post('/cskh/upload-image', (req: Request, res: Response): void => {
+  uploadImage.single('image')(req, res, (err) => {
+    if (err) {
+      res.status(400).json({ error: err.message || 'Lỗi tải tệp tin.' });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: 'Không tìm thấy tệp tin được tải lên.' });
+      return;
+    }
+    const publicUrl = `/uploads/${req.file.filename}`;
+    res.json({ success: true, imageUrl: publicUrl });
+  });
+});
+
+const audioStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname).toLowerCase() || '.webm';
+    cb(null, `cskh-audio-${uniqueSuffix}${ext}`);
+  }
+});
+
+const uploadAudio = multer({
+  storage: audioStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedExtensions = ['.flac', '.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.ogg', '.wav', '.webm'];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedExtensions.includes(ext) || file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ chấp nhận các tệp tin âm thanh hợp lệ.') as any, false);
+    }
+  }
+});
+
+// Public endpoint to transcribe audio for voice chat (Whisper fallback)
+router.post('/cskh/transcribe', (req: Request, res: Response): void => {
+  uploadAudio.single('audio')(req, res, async (err) => {
+    if (err) {
+      console.error('[STT Fallback] Multer error:', err);
+      res.status(400).json({ error: err.message || 'Lỗi tải tệp tin âm thanh.' });
+      return;
+    }
+    if (!req.file) {
+      res.status(400).json({ error: 'Không tìm thấy tệp tin âm thanh được tải lên.' });
+      return;
+    }
+
+    try {
+      const ai = getAiConfig('/audio/transcriptions');
+      if (!ai.apiKey) {
+        res.status(400).json({ error: 'AI provider is not configured for transcription.' });
+        return;
+      }
+
+      const form = new FormData();
+      form.append('file', fs.createReadStream(req.file.path), {
+        filename: req.file.filename,
+        contentType: req.file.mimetype
+      });
+      form.append('model', 'whisper-1');
+      form.append('language', 'vi');
+
+      const headers = { ...ai.headers };
+      delete headers['Content-Type'];
+      Object.assign(headers, form.getHeaders());
+
+      const response = await fetch(ai.url, {
+        method: 'POST',
+        headers,
+        body: form as any
+      });
+
+      const cleanup = () => {
+        if (req.file && fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+      };
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error('[STT Fallback] Whisper API response error:', errText);
+        cleanup();
+        res.status(response.status).json({ error: 'Không thể nhận diện giọng nói từ API.' });
+        return;
+      }
+
+      const result = await response.json();
+      cleanup();
+      res.json({ success: true, text: result.text || '' });
+    } catch (error: any) {
+      console.error('[STT Fallback] Error in transcribe route:', error);
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      res.status(500).json({ error: error.message || 'Lỗi hệ thống khi nhận diện giọng nói.' });
+    }
+  });
+});
+
 // Public chat message processing
 router.post('/cskh/chat', publicSpamLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workspaceId, sessionId, message } = req.body;
+    const { workspaceId, sessionId, message, imageUrl } = req.body;
     if (!workspaceId || !message) {
       res.status(400).json({ error: 'workspaceId và message là bắt buộc.' });
       return;
@@ -466,7 +606,8 @@ router.post('/cskh/chat', publicSpamLimiter, async (req: Request, res: Response)
       sessionId,
       message,
       ip,
-      userAgent
+      userAgent,
+      imageUrl
     );
 
     res.json(result);

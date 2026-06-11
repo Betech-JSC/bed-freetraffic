@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, requireWrite } from '../middleware/auth';
 import { WorkspaceRequest } from '../middleware/workspace';
+import { getIo } from '../lib/socket';
 import { cache, invalidateWorkspaceCache } from '../lib/cache';
 import multer from 'multer';
 import axios from 'axios';
@@ -19,7 +20,7 @@ const upload = multer({
 });
 
 
-// Load CSKH Config
+// Load CSKH Config (Real-time Config)
 router.get('/config', authenticate, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   const cacheKey = `ws:${req.workspaceId}:cskh-config`;
   try {
@@ -221,6 +222,16 @@ router.post('/sessions/:id/send-agent', authenticate, requireWrite, async (req: 
       where: { id: sessionId },
       data: { updatedAt: new Date() },
     });
+
+    try {
+      const io = getIo();
+      if (io) {
+        io.to(`session:${sessionId}`).emit('new_message', message);
+        io.to(`workspace:${req.workspaceId}`).emit('new_message', message);
+      }
+    } catch (socketErr) {
+      console.error('[Socket.io] Error broadcasting agent message:', socketErr);
+    }
 
     res.json({ success: true, message });
   } catch (error: any) {

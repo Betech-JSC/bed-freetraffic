@@ -9,6 +9,7 @@ import {
 } from '../lib/google';
 import { syncAnalyticsData } from '../services/analyticsSync';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { workspaceMiddleware } from '../middleware/workspace';
 
 const router = Router();
 
@@ -97,6 +98,7 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
 });
 
 router.use(authenticate);
+router.use(workspaceMiddleware);
 
 router.get('/status', async (req: AuthRequest, res: Response): Promise<void> => {
   const integration = await getGoogleTokensFromDb(req.workspaceId);
@@ -142,6 +144,18 @@ router.patch('/config', async (req: AuthRequest, res: Response): Promise<void> =
     return;
   }
   res.status(400).json({ error: 'Kết nối Google trước khi cấu hình property' });
+});
+
+router.delete('/', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    await prisma.googleIntegration.deleteMany({
+      where: { workspaceId: req.workspaceId },
+    });
+    res.json({ success: true, message: 'Đã ngắt kết nối Google thành công' });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Disconnect failed';
+    res.status(500).json({ error: msg });
+  }
 });
 
 export default router;

@@ -253,7 +253,7 @@ export default function ContentEditorPage() {
     <div className="space-y-8 page-container">
       <PageHeader
         title="Content Editor"
-        description={t('FR-09 — Soạn thảo các bài viết mẫu (Mẫu nội dung) để xoay vòng đăng bài kéo Traffic tự động.')}
+        description={t('Soạn thảo các bài viết mẫu (Mẫu nội dung) để xoay vòng đăng bài kéo Traffic tự động.')}
         actions={
           <button
             type="button"
@@ -267,40 +267,43 @@ export default function ContentEditorPage() {
           </button>
         }
       />
-            {/* Guide Banner */}
-      <div className="bg-white border border-brand/20 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-        <div>
-          <h4 className="font-bold text-slate-800 text-sm">{t('Hướng dẫn xoay vòng nội dung bài viết')}</h4>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            {t('Các mẫu bài viết bật **Active (Bật)** sẽ được Bot tự động lựa chọn ngẫu nhiên để đăng bài kéo traffic. Khi soạn thảo, bạn có thể bấm vào biến động để chèn nhanh:')}{' '}
+      
+      {/* Guide Banner */}
+      <div className="bg-brand/5 border border-brand/10 rounded-2xl p-5 shadow-sm">
+        <h4 className="font-bold text-slate-800 text-sm mb-2.5 flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-brand animate-pulse" />
+          {t('Hướng dẫn xoay vòng nội dung bài viết')}
+        </h4>
+        <div className="text-xs text-slate-650 leading-relaxed space-y-2">
+          <p>
+            {t('Các bài viết mẫu ở trạng thái Hoạt động sẽ được Bot tự động lựa chọn ngẫu nhiên để đăng bài kéo traffic. Khi soạn thảo, bạn có thể bấm vào các nút bên dưới để chèn thẻ cá nhân hóa:')}
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
-              className="mx-1 bg-orange-50 border border-brand/15 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              className="bg-brand text-white px-2.5 py-0.5 rounded text-[10px] font-bold transition-all hover:bg-brand-hover shadow-sm cursor-pointer"
               title={t('Click để chèn {url}')}
               onClick={() => insertPlaceholder('{url}')}
             >
-              {'{url}'}
+              {t('Chèn link kéo Traffic')}
             </button>
-            {t('(link trang đích kéo traffic),')}{' '}
             <button
               type="button"
-              className="mx-1 bg-orange-50 border border-brand/15 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              className="bg-brand text-white px-2.5 py-0.5 rounded text-[10px] font-bold transition-all hover:bg-brand-hover shadow-sm cursor-pointer"
               title={t('Click để chèn {name}')}
               onClick={() => insertPlaceholder('{name}')}
             >
-              {'{name}'}
+              {t('Chèn Tên Bot')}
             </button>
-            {t('(tên của Bot đang chạy), hoặc')}{' '}
             <button
               type="button"
-              className="mx-1 bg-orange-50 border border-brand/15 px-1.5 py-0.5 rounded text-brand font-mono text-[10px] font-bold transition-all hover:bg-brand/20 hover:scale-105 active:scale-95 shadow-sm cursor-pointer"
+              className="bg-brand text-white px-2.5 py-0.5 rounded text-[10px] font-bold transition-all hover:bg-brand-hover shadow-sm cursor-pointer"
               title={t('Click để chèn {date}')}
               onClick={() => insertPlaceholder('{date}')}
             >
-              {'{date}'}
+              {t('Chèn Ngày')}
             </button>
-            {t('(ngày hiện tại).')}
-          </p>
+          </div>
         </div>
       </div>
 
@@ -379,31 +382,32 @@ export default function ContentEditorPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-1 pt-2.5 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => handleEdit(tpl)}
-                  className="flex-1 text-center py-1.5 text-xs font-bold text-brand hover:text-brand-hover transition-colors cursor-pointer active:scale-95"
+                  className="flex-1 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 active:scale-95 hover:border-slate-300 transition-all cursor-pointer flex items-center justify-center gap-1"
                 >
-                  {t('Sửa')}
+                  ✏️ {t('Sửa')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleToggleActive(tpl)}
-                  className={`flex-1 text-center py-1.5 text-xs font-bold transition-colors cursor-pointer active:scale-95 ${
+                  className={`flex-1 py-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer active:scale-95 flex items-center justify-center gap-1 ${
                     tpl.isActive 
-                      ? 'text-slate-500 hover:text-slate-700' 
-                      : 'text-brand hover:text-brand-hover'
+                      ? 'border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100/60' 
+                      : 'border-brand/20 text-brand bg-brand/5 hover:bg-brand/10'
                   }`}
                 >
-                  {tpl.isActive ? t('Tạm dừng') : t('Bật chạy')}
+                  {tpl.isActive ? `⏸️ ${t('Tạm dừng')}` : `▶️ ${t('Bật chạy')}`}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDelete(tpl.id)}
-                  className="flex-1 text-center py-1.5 text-xs font-bold text-slate-450 hover:text-brand transition-colors cursor-pointer active:scale-95"
+                  className="py-1.5 px-3 rounded-lg border border-red-200 text-xs font-bold text-red-650 bg-red-50 hover:bg-red-100/60 active:scale-95 transition-all cursor-pointer flex items-center justify-center"
+                  title={t('Xóa')}
                 >
-                  {t('Xóa')}
+                  🗑️
                 </button>
               </div>
             </div>

@@ -42,6 +42,15 @@ export default function ReportsPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // AI report state variables
+  const [aiReport, setAiReport] = useState<AiAnalysisResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiLoadingMessage, setAiLoadingMessage] = useState('');
+  const [aiTab, setAiTab] = useState<'summary' | 'markdown'>('summary');
+  const [copying, setCopying] = useState(false);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -60,6 +69,77 @@ export default function ReportsPage() {
       }
     })();
   }, [days]);
+
+  const handleAiAnalyze = async (refresh = false) => {
+    setAiLoading(true);
+    setAiError('');
+    setAiReport(null);
+    setShowAiModal(true);
+
+    const messages = [
+      t('AI đang kết nối cơ sở dữ liệu tiếp thị...'),
+      t('AI đang tổng hợp xu hướng lượng truy cập (Traffic)...'),
+      t('AI đang kiểm tra biến động thứ hạng từ khóa...'),
+      t('AI đang thống kê các chiến dịch email marketing...'),
+      t('AI đang phân tích danh sách đơn hàng & doanh thu CRM...'),
+      t('AI đang quét nhật ký hoạt động hệ thống...'),
+      t('AI đang biên soạn các đề xuất tăng trưởng tối ưu...'),
+      t('AI đang hoàn thiện bản báo cáo chiến lược dạng Markdown...')
+    ];
+
+    let messageIndex = 0;
+    setAiLoadingMessage(messages[0]);
+    
+    const interval = setInterval(() => {
+      messageIndex = (messageIndex + 1) % messages.length;
+      setAiLoadingMessage(messages[messageIndex]);
+    }, 2000);
+
+    try {
+      const response = await apiFetch('/reports/ai-analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days, refresh })
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.error || t('Lỗi kết nối dịch vụ AI'));
+      }
+
+      const data = await response.json() as AiAnalysisResult;
+      setAiReport(data);
+    } catch (e: unknown) {
+      setAiError(e instanceof Error ? e.message : t('Lỗi phân tích báo cáo AI'));
+    } finally {
+      clearInterval(interval);
+      setAiLoading(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!aiReport) return;
+    const textToCopy = `BÁO CÁO PHÂN TÍCH TIẾP THỊ BẰNG AI (${days} ngày qua)
+==================================================
+TÓM TẮT TỔNG QUAN:
+${aiReport.summary}
+
+ĐIỂM SÁNG NỔI BẬT:
+${aiReport.highlights.map(h => `- ${h}`).join('\n')}
+
+VẤN ĐỀ CẦN LƯU Ý:
+${aiReport.issues.map(i => `- ${i}`).join('\n')}
+
+KHUYẾN NGHỊ ĐỀ XUẤT:
+${aiReport.recommendations.map(r => `- ${r}`).join('\n')}
+
+BÁO CÁO CHI TIẾT:
+${aiReport.markdown}`;
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopying(true);
+    setTimeout(() => setCopying(false), 2000);
+  };
 
   const download = async (type: string, format: 'csv' | 'pdf' | 'xlsx') => {
     setError('');
@@ -95,15 +175,28 @@ export default function ReportsPage() {
     <div className="space-y-8 page-container">
       <PageHeader
         title={t('Báo cáo tiếp thị')}
-        description={t('FR-06 — Phân tích lượng truy cập (Traffic) và Từ khóa SEO. Hỗ trợ xem trực quan và xuất file.')}
+        description={t('Phân tích lượng truy cập (Traffic) và Từ khóa SEO. Hỗ trợ xem trực quan và xuất file.')}
         actions={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 font-bold uppercase">{t('Khoảng thời gian:')}</span>
             <select className="input w-auto font-medium" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+              <option value={1}>{t('1 ngày qua')}</option>
               <option value={7}>{t('7 ngày qua')}</option>
               <option value={30}>{t('30 ngày qua')}</option>
               <option value={90}>{t('90 ngày qua')}</option>
             </select>
+            <button
+              type="button"
+              onClick={() => handleAiAnalyze(false)}
+              className="text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ml-1"
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                boxShadow: '0 4px 12px rgba(139, 92, 246, 0.25)'
+              }}
+            >
+              <SparklesIcon />
+              {t('Phân tích bằng AI')}
+            </button>
           </div>
         }
       />
@@ -304,6 +397,250 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {/* AI Analysis Modal */}
+      {showAiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-all animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden transform transition-all scale-100">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-violet-50/50 to-indigo-50/50 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div 
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-md animate-fade-in"
+                  style={{
+                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                  }}
+                >
+                  <SparklesIcon />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
+                    {t('AI Phân tích Tiếp thị')}
+                    <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full font-bold">
+                      {days === 1 ? t('24 giờ qua') : `${days} ${t('ngày qua')}`}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{t('Được phân tích tự động bởi mô hình AI dựa trên số liệu thực tế.')}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAiModal(false)}
+                className="w-8 h-8 rounded-full hover:bg-slate-100 transition-colors flex items-center justify-center text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-8">
+              {aiLoading ? (
+                <div className="h-[40vh] flex flex-col items-center justify-center space-y-5">
+                  <div className="relative w-16 h-16">
+                    <div className="absolute inset-0 rounded-full border-4 border-violet-100 animate-pulse"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-t-violet-600 animate-spin"></div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-slate-800 animate-pulse">{aiLoadingMessage}</p>
+                    <p className="text-xs text-slate-400 mt-1.5">{t('Quá trình này có thể mất từ 5 đến 15 giây...')}</p>
+                  </div>
+                </div>
+              ) : aiError ? (
+                <div className="h-[40vh] flex flex-col items-center justify-center p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-lg font-bold mb-4">✕</div>
+                  <h4 className="font-bold text-slate-800 text-base">{t('Không thể hoàn thành phân tích AI')}</h4>
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-100 p-3 rounded-xl max-w-md mt-2 mb-4 leading-normal">{aiError}</p>
+                  <button
+                    type="button"
+                    onClick={() => handleAiAnalyze(true)}
+                    className="btn-primary text-xs"
+                  >
+                    {t('Thử lại')}
+                  </button>
+                </div>
+              ) : aiReport ? (
+                <div className="space-y-6">
+                  {/* Tab Selector */}
+                  <div className="flex border-b border-slate-100 pb-px">
+                    <button
+                      type="button"
+                      onClick={() => setAiTab('summary')}
+                      className={`pb-3 text-sm font-bold px-4 transition-all border-b-2 cursor-pointer ${
+                        aiTab === 'summary'
+                          ? 'border-violet-600 text-violet-600'
+                          : 'border-transparent text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {t('Tóm tắt chiến lược')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAiTab('markdown')}
+                      className={`pb-3 text-sm font-bold px-4 transition-all border-b-2 cursor-pointer ${
+                        aiTab === 'markdown'
+                          ? 'border-violet-600 text-violet-600'
+                          : 'border-transparent text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {t('Báo cáo đầy đủ (Markdown)')}
+                    </button>
+                  </div>
+
+                  {/* Tab Contents */}
+                  {aiTab === 'summary' ? (
+                    <div className="space-y-6 animate-fade-in">
+                      {/* Summary Section */}
+                      <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
+                        <h4 className="font-black text-slate-800 text-sm mb-2 uppercase tracking-wider">{t('Tổng quan nhận xét')}</h4>
+                        <p className="text-sm text-slate-650 leading-relaxed font-medium">{aiReport.summary}</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Highlights card */}
+                        <div className="bg-emerald-50/40 border border-emerald-100/60 rounded-2xl p-5">
+                          <h4 className="font-extrabold text-emerald-800 text-sm mb-3.5 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">✓</span>
+                            {t('Điểm sáng nổi bật')}
+                          </h4>
+                          <ul className="space-y-2.5">
+                            {aiReport.highlights.map((h, i) => (
+                              <li key={i} className="text-xs text-slate-650 leading-relaxed flex items-start gap-1.5">
+                                <span className="text-emerald-500 font-bold mt-0.5">•</span>
+                                {h}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Issues card */}
+                        <div className="bg-amber-50/40 border border-amber-100/60 rounded-2xl p-5">
+                          <h4 className="font-extrabold text-amber-800 text-sm mb-3.5 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs">⚠️</span>
+                            {t('Cần lưu ý')}
+                          </h4>
+                          <ul className="space-y-2.5">
+                            {aiReport.issues.map((issue, i) => (
+                              <li key={i} className="text-xs text-slate-650 leading-relaxed flex items-start gap-1.5">
+                                <span className="text-amber-500 font-bold mt-0.5">•</span>
+                                {issue}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        {/* Recommendations card */}
+                        <div className="bg-violet-50/40 border border-violet-100/60 rounded-2xl p-5">
+                          <h4 className="font-extrabold text-violet-800 text-sm mb-3.5 flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center text-xs">💡</span>
+                            {t('Khuyến nghị tăng trưởng')}
+                          </h4>
+                          <ul className="space-y-2.5">
+                            {aiReport.recommendations.map((rec, i) => (
+                              <li key={i} className="text-xs text-slate-650 leading-relaxed flex items-start gap-1.5">
+                                <span className="text-violet-500 font-bold mt-0.5">•</span>
+                                {rec}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border border-slate-100 rounded-2xl p-6 bg-slate-50/50 max-h-[50vh] overflow-y-auto animate-fade-in">
+                      <SimpleMarkdown content={aiReport.markdown} />
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Modal Footer */}
+            {!aiLoading && aiReport && (
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => handleAiAnalyze(true)}
+                  className="px-4 py-2 border border-slate-200 text-slate-600 text-xs font-bold rounded-xl hover:bg-slate-100 hover:border-slate-300 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  🔄 {t('Phân tích lại (Bỏ cache)')}
+                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    className="px-4 py-2 text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                    style={{
+                      background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                      boxShadow: '0 2px 6px rgba(139, 92, 246, 0.2)'
+                    }}
+                  >
+                    {copying ? '✓ ' + t('Đã sao chép') : '📋 ' + t('Sao chép báo cáo')}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+type AiAnalysisResult = {
+  summary: string;
+  highlights: string[];
+  issues: string[];
+  recommendations: string[];
+  markdown: string;
+};
+
+const SparklesIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+    <path fillRule="evenodd" d="M9 4.5a.75.75 0 0 1 .721.544l.838 3.036a3.75 3.75 0 0 0 2.576 2.576l3.036.838a.75.75 0 0 1 0 1.442l-3.036.838a3.75 3.75 0 0 0-2.576 2.576l-.838 3.036a.75.75 0 0 1-1.442 0l-.838-3.036a3.75 3.75 0 0 0-2.576-2.576l-3.036-.838a.75.75 0 0 1 0-1.442l3.036-.838a3.75 3.75 0 0 0 2.576-2.576l.838-3.036A.75.75 0 0 1 9 4.5ZM18.75 10.5a.75.75 0 0 1 .721.544l.432 1.564a1.875 1.875 0 0 0 1.288 1.288l1.564.432a.75.75 0 0 1 0 1.442l-1.564.432a1.875 1.875 0 0 0-1.288 1.288l-.432 1.564a.75.75 0 0 1-1.442 0l-.432-1.564a1.875 1.875 0 0 0-1.288-1.288l-1.564-.432a.75.75 0 0 1 0-1.442l1.564-.432a1.875 1.875 0 0 0 1.288-1.288l.432-1.564A.75.75 0 0 1 18.75 10.5Z" clipRule="evenodd" />
+  </svg>
+);
+
+const SimpleMarkdown = ({ content }: { content: string }) => {
+  const lines = content.split('\n');
+  return (
+    <div className="space-y-3 font-sans text-sm text-slate-700">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('### ')) {
+          return <h4 key={idx} className="font-extrabold text-slate-800 text-sm mt-5 mb-2">{trimmed.replace('### ', '')}</h4>;
+        }
+        if (trimmed.startsWith('#### ')) {
+          return <h5 key={idx} className="font-bold text-slate-800 text-xs mt-4 mb-1 uppercase tracking-wider">{trimmed.replace('#### ', '')}</h5>;
+        }
+        if (trimmed.startsWith('## ')) {
+          return <h3 key={idx} className="font-extrabold text-slate-800 text-base mt-6 mb-3 border-b pb-1">{trimmed.replace('## ', '')}</h3>;
+        }
+        if (trimmed.startsWith('# ')) {
+          return <h2 key={idx} className="font-black text-slate-900 text-lg mt-7 mb-4 border-b-2 pb-2">{trimmed.replace('# ', '')}</h2>;
+        }
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          const rawText = trimmed.slice(2);
+          if (rawText.startsWith('**') && rawText.includes('**:')) {
+            const parts = rawText.split('**:');
+            const boldPart = parts[0].replace('**', '');
+            const normalPart = parts.slice(1).join('**:');
+            return (
+              <ul key={idx} className="list-disc pl-5 space-y-1">
+                <li><strong>{boldPart}</strong>: {normalPart}</li>
+              </ul>
+            );
+          }
+          return (
+            <ul key={idx} className="list-disc pl-5 space-y-1">
+              <li>{rawText}</li>
+            </ul>
+          );
+        }
+        if (trimmed === '') {
+          return <div key={idx} className="h-2" />;
+        }
+        return <p key={idx} className="leading-relaxed">{line}</p>;
+      })}
+    </div>
+  );
+};

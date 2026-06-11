@@ -277,6 +277,115 @@
         0%, 80%, 100% { transform: scale(0); }
         40% { transform: scale(1.0); }
       }
+      #ai-chat-form {
+        position: relative;
+      }
+      #ai-chat-image-btn {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s;
+        outline: none;
+      }
+      #ai-chat-image-btn:hover {
+        color: ${themeColor};
+      }
+      #ai-chat-image-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+      #ai-chat-image-preview-container {
+        padding: 8px 16px;
+        background: white;
+        border-top: 1px solid rgba(229, 231, 235, 0.6);
+        display: flex;
+        align-items: center;
+        position: relative;
+      }
+      #ai-chat-image-preview {
+        max-height: 60px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+      }
+      #ai-chat-image-preview-close {
+        position: absolute;
+        top: 4px;
+        left: 70px;
+        background: rgba(0, 0, 0, 0.6);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        cursor: pointer;
+      }
+      .ai-message img {
+        max-width: 100%;
+        max-height: 200px;
+        border-radius: 8px;
+        margin-top: 8px;
+        display: block;
+      }
+      .ai-message-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+        justify-content: flex-end;
+      }
+      .ai-speak-btn {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        cursor: pointer;
+        padding: 2px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s;
+        outline: none;
+      }
+      .ai-message.bot .ai-speak-btn {
+        color: #8b93a5;
+      }
+      .ai-message.bot .ai-speak-btn:hover {
+        color: ${themeColor};
+      }
+      #ai-chat-mic-btn {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        outline: none;
+      }
+      #ai-chat-mic-btn:hover {
+        color: ${themeColor};
+      }
+      #ai-chat-mic-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+      #ai-chat-mic-btn.recording {
+        color: #ef4444;
+        animation: ai-mic-pulse 1.2s infinite alternate;
+      }
+      @keyframes ai-mic-pulse {
+        from { transform: scale(1); }
+        to { transform: scale(1.18); }
+      }
       .hidden {
         display: none !important;
       }
@@ -286,7 +395,16 @@
     styleEl.textContent = css;
     document.head.appendChild(styleEl);
 
-    // 4. Inject HTML
+    // Inject Socket.io script dynamically
+    const socketScript = document.createElement('script');
+    socketScript.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+    socketScript.onload = () => {
+      if (typeof initSocketConnection === 'function') {
+        initSocketConnection();
+      }
+    };
+    document.head.appendChild(socketScript);
+
     const widgetRoot = document.createElement('div');
     widgetRoot.id = 'ai-chat-widget-root';
 
@@ -324,8 +442,23 @@
           <div class="dot"></div>
           <div class="dot"></div>
         </div>
+        <div id="ai-chat-image-preview-container" class="hidden">
+          <img id="ai-chat-image-preview" src="" alt="Preview" />
+          <button type="button" id="ai-chat-image-preview-close" aria-label="Xóa ảnh">×</button>
+        </div>
         <form id="ai-chat-form">
-          <input type="text" id="ai-chat-input" placeholder="Nhập tin nhắn..." required autocomplete="off" />
+          <input type="file" id="ai-chat-image-input" accept="image/*" class="hidden" />
+          <button type="button" id="ai-chat-image-btn" aria-label="Tải ảnh">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+          </button>
+          <input type="text" id="ai-chat-input" placeholder="Nhập tin nhắn..." autocomplete="off" />
+          <button type="button" id="ai-chat-mic-btn" aria-label="Ghi âm giọng nói">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+            </svg>
+          </button>
           <button type="submit" id="ai-chat-send-btn" aria-label="Gửi">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
@@ -345,11 +478,162 @@
     const input = document.getElementById('ai-chat-input');
     const messagesContainer = document.getElementById('ai-chat-messages');
     const typingIndicator = document.getElementById('ai-typing-indicator');
+    const micBtn = document.getElementById('ai-chat-mic-btn');
 
     const STORAGE_KEY = `cskh_session_id_${workspaceId}`;
     let sessionId = localStorage.getItem(STORAGE_KEY) || '';
-    let renderedCount = 1; // 1 message ban đầu
-    let syncInterval = null;
+    const renderedMessageIds = new Set();
+    const pendingVisitorMessages = [];
+    let socket = null;
+
+    // --- AI Voice Chat: Speech-to-Text (STT) Logic ---
+    let recognition = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let isRecording = false;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'vi-VN';
+
+      recognition.onstart = () => {
+        isRecording = true;
+        micBtn.classList.add('recording');
+        input.placeholder = 'Đang nghe giọng nói của bạn...';
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          input.value = (input.value ? input.value + ' ' : '') + transcript;
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('[WebSpeech STT] Error:', event.error);
+        if (event.error !== 'no-speech') {
+          startWhisperRecordingFallback();
+        }
+      };
+
+      recognition.onend = () => {
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        input.placeholder = 'Nhập tin nhắn...';
+      };
+    }
+
+    async function startWhisperRecordingFallback() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstart = () => {
+          isRecording = true;
+          micBtn.classList.add('recording');
+          input.placeholder = 'Đang ghi âm (Whisper)... Click lại để dừng';
+        };
+
+        mediaRecorder.onstop = async () => {
+          isRecording = false;
+          micBtn.classList.remove('recording');
+          input.placeholder = 'Đang nhận dạng giọng nói...';
+
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'speech.webm');
+
+          try {
+            const res = await fetch(`${apiHost}/api/public/cskh/transcribe`, {
+              method: 'POST',
+              body: formData
+            });
+            const data = await res.json();
+            if (data.text) {
+              input.value = (input.value ? input.value + ' ' : '') + data.text;
+            } else if (data.error) {
+              console.error('[Whisper STT] Error from server:', data.error);
+            }
+          } catch (err) {
+            console.error('[Whisper STT] Net error:', err);
+          } finally {
+            input.placeholder = 'Nhập tin nhắn...';
+            stream.getTracks().forEach(track => track.stop());
+          }
+        };
+
+        mediaRecorder.start();
+      } catch (err) {
+        console.error('[MediaRecorder STT] getUserMedia error:', err);
+        alert('Không thể truy cập Microphone của bạn.');
+        isRecording = false;
+        micBtn.classList.remove('recording');
+        input.placeholder = 'Nhập tin nhắn...';
+      }
+    }
+
+    if (micBtn) {
+      micBtn.addEventListener('click', () => {
+        if (isRecording) {
+          if (recognition) {
+            recognition.stop();
+          } else if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          }
+        } else {
+          if (recognition) {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.warn('[WebSpeech STT] Failed starting recognition, fallback:', e);
+              startWhisperRecordingFallback();
+            }
+          } else {
+            startWhisperRecordingFallback();
+          }
+        }
+      });
+    }
+
+    function initSocketConnection() {
+      if (typeof io === 'undefined') return;
+      if (socket) return; // Prevent double initialization
+      
+      socket = io(apiHost);
+      
+      if (sessionId) {
+        socket.emit('join_session', sessionId);
+      }
+      
+      socket.on('new_message', (msg) => {
+        if (msg.sender === 'visitor') {
+          const index = pendingVisitorMessages.indexOf(msg.content);
+          if (index !== -1) {
+            renderedMessageIds.add(msg.id);
+            pendingVisitorMessages.splice(index, 1);
+          } else {
+            appendMessage(msg.content, 'user', msg.id);
+          }
+        } else {
+          const sender = msg.sender === 'visitor' ? 'user' : 'bot';
+          appendMessage(msg.content, sender, msg.id);
+          if (msg.sender === 'bot' || msg.sender === 'agent') {
+            typingIndicator.classList.add('hidden');
+          }
+        }
+        scrollToBottom();
+      });
+    }
 
     async function syncMessages() {
       if (!sessionId) return;
@@ -358,17 +642,12 @@
         if (!response.ok) return;
         const data = await response.json();
         
-        // Tránh ghi đè nếu dữ liệu rỗng hoặc sai dạng
-        if (data && Array.isArray(data)) {
-          if (data.length !== renderedCount) {
-            messagesContainer.innerHTML = '';
-            // Gắn lại welcome message
-            appendMessage(welcomeMsg, 'bot');
-            
-            data.forEach(msg => {
-              appendMessage(msg.content, msg.sender === 'visitor' ? 'user' : 'bot');
+        if (data && data.success && Array.isArray(data.messages)) {
+          const newMessages = data.messages.filter(msg => !renderedMessageIds.has(msg.id));
+          if (newMessages.length > 0) {
+            newMessages.forEach(msg => {
+              appendMessage(msg.content, msg.sender === 'visitor' ? 'user' : 'bot', msg.id);
             });
-            renderedCount = data.length + 1;
             scrollToBottom();
           }
         }
@@ -377,29 +656,80 @@
       }
     }
 
+    const imageInput = document.getElementById('ai-chat-image-input');
+    const imageBtn = document.getElementById('ai-chat-image-btn');
+    const imagePreviewContainer = document.getElementById('ai-chat-image-preview-container');
+    const imagePreview = document.getElementById('ai-chat-image-preview');
+    const imagePreviewClose = document.getElementById('ai-chat-image-preview-close');
+    let uploadedImageUrl = '';
+
+    // Handle image selection, preview and upload
+    imageBtn.addEventListener('click', () => {
+      imageInput.click();
+    });
+
+    imageInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Show local preview immediately
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        imagePreview.src = event.target.result;
+        imagePreviewContainer.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+
+      // Upload to server
+      const formData = new FormData();
+      formData.append('image', file);
+
+      try {
+        const res = await fetch(`${apiHost}/api/public/cskh/upload-image`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        if (data.imageUrl) {
+          uploadedImageUrl = data.imageUrl;
+        } else {
+          alert(data.error || 'Lỗi tải ảnh lên.');
+          clearImagePreview();
+        }
+      } catch (err) {
+        console.error('Error uploading image:', err);
+        alert('Lỗi kết nối máy chủ khi tải ảnh.');
+        clearImagePreview();
+      }
+    });
+
+    imagePreviewClose.addEventListener('click', () => {
+      clearImagePreview();
+    });
+
+    function clearImagePreview() {
+      imageInput.value = '';
+      imagePreview.src = '';
+      imagePreviewContainer.classList.add('hidden');
+      uploadedImageUrl = '';
+    }
+
+    // Try starting socket connection if script is already loaded
+    if (typeof io !== 'undefined') {
+      initSocketConnection();
+    }
+
     bubble.addEventListener('click', () => {
       panel.classList.toggle('hidden');
       if (!panel.classList.contains('hidden')) {
         input.focus();
         syncMessages();
         scrollToBottom();
-        if (!syncInterval) {
-          syncInterval = setInterval(syncMessages, 4000);
-        }
-      } else {
-        if (syncInterval) {
-          clearInterval(syncInterval);
-          syncInterval = null;
-        }
       }
     });
 
     closeBtn.addEventListener('click', () => {
       panel.classList.add('hidden');
-      if (syncInterval) {
-        clearInterval(syncInterval);
-        syncInterval = null;
-      }
     });
 
     function scrollToBottom() {
@@ -409,9 +739,15 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const messageText = input.value.trim();
-      if (!messageText) return;
+      if (!messageText && !uploadedImageUrl) return;
 
-      appendMessage(messageText, 'user');
+      appendMessage(messageText, 'user', null, uploadedImageUrl);
+      if (messageText) {
+        pendingVisitorMessages.push(messageText);
+      }
+      
+      const currentImageUrl = uploadedImageUrl;
+      clearImagePreview();
       input.value = '';
       scrollToBottom();
 
@@ -427,23 +763,27 @@
           body: JSON.stringify({
             workspaceId: parseInt(workspaceId, 10),
             sessionId: sessionId,
-            message: messageText
+            message: messageText || 'Ảnh đính kèm',
+            imageUrl: currentImageUrl
           })
         });
 
         const data = await response.json();
-        typingIndicator.classList.add('hidden');
-
-        if (data.sessionId) {
+        
+        if (data.sessionId && data.sessionId !== sessionId) {
           sessionId = data.sessionId;
           localStorage.setItem(STORAGE_KEY, sessionId);
+          if (socket) {
+            socket.emit('join_session', sessionId);
+          }
         }
 
-        if (data.reply) {
-          appendMessage(data.reply, 'bot');
-          renderedCount++;
-        } else if (data.reply === '') {
-          // Trạng thái nhân viên đang tiếp quản, chờ đồng bộ tin nhắn từ worker
+        // Fallback: If socket is not connected, manually append reply
+        if (!socket || !socket.connected) {
+          typingIndicator.classList.add('hidden');
+          if (data.reply) {
+            appendMessage(data.reply, 'bot');
+          }
         }
       } catch (err) {
         typingIndicator.classList.add('hidden');
@@ -453,10 +793,83 @@
       scrollToBottom();
     });
 
-    function appendMessage(text, sender) {
+    function appendMessage(text, sender, id, imageUrl) {
+      if (id && renderedMessageIds.has(id)) return;
+      if (id) renderedMessageIds.add(id);
+
       const msgDiv = document.createElement('div');
       msgDiv.className = `ai-message ${sender} fade-in`;
-      msgDiv.innerText = text;
+      
+      if (text) {
+        const textSpan = document.createElement('span');
+        textSpan.innerText = text;
+        msgDiv.appendChild(textSpan);
+      }
+      
+      if (imageUrl) {
+        const img = document.createElement('img');
+        img.src = imageUrl.startsWith('/') ? `${apiHost}${imageUrl}` : imageUrl;
+        img.alt = 'Ảnh đính kèm';
+        msgDiv.appendChild(img);
+      }
+
+      // --- AI Voice Chat: Text-to-Speech (TTS) Logic ---
+      if (sender === 'bot' && text) {
+        const speakBtn = document.createElement('button');
+        speakBtn.type = 'button';
+        speakBtn.className = 'ai-speak-btn';
+        speakBtn.title = 'Nghe đọc tin nhắn';
+        speakBtn.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px; display: block;">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75 0 011.28.53v15.88a.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+          </svg>
+        `;
+        
+        let speaking = false;
+        speakBtn.addEventListener('click', () => {
+          if (speaking) {
+            window.speechSynthesis.cancel();
+            speaking = false;
+            speakBtn.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px; display: block;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75 0 011.28.53v15.88a.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+              </svg>
+            `;
+          } else {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voices = window.speechSynthesis.getVoices();
+            const viVoice = voices.find(v => v.lang.startsWith('vi') || v.lang.includes('vi-VN'));
+            if (viVoice) {
+              utterance.voice = viVoice;
+            }
+            utterance.lang = 'vi-VN';
+            
+            utterance.onend = () => {
+              speaking = false;
+              speakBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px; display: block;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75 0 011.28.53v15.88a.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
+                </svg>
+              `;
+            };
+            
+            speaking = true;
+            speakBtn.innerHTML = `
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px; display: block;">
+                <rect x="6" y="6" width="12" height="12" rx="1.5" />
+              </svg>
+            `;
+            window.speechSynthesis.speak(utterance);
+          }
+        });
+        
+        const actionContainer = document.createElement('div');
+        actionContainer.className = 'ai-message-actions';
+        actionContainer.appendChild(speakBtn);
+        msgDiv.appendChild(actionContainer);
+      }
+
       messagesContainer.appendChild(msgDiv);
     }
   }
