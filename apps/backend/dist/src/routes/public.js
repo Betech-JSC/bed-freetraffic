@@ -42,6 +42,8 @@ const cskhService_1 = require("../services/cskhService");
 const chatWidgetTemplate_1 = require("../services/chatWidgetTemplate");
 const node_1 = __importDefault(require("@payos/node"));
 const stripe_1 = __importDefault(require("stripe"));
+const cache_1 = require("../lib/cache");
+const rateLimiter_1 = require("../middleware/rateLimiter");
 const router = (0, express_1.Router)();
 // Retrieve all published blog posts of a workspace (public)
 router.get('/blog/workspace/:workspaceId', async (req, res) => {
@@ -120,7 +122,7 @@ function checkRateLimit(ip) {
     return true;
 }
 // Public Form Submission Endpoint
-router.post('/forms/submit', async (req, res) => {
+router.post('/forms/submit', rateLimiter_1.publicSpamLimiter, async (req, res) => {
     try {
         const ip = req.headers['x-forwarded-for'] || req.ip || '';
         if (!checkRateLimit(ip)) {
@@ -463,7 +465,7 @@ router.get('/pages/:slug/html', async (req, res) => {
     }
 });
 // Public chat message processing
-router.post('/cskh/chat', async (req, res) => {
+router.post('/cskh/chat', rateLimiter_1.publicSpamLimiter, async (req, res) => {
     try {
         const { workspaceId, sessionId, message } = req.body;
         if (!workspaceId || !message) {
@@ -578,6 +580,10 @@ const handleCheckout = async (req, res) => {
             });
             return createdOrder;
         });
+        // Invalidate cache for dashboard and reports
+        void (0, cache_1.invalidateWorkspaceCache)(parseInt(String(workspaceId), 10), ['dashboard', 'report']).catch(err => {
+            console.error('[Cache Invalidation Error]:', err);
+        });
         // 5. Load Payment Config
         const config = await prisma_1.default.paymentConfig.findUnique({
             where: { workspaceId: parseInt(String(workspaceId), 10) },
@@ -609,6 +615,17 @@ const handleCheckout = async (req, res) => {
                 orderNumber,
                 checkoutUrl: paymentLinkRes.checkoutUrl,
                 qrCode: paymentLinkRes.qrCode,
+            });
+        }
+        else if (paymentMethod === 'SEPAY') {
+            if (!config || !config.sepayAccountNumber || !config.sepayBankCode) {
+                res.status(400).json({ error: 'Cửa hàng chưa cấu hình số tài khoản hoặc ngân hàng đối soát SePay.vn.' });
+                return;
+            }
+            res.json({
+                success: true,
+                orderNumber,
+                checkoutUrl: `/api/public/checkout/vietqr?orderNumber=${orderNumber}`
             });
         }
         else if (paymentMethod === 'STRIPE') {
@@ -654,8 +671,8 @@ const handleCheckout = async (req, res) => {
         res.status(500).json({ error: error.message || 'Lỗi xử lý thanh toán.' });
     }
 };
-router.post('/checkout', handleCheckout);
-router.post('/orders/checkout', handleCheckout);
+router.post('/checkout', rateLimiter_1.publicSpamLimiter, handleCheckout);
+router.post('/orders/checkout', rateLimiter_1.publicSpamLimiter, handleCheckout);
 // =======================================================
 // MULTI-PAGE WEBSITE GENERATOR & CUSTOMER PORTAL SUPPORT
 // =======================================================
@@ -1781,6 +1798,257 @@ router.post('/zalo/webhook', async (req, res) => {
     catch (error) {
         console.error('[ZaloWebhook Error]:', error);
         res.status(500).json({ error: error.message || 'Lỗi xử lý webhook' });
+    }
+});
+// Polling status endpoint for client checkout updates
+router.get('/orders/status', async (req, res) => {
+    try {
+        const orderNumber = req.query.orderNumber;
+        if (!orderNumber) {
+            res.status(400).json({ error: 'Thiếu orderNumber' });
+            return;
+        }
+        const order = await prisma_1.default.order.findUnique({
+            where: { orderNumber },
+            select: { status: true }
+        });
+        if (!order) {
+            res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+            return;
+        }
+        res.json({ status: order.status });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi kiểm tra trạng thái đơn hàng' });
+    }
+});
+// Render local VietQR Payment Instruction Page
+router.get('/checkout/vietqr', async (req, res) => {
+    try {
+        const orderNumber = req.query.orderNumber;
+        if (!orderNumber) {
+            res.status(400).send('<h1>Thiếu thông tin mã đơn hàng</h1>');
+            return;
+        }
+        const order = await prisma_1.default.order.findUnique({
+            where: { orderNumber },
+            include: {
+                customer: true,
+                items: {
+                    include: {
+                        product: true
+                    }
+                }
+            }
+        });
+        if (!order || !order.workspaceId) {
+            res.status(404).send('<h1>Không tìm thấy đơn hàng</h1>');
+            return;
+        }
+        const config = await prisma_1.default.paymentConfig.findUnique({
+            where: { workspaceId: order.workspaceId }
+        });
+        if (!config || !config.sepayAccountNumber || !config.sepayBankCode) {
+            res.status(400).send('<h1>Cửa hàng chưa cấu hình thông tin ngân hàng SePay</h1>');
+            return;
+        }
+        const product = order.items[0]?.product;
+        const productName = product ? product.name : 'Sản phẩm kỹ thuật số';
+        const amount = order.totalAmount;
+        const acc = config.sepayAccountNumber;
+        const bank = config.sepayBankCode;
+        const accName = config.sepayAccountName || 'Chủ tài khoản';
+        // Generate VietQR URL through SePay QR API
+        const qrUrl = `https://qr.sepay.vn/img?acc=${acc}&bank=${bank}&amount=${Math.round(amount)}&des=${orderNumber}&template=compact`;
+        const html = `
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thanh toán đơn hàng ${orderNumber}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: radial-gradient(circle at top right, rgba(242, 92, 34, 0.08), transparent 40%),
+                  radial-gradient(circle at bottom left, rgba(251, 111, 29, 0.05), transparent 40%),
+                  #0f172a;
+    }
+  </style>
+</head>
+<body class="text-slate-200 min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-slate-900/60 backdrop-blur-xl border border-slate-800/60 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
+    <!-- Top indicator line -->
+    <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#f25c22] to-amber-500"></div>
+
+    <div class="text-center space-y-2 mb-6">
+      <div class="text-[#f25c22] font-black text-xl tracking-tight">Growth OS</div>
+      <h1 class="text-white font-extrabold text-lg">Cổng Thanh Toán VietQR</h1>
+      <p class="text-slate-400 text-xs">Quét mã QR bằng ứng dụng Ngân hàng để thanh toán tự động</p>
+    </div>
+
+    <!-- Status indicator (PENDING) -->
+    <div id="payment-status-box" class="bg-slate-950/40 border border-slate-800/50 rounded-2xl p-5 mb-5 flex flex-col items-center justify-center relative">
+      <!-- Dynamic QR Code Image -->
+      <div class="relative bg-white p-3 rounded-2xl shadow-inner border border-slate-100 flex items-center justify-center w-52 h-52 mb-4">
+        <img src="${qrUrl}" alt="Mã VietQR Thanh Toán" class="w-full h-full object-contain" />
+        <div id="status-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center opacity-0 pointer-events-none transition-all duration-300">
+          <span class="text-emerald-500 text-4xl mb-2">✓</span>
+          <span class="text-white font-bold text-sm">Thanh toán thành công!</span>
+        </div>
+      </div>
+
+      <!-- Transfer details -->
+      <div class="w-full space-y-2.5 text-xs">
+        <div class="flex justify-between border-b border-slate-800/50 pb-2 text-slate-400">
+          <span>Sản phẩm</span>
+          <span class="font-bold text-white max-w-[200px] truncate" title="${productName}">${productName}</span>
+        </div>
+        <div class="flex justify-between border-b border-slate-800/50 pb-2 text-slate-400">
+          <span>Ngân hàng</span>
+          <span class="font-bold text-white uppercase">${bank}</span>
+        </div>
+        <div class="flex justify-between border-b border-slate-800/50 pb-2 text-slate-400">
+          <span>Số tài khoản</span>
+          <span class="font-bold text-white font-mono tracking-wider flex items-center gap-1">
+            ${acc}
+            <button onclick="navigator.clipboard.writeText('${acc}'); alert('Đã sao chép số tài khoản');" class="text-xs text-[#f25c22] hover:underline hover:opacity-85 font-semibold">Copy</button>
+          </span>
+        </div>
+        <div class="flex justify-between border-b border-slate-800/50 pb-2 text-slate-400">
+          <span>Tên thụ hưởng</span>
+          <span class="font-bold text-white uppercase">${accName}</span>
+        </div>
+        <div class="flex justify-between border-b border-slate-800/50 pb-2 text-slate-400">
+          <span>Số tiền chuyển</span>
+          <span class="font-black text-[#f25c22] text-sm">${amount.toLocaleString('vi-VN')} VND</span>
+        </div>
+        <div class="flex justify-between border-b border-slate-800/50 pb-2 text-slate-400 bg-orange-500/10 p-2 rounded-lg border border-orange-500/20">
+          <span class="text-orange-400 font-semibold">Nội dung chuyển khoản</span>
+          <span class="font-black text-orange-400 font-mono tracking-widest flex items-center gap-2">
+            ${orderNumber}
+            <button onclick="navigator.clipboard.writeText('${orderNumber}'); alert('Đã sao chép nội dung chuyển khoản');" class="text-xs text-orange-300 hover:underline hover:opacity-85 font-bold">Copy</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert / Status message -->
+    <div id="helper-text" class="text-center text-xs text-slate-500 flex flex-col items-center justify-center gap-2">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
+        <span>Đang chờ bạn chuyển khoản...</span>
+      </div>
+      <p class="text-[10px] leading-relaxed text-slate-600 max-w-[300px]">Hệ thống sẽ tự nhận diện giao dịch và chuyển hướng sau khi nhận được tiền (thông thường từ 10s - 30s sau khi chuyển khoản).</p>
+    </div>
+  </div>
+
+  <script>
+    const orderNumber = '${orderNumber}';
+    let checkInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/public/orders/status?orderNumber=' + orderNumber);
+        const data = await res.json();
+        if (data.status === 'PAID') {
+          clearInterval(checkInterval);
+          
+          document.getElementById('status-overlay').classList.remove('opacity-0', 'pointer-events-none');
+          document.getElementById('helper-text').innerHTML = \`
+            <div class="text-emerald-400 font-bold text-sm flex items-center gap-1.5 justify-center">
+              <span>✓ Đã thanh toán đơn hàng thành công!</span>
+            </div>
+            <p class="text-[10px] text-slate-500">Đang chuẩn bị chuyển hướng bạn về trang chủ...</p>
+          \`;
+          
+          setTimeout(() => {
+            window.location.href = '/checkout/success?orderNumber=' + orderNumber;
+          }, 3000);
+        }
+      } catch (err) {
+        console.error('Lỗi kiểm tra trạng thái đơn hàng:', err);
+      }
+    }, 3000);
+  </script>
+</body>
+</html>
+    `;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(html);
+    }
+    catch (error) {
+        res.status(500).send('<h1>Lỗi hệ thống khi khởi tạo cổng thanh toán</h1>');
+    }
+});
+// Route to serve widget.js static file dynamically
+router.get('/cskh/widget.js', (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(__dirname, '../public/widget.js');
+        if (!fs.existsSync(filePath)) {
+            res.status(404).send('// Widget JS not found');
+            return;
+        }
+        const content = fs.readFileSync(filePath, 'utf8');
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.send(content);
+    }
+    catch (error) {
+        res.status(500).send('// Error loading widget JS');
+    }
+});
+// Route to get chat widget configuration
+router.get('/cskh/widget-config', async (req, res) => {
+    try {
+        const workspaceId = parseInt(req.query.workspaceId, 10);
+        if (isNaN(workspaceId)) {
+            res.status(400).json({ error: 'workspaceId là bắt buộc và phải là số.' });
+            return;
+        }
+        const config = await prisma_1.default.cskhConfig.findUnique({
+            where: { workspaceId },
+        });
+        if (!config) {
+            res.json({
+                themeColor: '#6366f1',
+                themeColor2: '#06b6d4',
+                title: 'Hỗ Trợ Khách Hàng AI',
+                welcomeMessage: 'Chào bạn! Mình là trợ lý ảo hỗ trợ trực tuyến. Mình có thể giúp gì cho bạn hôm nay?',
+                avatarUrl: '',
+                botName: 'AI',
+                liveChatEnabled: false,
+                aiChatbotEnabled: false,
+            });
+            return;
+        }
+        let settings = {
+            themeColor: '#6366f1',
+            themeColor2: '#06b6d4',
+            title: 'Hỗ Trợ Khách Hàng AI',
+            welcomeMessage: 'Chào bạn! Mình là trợ lý ảo hỗ trợ trực tuyến. Mình có thể giúp gì cho bạn hôm nay?',
+            avatarUrl: '',
+            botName: 'AI',
+        };
+        if (config.widgetSettings) {
+            try {
+                settings = { ...settings, ...JSON.parse(config.widgetSettings) };
+            }
+            catch (e) {
+                // use defaults
+            }
+        }
+        res.json({
+            ...settings,
+            liveChatEnabled: config.liveChatEnabled,
+            aiChatbotEnabled: config.aiChatbotEnabled,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi lấy cấu hình widget' });
     }
 });
 exports.default = router;

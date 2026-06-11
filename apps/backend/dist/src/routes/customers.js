@@ -8,33 +8,61 @@ const prisma_1 = __importDefault(require("../lib/prisma"));
 const smtp_1 = require("../lib/smtp");
 const careEmail_1 = require("../lib/careEmail");
 const auth_1 = require("../middleware/auth");
+const auditLogger_1 = require("../lib/auditLogger");
+const cache_1 = require("../lib/cache");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 const STATUSES = ['NEW', 'ACTIVE', 'NEED_FOLLOWUP', 'VIP', 'INACTIVE'];
 router.get('/', async (req, res) => {
     const status = req.query.status || undefined;
     const q = (req.query.q || '').trim();
-    const customers = await prisma_1.default.customer.findMany({
-        where: {
-            workspaceId: req.workspaceId,
-            ...(status ? { status } : {}),
-            ...(q
-                ? {
-                    OR: [
-                        { name: { contains: q, mode: 'insensitive' } },
-                        { email: { contains: q, mode: 'insensitive' } },
-                        { company: { contains: q, mode: 'insensitive' } },
-                    ],
-                }
-                : {}),
-        },
-        orderBy: { updatedAt: 'desc' },
-        include: {
-            notes: { orderBy: { createdAt: 'desc' }, take: 1 },
-            _count: { select: { emailLogs: true, notes: true } },
-        },
-    });
-    res.json(customers);
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
+    const skip = (page - 1) * limit;
+    const where = {
+        workspaceId: req.workspaceId,
+        ...(status ? { status } : {}),
+        ...(q
+            ? {
+                OR: [
+                    { name: { contains: q, mode: 'insensitive' } },
+                    { email: { contains: q, mode: 'insensitive' } },
+                    { company: { contains: q, mode: 'insensitive' } },
+                ],
+            }
+            : {}),
+    };
+    try {
+        const [total, vipCount, followupCount, customers] = await Promise.all([
+            prisma_1.default.customer.count({ where }),
+            prisma_1.default.customer.count({ where: { workspaceId: req.workspaceId, status: 'VIP' } }),
+            prisma_1.default.customer.count({ where: { workspaceId: req.workspaceId, status: 'NEED_FOLLOWUP' } }),
+            prisma_1.default.customer.findMany({
+                where,
+                orderBy: { updatedAt: 'desc' },
+                skip,
+                take: limit,
+                include: {
+                    notes: { orderBy: { createdAt: 'desc' }, take: 1 },
+                    _count: { select: { emailLogs: true, notes: true } },
+                },
+            }),
+        ]);
+        res.json({
+            data: customers,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+                vipCount,
+                followupCount,
+            },
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi lấy danh sách khách hàng' });
+    }
 });
 router.get('/meta/statuses', (_req, res) => {
     res.json(STATUSES);
@@ -76,6 +104,20 @@ router.post('/', auth_1.requireWrite, async (req, res) => {
             },
             include: { notes: { orderBy: { createdAt: 'desc' }, take: 5 } },
         });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'CREATE_CUSTOMER',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { customerId: customer.id, customerName: customer.name, email: customer.email }
+        });
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['dashboard', 'report']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
         res.status(201).json(customer);
     }
     catch (err) {
@@ -112,6 +154,20 @@ router.patch('/:id', auth_1.requireWrite, async (req, res) => {
             return;
         }
         const customer = await prisma_1.default.customer.update({ where: { id }, data });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'UPDATE_CUSTOMER',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { customerId: id, email: customer.email, updatedFields: Object.keys(data) }
+        });
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['dashboard', 'report']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
         res.json(customer);
     }
     catch (err) {
@@ -128,6 +184,20 @@ router.delete('/:id', auth_1.requireWrite, async (req, res) => {
         return;
     }
     await prisma_1.default.customer.delete({ where: { id } });
+    // Ghi audit log
+    await (0, auditLogger_1.logActivity)({
+        userId: req.user.userId,
+        workspaceId: req.workspaceId,
+        action: 'DELETE_CUSTOMER',
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        details: { customerId: id, email: existing.email, customerName: existing.name }
+    });
+    if (req.workspaceId) {
+        void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['dashboard', 'report']).catch(err => {
+            console.error('[Cache Invalidation Error]:', err);
+        });
+    }
     res.status(204).send();
 });
 router.post('/:id/notes', auth_1.requireWrite, async (req, res) => {
@@ -317,57 +387,111 @@ router.post('/import', auth_1.requireWrite, async (req, res) => {
     let createdCount = 0;
     let updatedCount = 0;
     const errors = [];
-    for (const c of customers) {
-        const name = c.name?.trim();
-        const email = c.email?.trim()?.toLowerCase();
-        const phone = c.phone?.trim() || null;
-        const company = c.company?.trim() || null;
-        const status = c.status || 'NEW';
-        if (!name || !email) {
-            errors.push(`Bỏ qua dòng không hợp lệ: thiếu Tên hoặc Email`);
-            continue;
-        }
-        try {
-            const existing = await prisma_1.default.customer.findFirst({
-                where: { email, workspaceId: req.workspaceId }
+    try {
+        // 1. Lọc các bản ghi hợp lệ
+        const validCustomers = [];
+        for (const c of customers) {
+            const name = c.name?.trim();
+            const email = c.email?.trim()?.toLowerCase();
+            if (!name || !email) {
+                errors.push(`Bỏ qua dòng không hợp lệ: thiếu Tên hoặc Email`);
+                continue;
+            }
+            validCustomers.push({
+                name,
+                email,
+                phone: c.phone?.trim() || null,
+                company: c.company?.trim() || null,
+                status: c.status || 'NEW',
             });
+        }
+        if (validCustomers.length === 0) {
+            res.status(400).json({
+                error: 'Không tìm thấy khách hàng hợp lệ để nhập.',
+                errors: errors.length > 0 ? errors : undefined,
+            });
+            return;
+        }
+        // 2. Lấy toàn bộ khách hàng hiện tại khớp với danh sách email cần nhập trong workspace
+        const emailsToImport = validCustomers.map((c) => c.email);
+        const existingCustomers = await prisma_1.default.customer.findMany({
+            where: {
+                workspaceId: req.workspaceId,
+                email: { in: emailsToImport },
+            },
+            select: { id: true, email: true, phone: true, company: true },
+        });
+        const existingMap = new Map(existingCustomers.map((c) => [c.email, c]));
+        // 3. Phân nhóm tạo mới và cập nhật
+        const toCreate = [];
+        const toUpdate = [];
+        for (const c of validCustomers) {
+            const existing = existingMap.get(c.email);
             if (existing) {
-                // Cập nhật thông tin mới
-                await prisma_1.default.customer.update({
-                    where: { id: existing.id },
+                toUpdate.push({
+                    id: existing.id,
                     data: {
-                        name,
-                        phone: phone || existing.phone,
-                        company: company || existing.company,
-                        status
-                    }
+                        name: c.name,
+                        phone: c.phone || existing.phone,
+                        company: c.company || existing.company,
+                        status: c.status,
+                    },
                 });
-                updatedCount++;
             }
             else {
-                // Tạo mới
-                await prisma_1.default.customer.create({
-                    data: {
-                        name,
-                        email,
-                        phone,
-                        company,
-                        status,
-                        workspaceId: req.workspaceId
-                    }
+                toCreate.push({
+                    name: c.name,
+                    email: c.email,
+                    phone: c.phone,
+                    company: c.company,
+                    status: c.status,
+                    workspaceId: req.workspaceId,
                 });
-                createdCount++;
             }
         }
-        catch (err) {
-            errors.push(`Lỗi xử lý ${email}: ${err.message}`);
+        // 4. Thực thi ghi dữ liệu theo lô (Batch size = 50) trong transaction
+        const BATCH_SIZE = 50;
+        // Xử lý tạo mới
+        for (let i = 0; i < toCreate.length; i += BATCH_SIZE) {
+            const batch = toCreate.slice(i, i + BATCH_SIZE);
+            await prisma_1.default.$transaction(batch.map((data) => prisma_1.default.customer.create({ data })));
+            createdCount += batch.length;
         }
+        // Xử lý cập nhật
+        for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+            const batch = toUpdate.slice(i, i + BATCH_SIZE);
+            await prisma_1.default.$transaction(batch.map((item) => prisma_1.default.customer.update({
+                where: { id: item.id },
+                data: item.data,
+            })));
+            updatedCount += batch.length;
+        }
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'IMPORT_CUSTOMERS',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { createdCount, updatedCount, totalImported: createdCount + updatedCount }
+        });
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['dashboard', 'report']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
+        res.json({
+            message: `Nhập thành công: tạo mới ${createdCount}, cập nhật ${updatedCount} khách hàng.`,
+            createdCount,
+            updatedCount,
+            errors: errors.length > 0 ? errors : undefined,
+        });
     }
-    res.json({
-        message: `Nhập thành công: tạo mới ${createdCount}, cập nhật ${updatedCount} khách hàng.`,
-        createdCount,
-        updatedCount,
-        errors: errors.length > 0 ? errors : undefined
-    });
+    catch (err) {
+        res.status(500).json({
+            error: err.message || 'Lỗi hệ thống khi nhập khách hàng.',
+            errors: errors.length > 0 ? errors : undefined,
+        });
+    }
 });
 exports.default = router;

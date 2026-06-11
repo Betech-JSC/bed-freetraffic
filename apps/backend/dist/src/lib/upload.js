@@ -21,15 +21,15 @@ const storage = multer_1.default.diskStorage({
 });
 exports.imageUpload = (0, multer_1.default)({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
     fileFilter: (_req, file, cb) => {
-        const allowed = /jpeg|jpg|png|gif|webp/;
+        const allowed = /jpeg|jpg|png|gif|webp|mp4|webm|avi|mov/;
         const ext = allowed.test(path_1.default.extname(file.originalname).toLowerCase());
         const mime = allowed.test(file.mimetype);
         if (ext && mime)
             cb(null, true);
         else
-            cb(new Error('Chỉ chấp nhận file ảnh (jpg, png, gif, webp)'));
+            cb(new Error('Chỉ chấp nhận file ảnh (jpg, png, gif, webp) hoặc video (mp4, webm, avi, mov)'));
     },
 });
 function uploadedImageUrl(filename) {

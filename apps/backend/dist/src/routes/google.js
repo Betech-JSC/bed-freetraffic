@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
+const googleapis_1 = require("googleapis");
 const google_1 = require("../lib/google");
 const analyticsSync_1 = require("../services/analyticsSync");
 const auth_1 = require("../middleware/auth");
@@ -20,12 +21,49 @@ router.get('/callback', async (req, res) => {
         }
         const tokens = await (0, google_1.exchangeGoogleCode)(code);
         const existing = await prisma_1.default.googleIntegration.findFirst({ where: { workspaceId } });
+        // Initialize credentials helper to fetch properties automatically
+        const oauth2 = (0, google_1.createOAuth2Client)();
+        let ga4PropertyId = process.env.GA4_PROPERTY_ID || existing?.ga4PropertyId || null;
+        let gscSiteUrl = process.env.GSC_SITE_URL || existing?.gscSiteUrl || null;
+        if (oauth2) {
+            oauth2.setCredentials({
+                access_token: tokens.access_token || undefined,
+                refresh_token: tokens.refresh_token || existing?.refreshToken || undefined,
+                expiry_date: tokens.expiry_date || undefined,
+            });
+            // 1. Automatically fetch GSC sites list
+            try {
+                const sc = googleapis_1.google.searchconsole({ version: 'v1', auth: oauth2 });
+                const { data: siteList } = await sc.sites.list();
+                if (siteList.siteEntry && siteList.siteEntry.length > 0) {
+                    // Select the first verified site URL
+                    gscSiteUrl = siteList.siteEntry[0].siteUrl || null;
+                }
+            }
+            catch (scErr) {
+                console.error('[Google OAuth] Error fetching GSC sites:', scErr.message);
+            }
+            // 2. Automatically fetch GA4 account property summaries
+            try {
+                const adminClient = googleapis_1.google.analyticsadmin({ version: 'v1beta', auth: oauth2 });
+                const { data: accounts } = await adminClient.accountSummaries.list();
+                if (accounts.accountSummaries && accounts.accountSummaries.length > 0) {
+                    const firstProp = accounts.accountSummaries[0].propertySummaries?.[0]?.property;
+                    if (firstProp) {
+                        ga4PropertyId = firstProp.replace('properties/', '') || null;
+                    }
+                }
+            }
+            catch (gaErr) {
+                console.error('[Google OAuth] Error fetching GA4 properties:', gaErr.message);
+            }
+        }
         const data = {
             accessToken: tokens.access_token || '',
             refreshToken: tokens.refresh_token || existing?.refreshToken || null,
             expiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-            ga4PropertyId: process.env.GA4_PROPERTY_ID || existing?.ga4PropertyId,
-            gscSiteUrl: process.env.GSC_SITE_URL || existing?.gscSiteUrl,
+            ga4PropertyId,
+            gscSiteUrl,
             syncStatus: 'CONNECTED',
             syncError: null,
             workspaceId,
@@ -35,6 +73,10 @@ router.get('/callback', async (req, res) => {
         }
         else {
             await prisma_1.default.googleIntegration.create({ data });
+        }
+        // Automatically trigger background sync for GA4/GSC stats immediately
+        if (workspaceId) {
+            (0, analyticsSync_1.syncAnalyticsData)(workspaceId).catch(err => console.error('[Google OAuth] Error triggering post-connect sync:', err));
         }
         const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
         res.redirect(`${frontend}/dashboard/settings?google=connected`);

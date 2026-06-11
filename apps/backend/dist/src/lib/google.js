@@ -146,6 +146,7 @@ async function fetchGscSummary(days = 30, workspaceId) {
 const GOOGLE_SCOPES = [
     'https://www.googleapis.com/auth/analytics.readonly',
     'https://www.googleapis.com/auth/webmasters.readonly',
+    'https://www.googleapis.com/auth/youtube.upload',
 ];
 function createOAuth2Client() {
     const clientId = process.env.GOOGLE_CLIENT_ID;

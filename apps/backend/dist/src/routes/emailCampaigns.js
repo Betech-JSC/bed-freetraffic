@@ -7,6 +7,7 @@ const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const emailCampaignSend_1 = require("../services/emailCampaignSend");
 const auth_1 = require("../middleware/auth");
+const emailCampaignQueue_1 = require("../queues/emailCampaignQueue");
 const router = (0, express_1.Router)();
 router.get('/track/open/:campaignId', async (req, res) => {
     const campaignId = parseInt(req.params.campaignId);
@@ -96,21 +97,40 @@ router.post('/:id/send', auth_1.requireWrite, async (req, res) => {
         return;
     }
     try {
-        const result = await (0, emailCampaignSend_1.sendEmailCampaign)(id);
-        if (result.status === 'FAILED') {
-            res.status(400).json({
-                error: result.errors[0] || 'Không gửi được email nào. Kiểm tra SMTP trong Cài đặt.',
-                sent: 0,
-                total: result.total,
-                errors: result.errors,
-            });
-            return;
+        const list = campaign.recipients.split(/[,;\s]+/).filter(Boolean);
+        // Update status to QUEUED
+        await prisma_1.default.emailCampaign.update({
+            where: { id },
+            data: { status: 'QUEUED' },
+        });
+        if (emailCampaignQueue_1.emailCampaignQueue) {
+            // Add to BullMQ queue
+            await emailCampaignQueue_1.emailCampaignQueue.add(`campaign-${id}`, { campaignId: id });
+        }
+        else {
+            // Direct async execution when Redis is disabled
+            (async () => {
+                try {
+                    await prisma_1.default.emailCampaign.update({
+                        where: { id },
+                        data: { status: 'PROCESSING' },
+                    });
+                    const result = await (0, emailCampaignSend_1.sendEmailCampaign)(id);
+                    console.log(`[EmailCampaign Router (No-Redis)] Gửi thành công chiến dịch #${id}: ${result.sent}/${result.total} email.`);
+                }
+                catch (err) {
+                    console.error(`[EmailCampaign Router (No-Redis)] Thất bại khi gửi chiến dịch #${id}:`, err);
+                    await prisma_1.default.emailCampaign.update({
+                        where: { id },
+                        data: { status: 'FAILED' },
+                    });
+                }
+            })();
         }
         res.json({
-            message: `Đã gửi ${result.sent}/${result.total} email`,
-            sent: result.sent,
-            total: result.total,
-            errors: result.errors.length ? result.errors : undefined,
+            message: 'Chiến dịch đã được đưa vào hàng đợi để gửi bất đồng bộ.',
+            sent: 0,
+            total: list.length,
         });
     }
     catch (err) {

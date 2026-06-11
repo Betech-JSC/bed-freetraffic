@@ -6,6 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_1 = require("../middleware/auth");
+const rbacMiddleware_1 = require("../middleware/rbacMiddleware");
+const auditLogger_1 = require("../lib/auditLogger");
+const cache_1 = require("../lib/cache");
 const router = (0, express_1.Router)();
 // ==========================================
 // PRODUCTS ENDPOINTS
@@ -40,6 +43,15 @@ router.post('/products', auth_1.authenticate, auth_1.requireWrite, async (req, r
                 workspaceId: req.workspaceId,
             },
         });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'CREATE_PRODUCT',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { productId: product.id, productName: product.name }
+        });
         res.status(201).json(product);
     }
     catch (error) {
@@ -67,6 +79,15 @@ router.put('/products/:id', auth_1.authenticate, auth_1.requireWrite, async (req
                 currency: currency !== undefined ? currency : existing.currency,
             },
         });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'UPDATE_PRODUCT',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { productId: id, oldName: existing.name, newName: updated.name }
+        });
         res.json(updated);
     }
     catch (error) {
@@ -87,6 +108,15 @@ router.delete('/products/:id', auth_1.authenticate, auth_1.requireWrite, async (
         await prisma_1.default.product.delete({
             where: { id },
         });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'DELETE_PRODUCT',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { productId: id, productName: existing.name }
+        });
         res.status(204).send();
     }
     catch (error) {
@@ -99,12 +129,29 @@ router.delete('/products/:id', auth_1.authenticate, auth_1.requireWrite, async (
 // Get list of orders
 router.get('/', auth_1.authenticate, async (req, res) => {
     try {
-        const orders = await prisma_1.default.order.findMany({
-            where: { workspaceId: req.workspaceId },
-            include: { customer: { select: { name: true, email: true } } },
-            orderBy: { createdAt: 'desc' },
+        const page = parseInt(req.query.page, 10) || 1;
+        const limit = parseInt(req.query.limit, 10) || 20;
+        const skip = (page - 1) * limit;
+        const where = { workspaceId: req.workspaceId };
+        const [total, orders] = await Promise.all([
+            prisma_1.default.order.count({ where }),
+            prisma_1.default.order.findMany({
+                where,
+                skip,
+                take: limit,
+                include: { customer: { select: { name: true, email: true } } },
+                orderBy: { createdAt: 'desc' },
+            }),
+        ]);
+        res.json({
+            data: orders,
+            meta: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
         });
-        res.json(orders);
     }
     catch (error) {
         res.status(500).json({ error: error.message || 'Lỗi lấy danh sách đơn hàng' });
@@ -206,10 +253,64 @@ router.post('/', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {
                 items: { include: { product: true } },
             },
         });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'CREATE_ORDER',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { orderId: newOrder.id, orderNumber: newOrder.orderNumber, totalAmount: newOrder.totalAmount }
+        });
+        // Invalidate cache
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['dashboard', 'report']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
         res.status(201).json(populated);
     }
     catch (error) {
         res.status(500).json({ error: error.message || 'Lỗi tạo đơn hàng' });
+    }
+});
+// Delete order (require OWNER role)
+router.delete('/:id', auth_1.authenticate, (0, rbacMiddleware_1.requireWorkspaceRole)(['OWNER']), async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const existing = await prisma_1.default.order.findFirst({
+            where: { id, workspaceId: req.workspaceId },
+        });
+        if (!existing) {
+            res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+            return;
+        }
+        await prisma_1.default.order.delete({
+            where: { id },
+        });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId: req.workspaceId,
+            action: 'DELETE_ORDER',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: {
+                orderId: id,
+                orderNumber: existing.orderNumber,
+                totalAmount: existing.totalAmount
+            }
+        });
+        // Invalidate cache
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['dashboard', 'report']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
+        res.status(204).send();
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi xóa đơn hàng' });
     }
 });
 exports.default = router;

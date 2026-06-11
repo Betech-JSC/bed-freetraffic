@@ -7,6 +7,8 @@ const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_1 = require("../middleware/auth");
 const workspace_1 = require("../middleware/workspace");
+const rbacMiddleware_1 = require("../middleware/rbacMiddleware");
+const auditLogger_1 = require("../lib/auditLogger");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 // Get list of workspaces the user has access to
@@ -90,6 +92,55 @@ router.get('/current', workspace_1.workspaceMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Lỗi máy chủ' });
     }
 });
+// Get workspace audit logs (OWNER & MEMBER only)
+router.get('/current/audit-logs', workspace_1.workspaceMiddleware, (0, rbacMiddleware_1.requireWorkspaceRole)(['OWNER', 'MEMBER']), async (req, res) => {
+    try {
+        const workspaceId = req.workspaceId;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const action = req.query.action;
+        const offset = (page - 1) * limit;
+        let logsQuery = `
+        SELECT a.*, u.email as "userEmail", u.name as "userName"
+        FROM "AuditLog" a
+        JOIN "User" u ON a."userId" = u.id
+        WHERE a."workspaceId" = $1
+      `;
+        let countQuery = `
+        SELECT COUNT(*)::integer as count
+        FROM "AuditLog"
+        WHERE "workspaceId" = $1
+      `;
+        const queryParams = [workspaceId];
+        let paramIndex = 2;
+        if (action && action.trim() !== '') {
+            logsQuery += ` AND a.action = $${paramIndex}`;
+            countQuery += ` AND action = $${paramIndex}`;
+            queryParams.push(action.trim());
+            paramIndex++;
+        }
+        logsQuery += ` ORDER BY a."createdAt" DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+        const logsParams = [...queryParams, limit, offset];
+        const [logs, countResult] = await Promise.all([
+            prisma_1.default.$queryRawUnsafe(logsQuery, ...logsParams),
+            prisma_1.default.$queryRawUnsafe(countQuery, ...queryParams)
+        ]);
+        const total = countResult?.[0]?.count || 0;
+        res.json({
+            logs,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    }
+    catch (error) {
+        console.error('[GET /workspaces/current/audit-logs] Error:', error);
+        res.status(500).json({ error: 'Lỗi máy chủ khi lấy audit logs' });
+    }
+});
 // Create a new workspace
 router.post('/', async (req, res) => {
     try {
@@ -109,6 +160,15 @@ router.post('/', async (req, res) => {
                     }
                 }
             }
+        });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId,
+            workspaceId: workspace.id,
+            action: 'CREATE_WORKSPACE',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: { workspaceName: workspace.name }
         });
         res.status(201).json({
             id: workspace.id,

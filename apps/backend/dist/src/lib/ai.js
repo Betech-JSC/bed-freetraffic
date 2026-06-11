@@ -68,15 +68,19 @@ function parseAiJson(text) {
     }
     catch (err) {
         // Strategy 2: Find and extract JSON object bounded by outermost curly braces { }
-        const startIdx = cleaned.indexOf('{');
-        const endIdx = cleaned.lastIndexOf('}');
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-            const jsonSub = cleaned.slice(startIdx, endIdx + 1);
-            try {
-                return JSON.parse(jsonSub);
-            }
-            catch (innerErr) {
-                // Fall through
+        // Only apply if the input is not intended to be a JSON array (i.e. does not start with '[')
+        const isArrayStr = cleaned.startsWith('[');
+        if (!isArrayStr) {
+            const startIdx = cleaned.indexOf('{');
+            const endIdx = cleaned.lastIndexOf('}');
+            if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+                const jsonSub = cleaned.slice(startIdx, endIdx + 1);
+                try {
+                    return JSON.parse(jsonSub);
+                }
+                catch (innerErr) {
+                    // Fall through
+                }
             }
         }
         // Strategy 3: Find and extract JSON array bounded by outermost brackets [ ]

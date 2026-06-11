@@ -297,7 +297,7 @@ router.post('/generate-ai', auth_1.authenticate, async (req, res) => {
         else {
             layoutInstructions = 'Thiết kế bố cục cơ bản: hero -> features -> testimonials -> form -> faq -> footer.';
         }
-        const systemInstructions = `Bạn là một kỹ sư thiết kế Landing Page AI chuyên nghiệp.
+        const systemInstructions = `Bạn là một kỹ sư thiết kế Landing Page AI chuyên nghiệp kiêm chuyên gia Copywriter chuyển đổi cao (Conversion Copywriting).
 Nhiệm vụ của bạn là tạo ra cấu trúc trang web Landing Page tuyệt đẹp dưới dạng một mảng JSON các khối PageBlock theo đúng định dạng được yêu cầu.
 
 Các loại khối (block.type) được hỗ trợ:
@@ -310,19 +310,25 @@ Các loại khối (block.type) được hỗ trợ:
 7. "testimonials": Đánh giá khách hàng (title, reviews: [{name, role, rating: 5, quote, avatar: ""}], backgroundColor, textColor).
 8. "faq": Câu hỏi thường gặp (title, faqs: [{question, answer}], backgroundColor, textColor).
 
-Quy tắc thiết kế quan trọng:
-1. Thứ tự và bố cục khối: ${layoutInstructions}
-2. Tạo ra tối thiểu 4 khối và tối đa 7 khối. Hãy viết tiêu đề, nội dung và các câu hỏi/lợi ích bằng tiếng Việt thật tự nhiên, thu hút khách mua hàng.
-3. Luôn sử dụng tông màu tươi sáng dựa trên cấu hình theme được chọn sau đây:
+Quy quy tắc thiết kế & Copywriting quan trọng:
+1. Áp dụng các công thức viết lời quảng cáo kinh doanh chuyên sâu như AIDA (Attention, Interest, Desire, Action) hoặc PAS (Pain, Agitate, Solve):
+   - Tiêu đề Hero (title) phải cực kỳ cuốn hút, đánh trúng nhu cầu hoặc mong muốn lớn nhất của khách hàng (ví dụ: "Chinh phục tiếng Anh giao tiếp trôi chảy sau 3 tháng" thay vì "Khóa học tiếng Anh").
+   - Phụ đề Hero (subtitle) phải làm rõ giải pháp hoặc lợi thế độc bản (USP), tạo sự tò mò hoặc cam kết rõ ràng.
+   - Các lợi ích (features.items) phải được viết dưới dạng "Tính năng đi kèm Lợi ích thực tế" chứ không chỉ liệt kê kỹ thuật (ví dụ: "Học 1 kèm 1 với giáo viên bản ngữ - Giúp sửa phát âm chuẩn xác ngay lập tức" thay vì "Giáo viên bản ngữ").
+   - Testimonials (đánh giá): Hãy viết các nhận xét đầy thuyết phục, nêu rõ sự thay đổi trước và sau khi sử dụng sản phẩm/dịch vụ của khách hàng.
+   - FAQ (câu hỏi thường gặp): Trả lời trực diện vào các mối lo ngại lớn nhất về giá cả, thời gian, sự cam kết hoàn tiền hoặc bảo hành để củng cố niềm tin.
+2. Thứ tự và bố cục khối: ${layoutInstructions}
+3. Tạo ra tối thiểu 4 khối và tối đa 7 khối. Hãy viết tiêu đề, nội dung và các câu hỏi/lợi ích bằng tiếng Việt thật tự nhiên, lưu loát, chuyên nghiệp và có tính thuyết phục cao.
+4. Luôn sử dụng tông màu chuyên nghiệp, tinh tế dựa trên cấu hình theme được chọn sau đây:
    - Màu nền Hero: ${themeInfo.heroBg}, màu chữ Hero: ${themeInfo.heroText}
    - Màu nền Features: ${themeInfo.featuresBg}, màu chữ Features: ${themeInfo.featuresText}
    - Màu nền Pricing: ${themeInfo.pricingBg}, màu chữ Pricing: ${themeInfo.pricingText}
    - Màu nền Form: ${themeInfo.formBg}, màu chữ Form: ${themeInfo.formText}
    - Màu nền Testimonials/Faq/Footer nên dùng màu nền sáng dịu như #ffffff, #f8fafc hoặc màu nền đồng tông nhẹ nhàng khác.
-4. Đối với ảnh (imageUrl) trong Hero: Hãy chọn hình ảnh chất lượng từ Unsplash tương thích với chủ đề. Ví dụ ảnh công nghệ/lập trình: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop", ảnh hải sản/món ăn: "https://images.unsplash.com/photo-1534080391025-09795d197360?w=800&auto=format&fit=crop", ảnh máy bay/du lịch: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&auto=format&fit=crop", vv.
-5. Chỉ trả về MẢNG JSON HỢP LỆ dạng PageBlock[].
-6. KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô để có thể chạy JSON.parse() trực tiếp.`;
-        const response = await (0, ai_1.fetchWithRetry)(ai.url, {
+5. Đối với ảnh (imageUrl) trong Hero: Hãy chọn hình ảnh chất lượng từ Unsplash tương thích với chủ đề. Ví dụ ảnh công nghệ/lập trình: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop", ảnh hải sản/món ăn: "https://images.unsplash.com/photo-1534080391025-09795d197360?w=800&auto=format&fit=crop", ảnh máy bay/du lịch: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&auto=format&fit=crop", vv.
+6. Chỉ trả về MẢNG JSON HỢP LỆ dạng PageBlock[].
+7. KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô để có thể chạy JSON.parse() trực tiếp.`;
+        let response = await (0, ai_1.fetchWithRetry)(ai.url, {
             method: 'POST',
             headers: ai.headers,
             body: JSON.stringify({
@@ -332,10 +338,27 @@ Quy tắc thiết kế quan trọng:
                     { role: 'user', content: `Hãy sinh các khối Landing Page tuyệt đẹp cho chủ đề sau: ${prompt}` }
                 ],
                 temperature: 0.8,
-                max_tokens: 2000,
+                max_tokens: 4000,
             }),
-            signal: AbortSignal.timeout(45000),
+            signal: AbortSignal.timeout(90000),
         });
+        if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
+            console.warn(`[AI Landing Page] Primary model ${ai.model} failed (${response.status}). Trying fallback Llama...`);
+            response = await (0, ai_1.fetchWithRetry)(ai.url, {
+                method: 'POST',
+                headers: ai.headers,
+                body: JSON.stringify({
+                    model: 'meta-llama/llama-3.2-3b-instruct:free',
+                    messages: [
+                        { role: 'system', content: systemInstructions },
+                        { role: 'user', content: `Hãy sinh các khối Landing Page tuyệt đẹp cho chủ đề sau: ${prompt}` }
+                    ],
+                    temperature: 0.8,
+                    max_tokens: 4000,
+                }),
+                signal: AbortSignal.timeout(90000),
+            });
+        }
         if (!response.ok) {
             const errText = await response.text();
             res.status(500).json({ error: `AI API returned status ${response.status}: ${errText}` });

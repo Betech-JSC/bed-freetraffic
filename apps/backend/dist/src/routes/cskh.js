@@ -39,9 +39,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_1 = require("../middleware/auth");
+const cache_1 = require("../lib/cache");
 const multer_1 = __importDefault(require("multer"));
 const axios_1 = __importDefault(require("axios"));
 const cheerio = __importStar(require("cheerio"));
+const embeddings_1 = require("../lib/embeddings");
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const router = (0, express_1.Router)();
@@ -51,7 +53,13 @@ const upload = (0, multer_1.default)({
 });
 // Load CSKH Config
 router.get('/config', auth_1.authenticate, async (req, res) => {
+    const cacheKey = `ws:${req.workspaceId}:cskh-config`;
     try {
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.json(cached);
+            return;
+        }
         let config = await prisma_1.default.cskhConfig.findUnique({
             where: { workspaceId: req.workspaceId },
         });
@@ -64,6 +72,7 @@ router.get('/config', auth_1.authenticate, async (req, res) => {
                 },
             });
         }
+        await cache_1.cache.set(cacheKey, config, 600); // Cache for 10 minutes
         res.json(config);
     }
     catch (error) {
@@ -75,7 +84,7 @@ router.post('/config', auth_1.authenticate, auth_1.requireWrite, async (req, res
     try {
         const { liveChatEnabled, aiChatbotEnabled, knowledgeBaseText, notificationChannels, followUpDelayHours, followUpEmailSubject, followUpEmailBody, 
         // new fields
-        autoCareEnabled, autoCareScheduleType, autoCareDelayHours, autoCareIntervalDays, autoCareEmailSubject, autoCareEmailBody, autoCareChannels, } = req.body;
+        autoCareEnabled, autoCareScheduleType, autoCareDelayHours, autoCareIntervalDays, autoCareEmailSubject, autoCareEmailBody, autoCareChannels, widgetSettings, } = req.body;
         const existing = await prisma_1.default.cskhConfig.findUnique({
             where: { workspaceId: req.workspaceId },
         });
@@ -100,6 +109,7 @@ router.post('/config', auth_1.authenticate, auth_1.requireWrite, async (req, res
                     autoCareEmailSubject: autoCareEmailSubject !== undefined ? autoCareEmailSubject : existing.autoCareEmailSubject,
                     autoCareEmailBody: autoCareEmailBody !== undefined ? autoCareEmailBody : existing.autoCareEmailBody,
                     autoCareChannels: autoCareChannels !== undefined ? autoCareChannels : existing.autoCareChannels,
+                    widgetSettings: widgetSettings !== undefined ? widgetSettings : existing.widgetSettings,
                 },
             });
         }
@@ -122,7 +132,16 @@ router.post('/config', auth_1.authenticate, auth_1.requireWrite, async (req, res
                     autoCareEmailSubject: autoCareEmailSubject || null,
                     autoCareEmailBody: autoCareEmailBody || null,
                     autoCareChannels: autoCareChannels || "email",
+                    widgetSettings: widgetSettings || null,
                 },
+            });
+        }
+        if (knowledgeBaseText !== undefined || !existing) {
+            void (0, embeddings_1.syncKnowledgeBaseEmbeddings)(req.workspaceId, config.knowledgeBaseText || '');
+        }
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['cskh-config']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
             });
         }
         res.json({ success: true, config });
@@ -297,6 +316,12 @@ router.post('/knowledge/upload', auth_1.authenticate, auth_1.requireWrite, uploa
                 knowledgeFiles: JSON.stringify(files)
             }
         });
+        void (0, embeddings_1.syncKnowledgeBaseEmbeddings)(req.workspaceId, newKnowledge);
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['cskh-config']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
         res.json({
             success: true,
             message: `Đã học thành công tri thức từ tài liệu: ${file.originalname}`,
@@ -378,6 +403,12 @@ router.post('/knowledge/crawl', auth_1.authenticate, auth_1.requireWrite, async 
                 knowledgeUrls: JSON.stringify(urls)
             }
         });
+        void (0, embeddings_1.syncKnowledgeBaseEmbeddings)(req.workspaceId, newKnowledge);
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['cskh-config']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
         res.json({
             success: true,
             message: `Đã học thành công tri thức từ URL: ${title}`,
@@ -407,6 +438,12 @@ router.post('/knowledge/reset', auth_1.authenticate, auth_1.requireWrite, async 
                 knowledgeUrls: null
             }
         });
+        void (0, embeddings_1.syncKnowledgeBaseEmbeddings)(req.workspaceId, '');
+        if (req.workspaceId) {
+            void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['cskh-config']).catch(err => {
+                console.error('[Cache Invalidation Error]:', err);
+            });
+        }
         res.json({ success: true, message: 'Đã đặt lại tri thức doanh nghiệp', config: updated });
     }
     catch (error) {

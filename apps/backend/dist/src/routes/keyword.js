@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_1 = require("../middleware/auth");
+const cache_1 = require("../lib/cache");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/groups', async (req, res) => {
@@ -31,12 +32,25 @@ router.post('/groups', auth_1.requireWrite, async (req, res) => {
     res.status(201).json(group);
 });
 router.get('/', async (req, res) => {
-    const keywords = await prisma_1.default.seoKeyword.findMany({
-        where: { workspaceId: req.workspaceId },
-        include: { channel: true, group: true },
-        orderBy: { createdAt: 'desc' },
-    });
-    res.json(keywords);
+    const cacheKey = `ws:${req.workspaceId}:keywords`;
+    try {
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.json(cached);
+            return;
+        }
+        const keywords = await prisma_1.default.seoKeyword.findMany({
+            where: { workspaceId: req.workspaceId },
+            include: { channel: true, group: true },
+            orderBy: { createdAt: 'desc' },
+        });
+        await cache_1.cache.set(cacheKey, keywords, 300); // Cache for 5 minutes
+        res.json(keywords);
+    }
+    catch (error) {
+        console.error('[GET /keywords]', error);
+        res.status(500).json({ error: 'Lỗi máy chủ' });
+    }
 });
 router.get('/:id/history', async (req, res) => {
     const id = parseInt(req.params.id);
@@ -81,6 +95,12 @@ router.post('/', auth_1.requireWrite, async (req, res) => {
             },
         });
     }
+    // Invalidate cache
+    if (req.workspaceId) {
+        void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['keywords', 'report', 'dashboard']).catch(err => {
+            console.error('[Cache Invalidation Error]:', err);
+        });
+    }
     res.status(201).json(seoKeyword);
 });
 router.patch('/:id', auth_1.requireWrite, async (req, res) => {
@@ -112,6 +132,12 @@ router.patch('/:id', auth_1.requireWrite, async (req, res) => {
             },
         });
     }
+    // Invalidate cache
+    if (req.workspaceId) {
+        void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['keywords', 'report', 'dashboard']).catch(err => {
+            console.error('[Cache Invalidation Error]:', err);
+        });
+    }
     res.json(seoKeyword);
 });
 router.delete('/:id', auth_1.requireWrite, async (req, res) => {
@@ -124,6 +150,12 @@ router.delete('/:id', auth_1.requireWrite, async (req, res) => {
         return;
     }
     await prisma_1.default.seoKeyword.delete({ where: { id } });
+    // Invalidate cache
+    if (req.workspaceId) {
+        void (0, cache_1.invalidateWorkspaceCache)(req.workspaceId, ['keywords', 'report', 'dashboard']).catch(err => {
+            console.error('[Cache Invalidation Error]:', err);
+        });
+    }
     res.status(204).send();
 });
 exports.default = router;

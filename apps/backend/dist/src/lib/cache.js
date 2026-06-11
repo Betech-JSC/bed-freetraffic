@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cache = void 0;
+exports.invalidateWorkspaceCache = invalidateWorkspaceCache;
 const ioredis_1 = __importDefault(require("ioredis"));
 class MemoryCache {
     store = new Map();
@@ -44,6 +45,14 @@ class MemoryCache {
     }
     async flush() {
         this.store.clear();
+    }
+    async delPattern(pattern) {
+        const regexPattern = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+        for (const key of this.store.keys()) {
+            if (regexPattern.test(key)) {
+                this.store.delete(key);
+            }
+        }
     }
 }
 class RedisCache {
@@ -105,6 +114,17 @@ class RedisCache {
             console.error('[Redis Cache] FLUSH error:', err);
         }
     }
+    async delPattern(pattern) {
+        try {
+            const keys = await this.client.keys(pattern);
+            if (keys.length > 0) {
+                await this.client.del(...keys);
+            }
+        }
+        catch (err) {
+            console.error('[Redis Cache] DEL pattern error:', err);
+        }
+    }
 }
 let cacheInstance;
 const redisHostOrUrl = process.env.REDIS_URL || process.env.REDIS_HOST;
@@ -117,3 +137,14 @@ else {
     cacheInstance = new MemoryCache();
 }
 exports.cache = cacheInstance;
+async function invalidateWorkspaceCache(workspaceId, namespaces) {
+    for (const ns of namespaces) {
+        if (ns === 'keywords' || ns === 'cskh-config') {
+            await exports.cache.del(`ws:${workspaceId}:${ns}`);
+        }
+        else {
+            const pattern = `ws:${workspaceId}:${ns}:*`;
+            await exports.cache.delPattern(pattern);
+        }
+    }
+}
