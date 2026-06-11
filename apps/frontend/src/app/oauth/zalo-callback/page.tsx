@@ -36,13 +36,13 @@ export default function ZaloCallbackPage() {
           return;
         }
 
-        const { appId, appSecret, redirectUri } = JSON.parse(raw);
+        const { appId, appSecret, redirectUri, codeVerifier } = JSON.parse(raw);
 
         try {
           const res = await apiFetch('/social/zalo/callback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, appId, appSecret, redirectUri }),
+            body: JSON.stringify({ code, appId, appSecret, redirectUri, codeVerifier }),
           });
           const data = await res.json();
 

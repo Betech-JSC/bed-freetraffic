@@ -3,7 +3,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch, apiJson } from '@/lib/api';
 import { FacebookConnectCard } from '@/components/settings/FacebookConnectCard';
+import { ZaloConnectCard } from '@/components/settings/ZaloConnectCard';
+import { TikTokConnectCard } from '@/components/settings/TikTokConnectCard';
 import { useLocale } from '@/context/LocaleContext';
+import { AuditLogsTab } from '@/components/settings/AuditLogsTab';
 
 // ===== TYPES =====
 interface Connection {
@@ -17,6 +20,7 @@ interface Connection {
 
 export default function SettingsPage() {
   const { t, locale } = useLocale();
+  const [activeTab, setActiveTab] = useState<'integrations' | 'security' | 'audit'>('integrations');
   const [connections, setConnections] = useState<Connection[]>([]);
   const [fbBotStatus, setFbBotStatus] = useState<{ botReady: boolean } | null>(null);
 
@@ -30,14 +34,7 @@ export default function SettingsPage() {
   const [emailTestLoading, setEmailTestLoading] = useState(false);
   const [emailTestMsg, setEmailTestMsg] = useState('');
 
-  // Zalo state
-  const [zaloMode, setZaloMode] = useState<'idle' | 'quick' | 'oauth'>('idle');
-  const [zaloToken, setZaloToken] = useState('');
-  const [zaloAppId, setZaloAppId] = useState('');
-  const [zaloAppSecret, setZaloAppSecret] = useState('');
-  const [zaloLoading, setZaloLoading] = useState(false);
-  const [zaloError, setZaloError] = useState('');
-  const [zaloSuccess, setZaloSuccess] = useState('');
+
 
   // Mailchimp state
   const [mailchimpMode, setMailchimpMode] = useState<'idle' | 'form'>('idle');
@@ -177,82 +174,7 @@ export default function SettingsPage() {
     setEmailLoading(false);
   };
 
-  // ===== ZALO =====
-  const handleZaloQuickConnect = async () => {
-    setZaloLoading(true); setZaloError(''); setZaloSuccess('');
-    try {
-      const res = await apiFetch('/social/zalo/quick-connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken: zaloToken })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setZaloSuccess(`${t('Đã kết nối:')} ${data.oaName}`);
-        setZaloMode('idle');
-        fetchConnections();
-      } else {
-        setZaloError(data.error || t('Không thể kết nối'));
-      }
-    } catch { setZaloError(t('Lỗi kết nối máy chủ')); }
-    setZaloLoading(false);
-  };
 
-  const handleZaloOAuth = async () => {
-    setZaloLoading(true); setZaloError('');
-    const redirectUri = `${window.location.origin}/oauth/zalo-callback`;
-    try {
-      const res = await apiFetch('/social/zalo/auth-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appId: zaloAppId, redirectUri })
-      });
-      const data = await res.json();
-      if (data.url) {
-        localStorage.setItem('zalo_oauth', JSON.stringify({ appId: zaloAppId, appSecret: zaloAppSecret, redirectUri }));
-        const popup = window.open(data.url, 'zalo_oauth', 'width=600,height=700,scrollbars=yes');
-        const check = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(check);
-            setZaloLoading(false);
-            fetchConnections();
-          }
-        }, 1000);
-      }
-    } catch { setZaloError(t('Lỗi tạo URL đăng nhập')); setZaloLoading(false); }
-  };
-
-  const handleZaloUnifiedConnect = async () => {
-    setZaloLoading(true); setZaloError(''); setZaloSuccess('');
-    try {
-      const workspaceId = localStorage.getItem('workspaceId') || '0';
-      const data = await apiJson<{ url: string }>(`/auth/social/zalo/url?action=connect&workspaceId=${workspaceId}`);
-      if (data.url) {
-        const popup = window.open(data.url, 'zalo_oauth', 'width=600,height=700,scrollbars=yes');
-        const handleMessage = (event: MessageEvent) => {
-          if (event.data?.type === 'social_connected' && event.data?.platform === 'zalo') {
-            fetchConnections();
-            window.removeEventListener('message', handleMessage);
-          }
-        };
-        window.addEventListener('message', handleMessage);
-
-        const check = setInterval(() => {
-          if (popup?.closed) {
-            clearInterval(check);
-            setZaloLoading(false);
-            fetchConnections();
-          }
-        }, 1000);
-      } else {
-        setZaloError(t('Không tạo được đường dẫn kết nối Zalo.'));
-        setZaloLoading(false);
-      }
-    } catch (e: unknown) {
-      setZaloError(e instanceof Error ? e.message : t('Lỗi kết nối máy chủ.'));
-      setZaloLoading(false);
-    }
-  };
 
   const handleGoogleUnifiedConnect = async () => {
     setEmailLoading(true); setEmailError(''); setEmailSuccess('');
@@ -384,6 +306,8 @@ export default function SettingsPage() {
   const telegramConn = getConn('telegram');
   const redditConn = getConn('reddit');
   const mozConn = getConn('moz');
+  const tiktokConn = getConn('tiktok');
+  const tiktokshopConn = getConn('tiktokshop');
 
   const isFbConnected = !!fbConn;
   const isFbReady = isFbConnected && (fbBotStatus ? fbBotStatus.botReady : true);
@@ -391,11 +315,47 @@ export default function SettingsPage() {
   return (
     <div className="page-container max-w-4xl">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">{t('Tích hợp & Kết nối')}</h1>
-        <p className="text-slate-500 text-sm mt-1.5">{t('Liên kết tài khoản MXH để Bot tự động đăng bài kéo traffic')}</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">{t('Cài đặt hệ thống')}</h1>
+        <p className="text-slate-500 text-sm mt-1.5">{t('Quản lý tích hợp, bảo mật tài khoản và giám sát hoạt động')}</p>
       </div>
 
-      {/* ===== THỐNG KÊ NHANH ===== */}
+      {/* ===== TAB SELECTOR ===== */}
+      <div className="flex border-b border-slate-200 gap-6 mb-6">
+        <button
+          onClick={() => setActiveTab('integrations')}
+          className={`pb-3 text-sm font-semibold border-b-2 transition-colors focus:outline-none ${
+            activeTab === 'integrations'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          {t('Tích hợp & Kết nối')}
+        </button>
+        <button
+          onClick={() => setActiveTab('security')}
+          className={`pb-3 text-sm font-semibold border-b-2 transition-colors focus:outline-none ${
+            activeTab === 'security'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          {t('Bảo mật & 2FA')}
+        </button>
+        <button
+          onClick={() => setActiveTab('audit')}
+          className={`pb-3 text-sm font-semibold border-b-2 transition-colors focus:outline-none ${
+            activeTab === 'audit'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          {t('Nhật ký hoạt động')}
+        </button>
+      </div>
+
+      {activeTab === 'integrations' && (
+        <div className="space-y-6">
+          {/* ===== THỐNG KÊ NHANH ===== */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { 
@@ -421,6 +381,22 @@ export default function SettingsPage() {
             statusColor: zaloConn ? 'text-green-600' : 'text-gray-400',
             dotColor: zaloConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
             borderColor: zaloConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
+          },
+          { 
+            label: 'TikTok Shop', 
+            connected: !!tiktokshopConn, 
+            statusText: tiktokshopConn ? t('Đang đồng bộ') : t('Chưa kết nối'),
+            statusColor: tiktokshopConn ? 'text-green-600' : 'text-gray-400',
+            dotColor: tiktokshopConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
+            borderColor: tiktokshopConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
+          },
+          { 
+            label: t('Kênh TikTok'), 
+            connected: !!tiktokConn, 
+            statusText: tiktokConn ? t('Sẵn sàng') : t('Chưa kết nối'),
+            statusColor: tiktokConn ? 'text-green-600' : 'text-gray-400',
+            dotColor: tiktokConn ? 'bg-green-500 animate-pulse' : 'bg-gray-300',
+            borderColor: tiktokConn ? 'border-green-200 bg-green-50/50' : 'border-gray-100 bg-white'
           },
           { 
             label: 'Mailchimp', 
@@ -585,102 +561,9 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ===== ZALO ===== */}
-      <div className="card overflow-hidden">
-        <div className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Zalo Official Account</h3>
-                {zaloConn ? (
-                  <p className="text-sm text-green-600 font-medium">{zaloConn.pageName}</p>
-                ) : (
-                  <p className="text-sm text-gray-400">{t('Gửi tin nhắn tự động qua Zalo OA')}</p>
-                )}
-              </div>
-            </div>
-            {zaloConn ? (
-              <button onClick={() => handleDisconnect('zalo')} className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
-                {t('Ngắt kết nối')}
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button 
-                  onClick={handleZaloUnifiedConnect}
-                  disabled={zaloLoading}
-                  className="px-4 py-2 text-sm font-bold text-white rounded-lg shadow-sm transition-colors disabled:opacity-50"
-                  style={{ background: '#0068FF' }}
-                >
-                  {zaloLoading ? t('Đang kết nối...') : t('Zalo OA (Một chạm)')}
-                </button>
-                <button 
-                  onClick={() => { setZaloMode('quick'); setZaloError(''); setZaloSuccess(''); }} 
-                  className="px-4 py-2 text-sm font-medium text-[#0068FF] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                >
-                  {t('Token thủ công')}
-                </button>
-                <button 
-                  onClick={() => { setZaloMode('oauth'); setZaloError(''); setZaloSuccess(''); }} 
-                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-gray-650 transition-colors"
-                >
-                  {t('Cấu hình ứng dụng')}
-                </button>
-              </div>
-            )}
-          </div>
+      <ZaloConnectCard onConnectionChange={fetchConnections} />
 
-          {zaloSuccess && <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">{zaloSuccess}</div>}
-          {zaloError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{zaloError}</div>}
-
-          {zaloMode === 'quick' && !zaloConn && (
-            <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
-              <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
-                <p className="font-bold mb-1">{t('Cách lấy Token Zalo OA:')}</p>
-                <ol className="list-decimal list-inside space-y-1">
-                  <li>{t('Truy cập')} <a href="https://developers.zalo.me/" target="_blank" className="underline font-medium">Zalo Developers</a></li>
-                  <li>{t('Vào mục Zalo OA → Lấy Access Token')}</li>
-                  <li>{t('Dán token vào ô bên dưới')}</li>
-                </ol>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">OA Access Token</label>
-                <input type="text" value={zaloToken} onChange={e => setZaloToken(e.target.value)} placeholder={t('Dán Access Token...')} className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-200 outline-none" />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setZaloMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
-                <button onClick={handleZaloQuickConnect} disabled={!zaloToken || zaloLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#0068FF' }}>
-                  {zaloLoading ? t('Đang kết nối...') : t('Kết nối ngay')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {zaloMode === 'oauth' && !zaloConn && (
-            <div className="mt-5 pt-5 border-t border-gray-100 space-y-4">
-              <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
-                <p className="font-bold mb-1">{t('Đăng nhập OAuth tự động:')}</p>
-                <p>{t('Nhập App ID & Secret Key từ')} <a href="https://developers.zalo.me/" target="_blank" className="underline font-medium">Zalo Developers</a></p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">App ID</label>
-                  <input type="text" value={zaloAppId} onChange={e => setZaloAppId(e.target.value)} placeholder="App ID..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-200 outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Secret Key</label>
-                  <input type="password" value={zaloAppSecret} onChange={e => setZaloAppSecret(e.target.value)} placeholder="Secret Key..." className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-200 outline-none" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setZaloMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
-                <button onClick={handleZaloOAuth} disabled={!zaloAppId || !zaloAppSecret || zaloLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#0068FF' }}>
-                  {zaloLoading ? t('Đang mở Zalo...') : t('Đăng nhập Zalo')}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <TikTokConnectCard onConnectionChange={fetchConnections} />
 
       {/* ===== MAILCHIMP ===== */}
       <div className="card overflow-hidden">
@@ -928,10 +811,19 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="card p-6 mt-6">
-        <h2 className="text-lg font-bold text-slate-900 mb-2">{t('Bảo mật 2FA (TOTP)')}</h2>
-        <TwoFactorSection />
-      </div>
+        </div>
+      )}
+
+      {activeTab === 'security' && (
+        <div className="card p-6">
+          <h2 className="text-lg font-bold text-slate-900 mb-2">{t('Bảo mật 2FA (TOTP)')}</h2>
+          <TwoFactorSection />
+        </div>
+      )}
+
+      {activeTab === 'audit' && (
+        <AuditLogsTab />
+      )}
     </div>
   );
 }

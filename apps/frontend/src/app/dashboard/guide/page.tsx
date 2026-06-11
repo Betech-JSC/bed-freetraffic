@@ -187,6 +187,11 @@ export default function GuidePage() {
         {
           title: 'Bước 3: AI tự động phân loại Lead CRM & Cảnh báo',
           description: 'Khi Chatbot thu thập được Email/SĐT của khách chat, hệ thống sẽ bắn cảnh báo tức thì về Telegram/Slack cho admin. Đồng thời, AI sẽ tự động đọc lịch sử chat, phân loại khách hàng thành HOT/WARM/COLD, chấm điểm tiềm năng và ghi Note phân tích chi tiết vào CRM.',
+        },
+        {
+          title: 'Bước 4: Nhận diện cảm xúc & Cảnh báo khẩn cấp (Tự động tiếp quản)',
+          description: 'Hệ thống tự động phát hiện nếu khách hàng bực dọc hoặc yêu cầu gặp người thật. AI sẽ lập tức kích hoạt Tự động tiếp quản (Agent Takeover) trong 30 phút để tạm dừng chatbot, đồng thời gửi cảnh báo khẩn cấp qua Telegram, Email (SMTP) và ghi nhận trực tiếp vào Nhật ký cảnh báo trên Dashboard.',
+          tip: 'Để nhận cảnh báo khẩn cấp, hãy đảm bảo bạn đã cấu hình SMTP/Telegram và tích chọn các kênh tương ứng trong mục cấu hình CSKH.'
         }
       ]
     },
@@ -379,6 +384,11 @@ export default function GuidePage() {
         {
           title: 'Step 3: AI Auto-classification of CRM Leads & Alerts',
           description: 'When the Chatbot collects Email/Phone, it immediately alerts the admin on Telegram/Slack. Simultaneously, AI reads the chat history, classifies the customer as HOT/WARM/COLD, scores the lead, and logs notes in the CRM.',
+        },
+        {
+          title: 'Step 4: Sentiment Detection & Urgent Alerts (Auto-Takeover)',
+          description: 'The system automatically detects if a customer is frustrated or requests to speak to a human. AI instantly activates Agent Takeover for 30 minutes to halt the chatbot, and dispatches urgent alerts via Telegram, Email (SMTP), and records it directly under Dashboard Alert Logs.',
+          tip: 'To receive urgent alerts, make sure you configure SMTP/Telegram and check their boxes under CSKH Alert Notification Channels.'
         }
       ]
     },

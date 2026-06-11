@@ -28,6 +28,7 @@ export default function BlogPage() {
   // Form states for creation / editing
   const [isEditing, setIsEditing] = useState(false);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
+  const [focusKeyword, setFocusKeyword] = useState('');
   const [form, setForm] = useState({
     title: '',
     slug: '',
@@ -37,6 +38,133 @@ export default function BlogPage() {
     tags: '',
     published: false,
   });
+
+  const analyzeSeo = () => {
+    const report = {
+      score: 0,
+      titleLength: form.title.length,
+      summaryLength: form.summary.length,
+      wordCount: form.content.split(/\s+/).filter(Boolean).length,
+      hasH2: /##\s+.+/i.test(form.content),
+      hasH3: /###\s+.+/i.test(form.content),
+      hasLinks: /\[.+\]\(.+\)/i.test(form.content),
+      hasImages: /!\[.+\]\(.+\)/i.test(form.content),
+      keywordInTitle: false,
+      keywordInSummary: false,
+      keywordInContent: false,
+      keywordDensity: 0,
+      checklist: [] as { label: string; passed: boolean; tip: string }[]
+    };
+
+    // 1. Title Length Check (10-60 chars)
+    const isTitleOk = report.titleLength >= 10 && report.titleLength <= 60;
+    report.checklist.push({
+      label: 'Độ dài tiêu đề bài viết',
+      passed: isTitleOk,
+      tip: isTitleOk 
+        ? `Tốt (${report.titleLength} ký tự)` 
+        : `Nên từ 10-60 ký tự (Hiện tại: ${report.titleLength} ký tự)`
+    });
+    if (isTitleOk) report.score += 15;
+
+    // 2. Summary (Meta Desc) Length Check (50-160 chars)
+    const isSummaryOk = report.summaryLength >= 50 && report.summaryLength <= 160;
+    report.checklist.push({
+      label: 'Độ dài SEO Meta Description',
+      passed: isSummaryOk,
+      tip: isSummaryOk 
+        ? `Tốt (${report.summaryLength} ký tự)` 
+        : `Nên từ 50-160 ký tự để hiển thị tốt trên Google (Hiện tại: ${report.summaryLength} ký tự)`
+    });
+    if (isSummaryOk) report.score += 15;
+
+    // 3. Word Count Check (>= 300 words)
+    const isWordCountOk = report.wordCount >= 300;
+    report.checklist.push({
+      label: 'Độ dài nội dung bài viết',
+      passed: isWordCountOk,
+      tip: isWordCountOk 
+        ? `Tốt (${report.wordCount} từ)` 
+        : `Nên có ít nhất 300 từ để đạt thứ hạng cao (Hiện tại: ${report.wordCount} từ)`
+    });
+    if (isWordCountOk) report.score += 10;
+    else if (report.wordCount > 100) report.score += 5;
+
+    // 4. Header Hierarchy (H2 / H3)
+    const hasHeaders = report.hasH2 || report.hasH3;
+    report.checklist.push({
+      label: 'Sử dụng các thẻ Heading (H2, H3)',
+      passed: hasHeaders,
+      tip: hasHeaders 
+        ? 'Tốt, cấu trúc bài viết rõ ràng' 
+        : 'Nên sử dụng ## (H2) hoặc ### (H3) để phân chia các phần'
+    });
+    if (hasHeaders) report.score += 10;
+
+    // 5. Links and Images
+    const hasMedia = report.hasLinks || report.hasImages;
+    report.checklist.push({
+      label: 'Liên kết & Hình ảnh trực quan',
+      passed: hasMedia,
+      tip: hasMedia 
+        ? 'Tốt, đã có ảnh hoặc liên kết' 
+        : 'Nên chèn thêm liên kết hoặc hình ảnh minh họa để giữ chân người đọc'
+    });
+    if (hasMedia) report.score += 10;
+
+    // Focus keyword checks
+    if (focusKeyword.trim()) {
+      const kw = focusKeyword.toLowerCase().trim();
+      
+      // Keyword in Title
+      report.keywordInTitle = form.title.toLowerCase().includes(kw);
+      report.checklist.push({
+        label: `Từ khóa chính xuất hiện trong tiêu đề`,
+        passed: report.keywordInTitle,
+        tip: report.keywordInTitle 
+          ? 'Tốt' 
+          : `Thêm từ khóa "${focusKeyword}" vào tiêu đề của bạn`
+      });
+      if (report.keywordInTitle) report.score += 15;
+
+      // Keyword in Meta Description
+      report.keywordInSummary = form.summary.toLowerCase().includes(kw);
+      report.checklist.push({
+        label: `Từ khóa chính xuất hiện trong Meta Description`,
+        passed: report.keywordInSummary,
+        tip: report.keywordInSummary 
+          ? 'Tốt' 
+          : `Thêm từ khóa "${focusKeyword}" vào mô tả tóm tắt`
+      });
+      if (report.keywordInSummary) report.score += 10;
+
+      // Keyword density
+      const words = form.content.toLowerCase().split(/\s+/).filter(Boolean);
+      const kwCount = form.content.toLowerCase().split(kw).length - 1;
+      const density = words.length > 0 ? (kwCount / words.length) * 100 : 0;
+      report.keywordDensity = Number(density.toFixed(2));
+
+      const isDensityOk = density >= 0.5 && density <= 3.0;
+      report.checklist.push({
+        label: `Mật độ từ khóa chính (0.5% - 3%)`,
+        passed: isDensityOk,
+        tip: isDensityOk 
+          ? `Tốt (${report.keywordDensity}%)` 
+          : `Mật độ từ khóa chính nên từ 0.5% đến 3% (Hiện tại: ${report.keywordDensity}%, số lần lặp: ${kwCount})`
+      });
+      if (isDensityOk) report.score += 15;
+      else if (kwCount > 0) report.score += 5;
+    } else {
+      // Default tips if no focus keyword provided
+      report.checklist.push({
+        label: 'Nhập từ khóa chính để tối ưu hóa SEO sâu hơn',
+        passed: false,
+        tip: 'Hãy điền "Từ khóa chính" ở ô bên cạnh để kiểm tra từ khóa'
+      });
+    }
+
+    return report;
+  };
 
   const loadPosts = useCallback(async () => {
     try {
@@ -179,112 +307,174 @@ export default function BlogPage() {
       )}
 
       {isEditing ? (
-        <form onSubmit={handleSave} className="card p-6 space-y-6">
-          <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">
-            {selectedPostId ? 'Chỉnh sửa bài viết' : 'Viết bài mới'}
-          </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Editor Form */}
+          <form onSubmit={handleSave} className="lg:col-span-2 card p-6 space-y-6">
+            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">
+              {selectedPostId ? 'Chỉnh sửa bài viết' : 'Viết bài mới'}
+            </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <label className="label">Tiêu đề bài viết</label>
+                <input
+                  type="text"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                  placeholder="Nhập tiêu đề hấp dẫn..."
+                  className="input"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="label">Đường dẫn thân thiện (URL Slug)</label>
+                <input
+                  type="text"
+                  value={form.slug}
+                  onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                  placeholder="vi-du-duong-dan-bai-viet"
+                  className="input"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1">
+                <label className="label">Tác giả</label>
+                <input
+                  type="text"
+                  value={form.authorName}
+                  onChange={(e) => setForm({ ...form, authorName: e.target.value })}
+                  className="input"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="label">Tags (ngăn cách bởi dấu phẩy)</label>
+                <input
+                  type="text"
+                  value={form.tags}
+                  onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                  placeholder="seo, marketing, traffic"
+                  className="input"
+                />
+              </div>
+            </div>
+
             <div className="space-y-1">
-              <label className="label">Tiêu đề bài viết</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="Nhập tiêu đề hấp dẫn..."
+              <label className="label">Mô tả tóm tắt (SEO Meta Description)</label>
+              <textarea
+                value={form.summary}
+                onChange={(e) => setForm({ ...form, summary: e.target.value })}
+                placeholder="Nhập mô tả tóm tắt bài viết giúp thu hút người đọc trên Google Search..."
+                rows={2}
                 className="input"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="label">Đường dẫn thân thiện (URL Slug)</label>
-              <input
-                type="text"
-                value={form.slug}
-                onChange={(e) => setForm({ ...form, slug: e.target.value })}
-                placeholder="vi-du-duong-dan-bai-viet"
-                className="input"
+              <div className="flex justify-between items-center mb-1">
+                <label className="label mb-0">Nội dung bài viết (Hỗ trợ Markdown)</label>
+                <span className="text-[10px] text-slate-400">Mẹo: Sử dụng # cho Heading, * cho In nghiêng, ** cho In đậm</span>
+              </div>
+              <textarea
+                value={form.content}
+                onChange={(e) => setForm({ ...form, content: e.target.value })}
+                placeholder="Nhập nội dung bài viết bằng Markdown..."
+                rows={12}
+                className="input font-mono text-xs"
               />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="published"
+                checked={form.published}
+                onChange={(e) => setForm({ ...form, published: e.target.checked })}
+                className="h-4 w-4 border-slate-350 rounded accent-[#f25c22] cursor-pointer"
+              />
+              <label htmlFor="published" className="text-xs font-semibold text-slate-600 select-none cursor-pointer">
+                Xuất bản bài viết này lên trang chủ ngay lập tức
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsEditing(false)}
+                className="btn-secondary px-5 py-2"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="submit"
+                className="btn-primary px-6 py-2"
+              >
+                Lưu bài viết
+              </button>
+            </div>
+          </form>
+
+          {/* Real-time SEO Analyzer Sidebar */}
+          <div className="card p-6 space-y-6 self-start bg-white border border-slate-200 shadow-sm rounded-2xl">
+            <h3 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
+              📊 Trợ lý SEO On-page Real-time
+            </h3>
+
+            {/* Focus Keyword Input */}
             <div className="space-y-1">
-              <label className="label">Tác giả</label>
+              <label className="label text-xs font-bold text-slate-500 uppercase tracking-wider">Từ khóa chính (Focus Keyword)</label>
               <input
                 type="text"
-                value={form.authorName}
-                onChange={(e) => setForm({ ...form, authorName: e.target.value })}
-                className="input"
+                value={focusKeyword}
+                onChange={(e) => setFocusKeyword(e.target.value)}
+                placeholder="Nhập từ khóa chính để kiểm tra..."
+                className="input text-xs"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="label">Tags (ngăn cách bởi dấu phẩy)</label>
-              <input
-                type="text"
-                value={form.tags}
-                onChange={(e) => setForm({ ...form, tags: e.target.value })}
-                placeholder="seo, marketing, traffic"
-                className="input"
-              />
+            {/* Score Gauge */}
+            {(() => {
+              const seoReport = analyzeSeo();
+              const scoreColor = seoReport.score >= 80 
+                ? 'text-emerald-600 border-emerald-500 bg-emerald-500/10' 
+                : seoReport.score >= 50 
+                ? 'text-amber-600 border-amber-500 bg-amber-500/10' 
+                : 'text-rose-600 border-rose-500 bg-rose-500/10';
+              
+              return (
+                <div className="flex flex-col items-center justify-center py-2 border-b border-slate-100 pb-4">
+                  <div className={`w-24 h-24 rounded-full border-4 flex flex-col items-center justify-center transition-all duration-350 ${scoreColor}`}>
+                    <span className="text-3xl font-extrabold">{seoReport.score}</span>
+                    <span className="text-[9px] font-bold uppercase tracking-wider">SEO Score</span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-600 mt-3">
+                    {seoReport.score >= 80 ? '🎉 Tối ưu rất tốt!' : seoReport.score >= 50 ? '⚡ Khá tốt, cần cải thiện thêm' : '⚠️ Cần tối ưu hóa thêm'}
+                  </p>
+                </div>
+              );
+            })()}
+
+            {/* Checklist items */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Danh mục SEO cần tối ưu</h4>
+              <div className="space-y-3.5 max-h-[350px] overflow-y-auto pr-1">
+                {analyzeSeo().checklist.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-2.5 text-xs">
+                    <span className={`text-sm shrink-0 font-bold ${item.passed ? 'text-emerald-500' : 'text-rose-400'}`}>
+                      {item.passed ? '✓' : '⚠'}
+                    </span>
+                    <div className="space-y-0.5">
+                      <span className={`font-bold block ${item.passed ? 'text-slate-700' : 'text-slate-500'}`}>{item.label}</span>
+                      <span className="text-[10px] text-slate-400 leading-normal block">{item.tip}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-
-          <div className="space-y-1">
-            <label className="label">Mô tả tóm tắt (SEO Meta Description)</label>
-            <textarea
-              value={form.summary}
-              onChange={(e) => setForm({ ...form, summary: e.target.value })}
-              placeholder="Nhập mô tả tóm tắt bài viết giúp thu hút người đọc trên Google Search..."
-              rows={2}
-              className="input"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex justify-between items-center mb-1">
-              <label className="label mb-0">Nội dung bài viết (Hỗ trợ Markdown)</label>
-              <span className="text-[10px] text-slate-400">Mẹo: Sử dụng # cho Heading, * cho In nghiêng, ** cho In đậm</span>
-            </div>
-            <textarea
-              value={form.content}
-              onChange={(e) => setForm({ ...form, content: e.target.value })}
-              placeholder="Nhập nội dung bài viết bằng Markdown..."
-              rows={12}
-              className="input font-mono text-xs"
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              id="published"
-              checked={form.published}
-              onChange={(e) => setForm({ ...form, published: e.target.checked })}
-              className="h-4 w-4 border-slate-350 rounded accent-[#f25c22] cursor-pointer"
-            />
-            <label htmlFor="published" className="text-xs font-semibold text-slate-600 select-none cursor-pointer">
-              Xuất bản bài viết này lên trang chủ ngay lập tức
-            </label>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setIsEditing(false)}
-              className="btn-secondary px-5 py-2"
-            >
-              Hủy bỏ
-            </button>
-            <button
-              type="submit"
-              className="btn-primary px-6 py-2"
-            >
-              Lưu bài viết
-            </button>
-          </div>
-        </form>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {loading ? (

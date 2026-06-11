@@ -404,12 +404,15 @@ router.post('/email/test', async (req, res) => {
 // Tạo URL đăng nhập Zalo OAuth
 router.post('/zalo/auth-url', async (req, res) => {
     try {
-        const { appId, redirectUri } = req.body;
+        const { appId, redirectUri, codeChallenge } = req.body;
         if (!appId) {
             res.status(400).json({ error: 'Thiếu Zalo App ID' });
             return;
         }
-        const url = `https://oauth.zaloapp.com/v4/oa/permission?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        let url = `https://oauth.zaloapp.com/v4/oa/permission?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+        if (codeChallenge) {
+            url += `&code_challenge=${codeChallenge}`;
+        }
         res.json({ url });
     }
     catch (error) {
@@ -419,7 +422,7 @@ router.post('/zalo/auth-url', async (req, res) => {
 // Callback Zalo OAuth
 router.post('/zalo/callback', async (req, res) => {
     try {
-        const { code, appId, appSecret, redirectUri } = req.body;
+        const { code, appId, appSecret, redirectUri, codeVerifier } = req.body;
         // Đổi code lấy Access Token từ Zalo
         const tokenRes = await fetch('https://oauth.zaloapp.com/v4/oa/access_token', {
             method: 'POST',
@@ -430,7 +433,8 @@ router.post('/zalo/callback', async (req, res) => {
             body: new URLSearchParams({
                 code,
                 app_id: appId,
-                grant_type: 'authorization_code'
+                grant_type: 'authorization_code',
+                code_verifier: codeVerifier || ''
             })
         });
         const tokenData = await tokenRes.json();
@@ -758,6 +762,64 @@ router.post('/moz/connect', async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: error.message || 'Lỗi kết nối máy chủ' });
+    }
+});
+// ==================== TIKTOK SHOP ====================
+// Kết nối thủ công bằng token cho TikTok Shop
+router.post('/tiktokshop/bind-page', async (req, res) => {
+    try {
+        const { pageId, pageAccessToken, pageName } = req.body;
+        if (!pageId || !pageAccessToken) {
+            res.status(400).json({ error: 'Thiếu Shop ID hoặc Access Token.' });
+            return;
+        }
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'tiktokshop', pageId, workspaceId: req.workspaceId }
+        });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: { accessToken: pageAccessToken, pageName: pageName || 'TikTok Shop Store', status: 'CONNECTED' }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: { platform: 'tiktokshop', workspaceId: req.workspaceId, accessToken: pageAccessToken, pageName: pageName || 'TikTok Shop Store', pageId, status: 'CONNECTED' }
+            });
+        }
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Lỗi máy chủ' });
+    }
+});
+// ==================== TIKTOK CREATOR ====================
+// Kết nối thủ công bằng token cho TikTok Creator
+router.post('/tiktok/bind-page', async (req, res) => {
+    try {
+        const { pageId, pageAccessToken, pageName } = req.body;
+        if (!pageId || !pageAccessToken) {
+            res.status(400).json({ error: 'Thiếu Channel Open ID hoặc Access Token.' });
+            return;
+        }
+        const existing = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'tiktok', pageId, workspaceId: req.workspaceId }
+        });
+        if (existing) {
+            await prisma_1.default.socialConnection.update({
+                where: { id: existing.id },
+                data: { accessToken: pageAccessToken, pageName: pageName || 'TikTok Creator', status: 'CONNECTED' }
+            });
+        }
+        else {
+            await prisma_1.default.socialConnection.create({
+                data: { platform: 'tiktok', workspaceId: req.workspaceId, accessToken: pageAccessToken, pageName: pageName || 'TikTok Creator', pageId, status: 'CONNECTED' }
+            });
+        }
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Lỗi máy chủ' });
     }
 });
 exports.default = router;

@@ -100,6 +100,28 @@ const isColorLight = (hex: string): boolean => {
   return yiq >= 150;
 };
 
+const getAdaptiveCardStyles = (textColor?: string) => {
+  const hex = textColor || '#000000';
+  const isLight = isColorLight(hex);
+  if (isLight) {
+    return {
+      bg: 'rgba(255, 255, 255, 0.08)',
+      bgHover: 'rgba(255, 255, 255, 0.12)',
+      border: 'rgba(255, 255, 255, 0.15)',
+      textSecondary: 'rgba(255, 255, 255, 0.65)',
+      textPrimary: 'inherit',
+    };
+  } else {
+    return {
+      bg: 'rgba(0, 0, 0, 0.03)',
+      bgHover: 'rgba(0, 0, 0, 0.05)',
+      border: 'rgba(0, 0, 0, 0.08)',
+      textSecondary: 'rgba(0, 0, 0, 0.65)',
+      textPrimary: 'inherit',
+    };
+  }
+};
+
 const DEFAULT_BLOCKS: PageBlock[] = [
   {
     id: 'block-1',
@@ -845,6 +867,7 @@ export default function LandingPageBuilder() {
           <label class="block text-xs font-semibold text-gray-600 mb-1">Phương thức thanh toán</label>
           <select id="checkout-gateway" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:outline-none focus:border-[#f25c22]">
             <option value="PAYOS">Chuyển khoản VietQR nhanh (PayOS)</option>
+            <option value="SEPAY">Chuyển khoản VietQR tự động (SePay.vn)</option>
             <option value="STRIPE">Thanh toán Thẻ Quốc tế (Stripe)</option>
           </select>
         </div>
@@ -1625,6 +1648,7 @@ export default function LandingPageBuilder() {
                                 className="w-full bg-white border border-slate-200 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
                               >
                                 <option value="PAYOS">VietQR chuyển khoản nhanh (PayOS)</option>
+                                <option value="SEPAY">VietQR đối soát tự động (SePay.vn)</option>
                                 <option value="STRIPE">Thẻ Quốc Tế (Stripe)</option>
                               </select>
                             </div>
@@ -2440,6 +2464,8 @@ export default function LandingPageBuilder() {
                 // Hide block completely in Mobile View if toggled
                 if (isMobileHidden && device === 'mobile') return null;
 
+                const cardStyle = getAdaptiveCardStyles(block.textColor);
+
                 return (
                   <div
                     key={block.id}
@@ -2506,6 +2532,39 @@ export default function LandingPageBuilder() {
                       >
                         🗑 Xóa
                       </button>
+
+                      {/* Divider */}
+                      <div className="w-[1px] h-3.5 bg-slate-200"></div>
+
+                      {/* Background Color Picker */}
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-[9px] font-bold text-slate-400">Nền:</span>
+                        <input
+                          type="color"
+                          value={block.backgroundColor || '#ffffff'}
+                          onChange={(e) => {
+                            const updated = { ...block, backgroundColor: e.target.value };
+                            updateBlock(updated);
+                          }}
+                          className="w-4 h-4 p-0 bg-transparent border-0 cursor-pointer rounded overflow-hidden"
+                          title="Đổi màu nền"
+                        />
+                      </div>
+
+                      {/* Text Color Picker */}
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <span className="text-[9px] font-bold text-slate-400">Chữ:</span>
+                        <input
+                          type="color"
+                          value={block.textColor || '#000000'}
+                          onChange={(e) => {
+                            const updated = { ...block, textColor: e.target.value };
+                            updateBlock(updated);
+                          }}
+                          className="w-4 h-4 p-0 bg-transparent border-0 cursor-pointer rounded overflow-hidden"
+                          title="Đổi màu chữ"
+                        />
+                      </div>
                     </div>
 
                     {/* Block Info Badge */}
@@ -2540,8 +2599,21 @@ export default function LandingPageBuilder() {
                                 {renderEditableText(block, 'buttonText', block.buttonText || 'Bấm đăng ký', "")}
                               </button>
                             </div>
-                            <div className={`${block.imageAlignment === 'left' ? 'md:order-1' : ''} flex justify-center`}>
+                            <div className={`${block.imageAlignment === 'left' ? 'md:order-1' : ''} flex justify-center relative group/img`}>
                               <img src={block.imageUrl} alt="preview" className="rounded-lg shadow-lg border border-slate-200 max-h-[220px] object-cover" />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const newUrl = prompt('Nhập link ảnh mới (URL):', block.imageUrl);
+                                  if (newUrl !== null) {
+                                    updateBlock({ ...block, imageUrl: newUrl });
+                                  }
+                                }}
+                                className="absolute inset-0 bg-black/40 hover:bg-black/60 text-white text-[11px] font-bold rounded-lg opacity-0 group-hover/img:opacity-100 transition duration-150 flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                📷 Đổi hình ảnh
+                              </button>
                             </div>
                           </div>
                         ) : (
@@ -2553,8 +2625,21 @@ export default function LandingPageBuilder() {
                               {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                             </p>
                             {block.imageUrl && (
-                              <div className="my-4 flex justify-center">
+                              <div className="my-4 flex justify-center relative group/img max-w-fit mx-auto">
                                 <img src={block.imageUrl} alt="preview" className="rounded-lg shadow-lg border border-slate-200 max-h-[220px] object-cover" />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newUrl = prompt('Nhập link ảnh mới (URL):', block.imageUrl);
+                                    if (newUrl !== null) {
+                                      updateBlock({ ...block, imageUrl: newUrl });
+                                    }
+                                  }}
+                                  className="absolute inset-0 bg-black/40 hover:bg-black/60 text-white text-[11px] font-bold rounded-lg opacity-0 group-hover/img:opacity-100 transition duration-150 flex items-center justify-center gap-1 cursor-pointer"
+                                >
+                                  📷 Đổi hình ảnh
+                                </button>
                               </div>
                             )}
                             <button className="px-5 py-2.5 bg-[#f25c22] text-white text-xs font-bold rounded-lg mt-2">
@@ -2572,7 +2657,11 @@ export default function LandingPageBuilder() {
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {(block.items || []).map((item, idx) => (
-                            <div key={idx} className="flex items-start gap-2 bg-white/20 p-3 rounded border border-white/10">
+                            <div
+                              key={idx}
+                              style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                              className="flex items-start gap-2 p-3 rounded border"
+                            >
                               <span className="text-indigo-400 text-xs">✓</span>
                               {renderEditableText(block, 'items', item, "text-xs font-medium block flex-1", idx)}
                             </div>
@@ -2582,18 +2671,21 @@ export default function LandingPageBuilder() {
                     )}
 
                     {block.type === 'form' && (
-                      <div className="max-w-xs mx-auto bg-white border border-slate-200 rounded-lg p-6 space-y-4 text-slate-800 shadow-md">
-                        <h3 className="font-bold text-sm text-center text-slate-900">
+                      <div
+                        style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                        className="max-w-xs mx-auto border rounded-lg p-6 space-y-4 shadow-md"
+                      >
+                        <h3 className="font-bold text-sm text-center">
                           {renderEditableText(block, 'title', block.title, "block")}
                         </h3>
-                        <p className="text-[10px] text-slate-505 text-center">
+                        <p style={{ color: cardStyle.textSecondary }} className="text-[10px] text-center">
                           {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                         </p>
                         
                         {!block.formId ? (
-                          <div className="p-3 bg-amber-50 border border-amber-250 rounded-lg text-center space-y-2">
-                            <p className="text-xs text-amber-805 font-bold">⚠️ Chưa liên kết biểu mẫu</p>
-                            <p className="text-[10px] text-amber-600 leading-normal">Bạn cần liên kết Custom Form để thu thập thông tin khách hàng.</p>
+                          <div className="p-3 bg-amber-50/15 border border-amber-500/30 rounded-lg text-center space-y-2">
+                            <p className="text-xs text-amber-500 font-bold">⚠️ Chưa liên kết biểu mẫu</p>
+                            <p style={{ color: cardStyle.textSecondary }} className="text-[10px] leading-normal">Bạn cần liên kết Custom Form để thu thập thông tin khách hàng.</p>
                             <select
                               value={block.formId || ''}
                               onClick={(e) => e.stopPropagation()}
@@ -2613,18 +2705,28 @@ export default function LandingPageBuilder() {
                           <>
                             <div className="space-y-2">
                               <div className="space-y-1">
-                                <label className="text-[9px] text-slate-550 font-semibold uppercase">Họ và Tên</label>
-                                <input disabled placeholder="Nguyễn Văn A" className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs cursor-not-allowed" />
+                                <label style={{ color: cardStyle.textSecondary }} className="text-[9px] font-semibold uppercase opacity-95">Họ và Tên</label>
+                                <input
+                                  disabled
+                                  placeholder="Nguyễn Văn A"
+                                  style={{ backgroundColor: 'rgba(0, 0, 0, 0.02)', borderColor: cardStyle.border, color: block.textColor }}
+                                  className="w-full border rounded px-2.5 py-1.5 text-xs cursor-not-allowed"
+                                />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] text-slate-550 font-semibold uppercase">Email</label>
-                                <input disabled placeholder="name@email.com" className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-xs cursor-not-allowed" />
+                                <label style={{ color: cardStyle.textSecondary }} className="text-[9px] font-semibold uppercase opacity-95">Email</label>
+                                <input
+                                  disabled
+                                  placeholder="name@email.com"
+                                  style={{ backgroundColor: 'rgba(0, 0, 0, 0.02)', borderColor: cardStyle.border, color: block.textColor }}
+                                  className="w-full border rounded px-2.5 py-1.5 text-xs cursor-not-allowed"
+                                />
                               </div>
                             </div>
                             <button disabled className="w-full py-2 bg-[#f25c22] text-white font-bold text-xs rounded transition mt-1 cursor-not-allowed">
                               Đăng ký (Demo Form)
                             </button>
-                            <p className="text-[9px] text-center text-slate-400 font-semibold">
+                            <p style={{ color: cardStyle.textSecondary }} className="text-[9px] text-center font-semibold">
                               Form ID: {block.formId}
                               {block.workflowId && ` | Workflow: ${workflows.find(w => String(w.id) === block.workflowId)?.name}`}
                             </p>
@@ -2683,10 +2785,10 @@ export default function LandingPageBuilder() {
                           <div className="space-y-6">
                             <div className="text-center max-w-xl mx-auto mb-4">
                               <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-bold rounded-full uppercase tracking-wider">Đặc Sản</span>
-                              <h2 className="text-md md:text-lg font-bold text-white mt-1">
+                              <h2 className="text-md md:text-lg font-bold mt-1">
                                 {renderEditableText(block, 'title', block.title, "block")}
                               </h2>
-                              <p className="text-xs text-slate-400 mt-1">
+                              <p style={{ color: cardStyle.textSecondary }} className="text-xs mt-1">
                                 {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                               </p>
                             </div>
@@ -2698,15 +2800,19 @@ export default function LandingPageBuilder() {
                                 const badgeClass = ['bg-orange-900/40 text-orange-400', 'bg-amber-900/40 text-amber-400', 'bg-green-900/40 text-green-400'][index % 3];
 
                                 return (
-                                  <div key={p.id || index} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow flex flex-col justify-between">
+                                  <div
+                                    key={p.id || index}
+                                    style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                                    className="border rounded-xl overflow-hidden shadow flex flex-col justify-between"
+                                  >
                                     <img src={img} alt="preview" className="h-28 w-full object-cover" />
                                     <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                                       <div className="space-y-1">
                                         <span className={`px-1.5 py-0.5 ${badgeClass} text-[8px] font-bold rounded`}>{badges[index % 3]}</span>
-                                        <h4 className="text-xs font-bold text-white line-clamp-1">{p.name}</h4>
-                                        <p className="text-[10px] text-slate-400 line-clamp-2">{p.description || 'Sản phẩm chất lượng cao được tuyển chọn kỹ lưỡng.'}</p>
+                                        <h4 className="text-xs font-bold line-clamp-1">{p.name}</h4>
+                                        <p style={{ color: cardStyle.textSecondary }} className="text-[10px] line-clamp-2">{p.description || 'Sản phẩm chất lượng cao được tuyển chọn kỹ lưỡng.'}</p>
                                       </div>
-                                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                                      <div style={{ borderColor: cardStyle.border }} className="flex justify-between items-center pt-2 border-t">
                                         <span className="text-orange-400 text-xs font-bold">chỉ từ {pPrice}đ</span>
                                         <button disabled style={{ backgroundColor: '#f25c22' }} className="px-3 py-1 text-white rounded text-[10px] font-bold cursor-not-allowed">Đặt Mua</button>
                                       </div>
@@ -2724,10 +2830,10 @@ export default function LandingPageBuilder() {
                           <div className="space-y-6">
                             <div className="text-center max-w-xl mx-auto mb-4">
                               <span className="px-2 py-0.5 bg-orange-100 text-orange-850 text-[9px] font-bold rounded-full uppercase tracking-wider">Lộ Trình Bài Bản</span>
-                              <h2 className="text-md md:text-lg font-bold text-white mt-1">
+                              <h2 className="text-md md:text-lg font-bold mt-1">
                                 {renderEditableText(block, 'title', block.title, "block")}
                               </h2>
-                              <p className="text-xs text-slate-400 mt-1">
+                              <p style={{ color: cardStyle.textSecondary }} className="text-xs mt-1">
                                 {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                               </p>
                             </div>
@@ -2739,15 +2845,19 @@ export default function LandingPageBuilder() {
                                 const badgeClass = ['bg-sky-900/40 text-sky-400', 'bg-purple-900/40 text-purple-400', 'bg-green-900/40 text-green-400'][index % 3];
 
                                 return (
-                                  <div key={p.id || index} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow flex flex-col justify-between">
+                                  <div
+                                    key={p.id || index}
+                                    style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                                    className="border rounded-xl overflow-hidden shadow flex flex-col justify-between"
+                                  >
                                     <img src={img} alt="preview" className="h-28 w-full object-cover" />
                                     <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                                       <div className="space-y-1">
                                         <span className={`px-1.5 py-0.5 ${badgeClass} text-[8px] font-bold rounded`}>{badges[index % 3]}</span>
-                                        <h4 className="text-xs font-bold text-white line-clamp-1">{p.name}</h4>
-                                        <p className="text-[10px] text-slate-400 line-clamp-2">{p.description || 'Khóa học chất lượng cao học trực tuyến hiệu quả cao.'}</p>
+                                        <h4 className="text-xs font-bold line-clamp-1">{p.name}</h4>
+                                        <p style={{ color: cardStyle.textSecondary }} className="text-[10px] line-clamp-2">{p.description || 'Khóa học chất lượng cao học trực tuyến hiệu quả cao.'}</p>
                                       </div>
-                                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                                      <div style={{ borderColor: cardStyle.border }} className="flex justify-between items-center pt-2 border-t">
                                         <span className="text-orange-400 text-xs font-bold">{pPrice}đ</span>
                                         <button disabled style={{ backgroundColor: '#f05123' }} className="px-3 py-1 text-white rounded text-[10px] font-bold cursor-not-allowed">Đăng Ký</button>
                                       </div>
@@ -2765,10 +2875,10 @@ export default function LandingPageBuilder() {
                           <div className="space-y-6">
                             <div className="text-center max-w-xl mx-auto mb-4">
                               <span className="px-2 py-0.5 bg-sky-100 text-sky-850 text-[9px] font-bold rounded-full uppercase tracking-wider">Hành Trình Mơ Ước</span>
-                              <h2 className="text-md md:text-lg font-bold text-white mt-1">
+                              <h2 className="text-md md:text-lg font-bold mt-1">
                                 {renderEditableText(block, 'title', block.title, "block")}
                               </h2>
-                              <p className="text-xs text-slate-400 mt-1">
+                              <p style={{ color: cardStyle.textSecondary }} className="text-xs mt-1">
                                 {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                               </p>
                             </div>
@@ -2781,15 +2891,19 @@ export default function LandingPageBuilder() {
                                 const btnLabel = index === 0 ? 'Đặt Combo' : index === 1 ? 'Đặt Tour' : 'Đặt Vé';
 
                                 return (
-                                  <div key={p.id || index} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow flex flex-col justify-between">
+                                  <div
+                                    key={p.id || index}
+                                    style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                                    className="border rounded-xl overflow-hidden shadow flex flex-col justify-between"
+                                  >
                                     <img src={img} alt="preview" className="h-28 w-full object-cover" />
                                     <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                                       <div className="space-y-1">
                                         <span className={`px-1.5 py-0.5 ${badgeClass} text-[8px] font-bold rounded`}>{badges[index % 3]}</span>
-                                        <h4 className="text-xs font-bold text-white line-clamp-1">{p.name}</h4>
-                                        <p className="text-[10px] text-slate-400 line-clamp-2">{p.description || 'Dịch vụ chất lượng cao, hỗ trợ nhiệt tình chu đáo.'}</p>
+                                        <h4 className="text-xs font-bold line-clamp-1">{p.name}</h4>
+                                        <p style={{ color: cardStyle.textSecondary }} className="text-[10px] line-clamp-2">{p.description || 'Dịch vụ chất lượng cao, hỗ trợ nhiệt tình chu đáo.'}</p>
                                       </div>
-                                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                                      <div style={{ borderColor: cardStyle.border }} className="flex justify-between items-center pt-2 border-t">
                                         <span className="text-sky-400 text-xs font-bold">từ {pPrice}đ</span>
                                         <button disabled style={{ backgroundColor: '#0284c7' }} className="px-3 py-1 text-white rounded text-[10px] font-bold cursor-not-allowed">{btnLabel}</button>
                                       </div>
@@ -2804,18 +2918,21 @@ export default function LandingPageBuilder() {
 
                       return (
                         <div className="text-center space-y-4">
-                          <h2 className="text-md md:text-lg font-bold text-white">
+                          <h2 className="text-md md:text-lg font-bold">
                             {renderEditableText(block, 'title', block.title, "block")}
                           </h2>
-                          <p className="text-xs text-slate-400">
+                          <p style={{ color: cardStyle.textSecondary }} className="text-xs">
                             {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                           </p>
-                          <div className="max-w-xs mx-auto bg-slate-950/80 border border-slate-850 rounded-lg p-6 space-y-3 mt-4 relative">
+                          <div
+                            style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                            className="max-w-xs mx-auto border rounded-lg p-6 space-y-3 mt-4 relative"
+                          >
                             <span className="absolute top-0 right-0 bg-[#f25c22] text-[9px] font-bold text-white px-2 py-0.5 rounded-bl">Phổ biến</span>
-                            <h4 className="text-xs font-bold text-white">Gói Ưu Đãi</h4>
-                            <p className="text-2xl font-extrabold text-white">
+                            <h4 className="text-xs font-bold">Gói Ưu Đãi</h4>
+                            <p className="text-2xl font-extrabold">
                               {renderEditableText(block, 'priceVal', block.priceVal || '499.000đ', "")}
-                              <span className="text-[10px] font-normal text-slate-500">/tháng</span>
+                              <span style={{ color: cardStyle.textSecondary }} className="text-[10px] font-normal">/tháng</span>
                             </p>
                             <button disabled className="w-full py-2 bg-[#f25c22] text-white font-bold text-xs rounded cursor-not-allowed">
                               {block.productId ? `Thanh toán (${block.paymentMethod || 'PAYOS'})` : (block.buttonText || 'Mua ngay')}
@@ -2827,57 +2944,61 @@ export default function LandingPageBuilder() {
 
                     {block.type === 'countdown' && (
                       <div className="text-center space-y-3">
-                        <h2 className="text-md md:text-lg font-bold text-white">
+                        <h2 className="text-md md:text-lg font-bold">
                           {renderEditableText(block, 'title', block.title, "block")}
                         </h2>
-                        <p className="text-xs text-slate-400">
+                        <p style={{ color: cardStyle.textSecondary }} className="text-xs">
                           {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                         </p>
-                        <div className="flex justify-center gap-3 mt-4 text-white font-mono">
-                          <div className="bg-slate-950 border border-slate-850 rounded p-2.5 min-w-[50px]">
+                        <div className="flex justify-center gap-3 mt-4 font-mono">
+                          <div style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }} className="border rounded p-2.5 min-w-[50px]">
                             <span className="text-lg font-extrabold block text-[#f25c22]">02</span>
-                            <span className="text-[8px] text-slate-500 uppercase">Ngày</span>
+                            <span style={{ color: cardStyle.textSecondary }} className="text-[8px] uppercase">Ngày</span>
                           </div>
-                          <div className="bg-slate-950 border border-slate-850 rounded p-2.5 min-w-[50px]">
+                          <div style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }} className="border rounded p-2.5 min-w-[50px]">
                             <span className="text-lg font-extrabold block text-[#f25c22]">14</span>
-                            <span className="text-[8px] text-slate-500 uppercase">Giờ</span>
+                            <span style={{ color: cardStyle.textSecondary }} className="text-[8px] uppercase">Giờ</span>
                           </div>
-                          <div className="bg-slate-950 border border-slate-850 rounded p-2.5 min-w-[50px]">
+                          <div style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }} className="border rounded p-2.5 min-w-[50px]">
                             <span className="text-lg font-extrabold block text-[#f25c22]">38</span>
-                            <span className="text-[8px] text-slate-500 uppercase">Phút</span>
+                            <span style={{ color: cardStyle.textSecondary }} className="text-[8px] uppercase">Phút</span>
                           </div>
-                          <div className="bg-slate-950 border border-slate-850 rounded p-2.5 min-w-[50px]">
+                          <div style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }} className="border rounded p-2.5 min-w-[50px]">
                             <span className="text-lg font-extrabold block text-[#f25c22]">45</span>
-                            <span className="text-[8px] text-slate-500 uppercase">Giây</span>
+                            <span style={{ color: cardStyle.textSecondary }} className="text-[8px] uppercase">Giây</span>
                           </div>
                         </div>
-                        <p className="text-[9px] text-slate-500 italic mt-1">Hạn kết thúc: {block.countdownEnd || 'Chưa cài đặt'}</p>
+                        <p style={{ color: cardStyle.textSecondary }} className="text-[9px] italic mt-1">Hạn kết thúc: {block.countdownEnd || 'Chưa cài đặt'}</p>
                       </div>
                     )}
 
                     {block.type === 'testimonials' && (
                       <div className="space-y-4">
-                        <h2 className="text-md md:text-lg font-bold text-white text-center">
+                        <h2 className="text-md md:text-lg font-bold text-center">
                           {renderEditableText(block, 'title', block.title, "block")}
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           {(block.reviews || []).map((r, idx) => (
-                            <div key={idx} className="bg-slate-950/50 border border-slate-850 p-4 rounded-lg flex flex-col justify-between">
+                            <div
+                              key={idx}
+                              style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                              className="border p-4 rounded-lg flex flex-col justify-between"
+                            >
                               <div className="space-y-1">
                                 <span className="text-[#f25c22] text-[10px]">{'★'.repeat(r.rating || 5)}{'☆'.repeat(5 - (r.rating || 5))}</span>
-                                <p className="text-slate-300 italic text-[11px] leading-relaxed">
+                                <p style={{ color: cardStyle.textSecondary }} className="italic text-[11px] leading-relaxed">
                                   "{renderEditableText(block, 'reviews', r.quote, "", idx, 'quote')}"
                                 </p>
                               </div>
-                              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-850">
-                                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-[#f25c22] text-xs">
+                              <div style={{ borderColor: cardStyle.border }} className="flex items-center gap-2 mt-4 pt-3 border-t">
+                                <div style={{ backgroundColor: cardStyle.border }} className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[#f25c22] text-xs">
                                   {r.name.charAt(0)}
                                 </div>
                                 <div>
-                                  <h4 className="font-bold text-white text-xs">
+                                  <h4 className="font-bold text-xs">
                                     {renderEditableText(block, 'reviews', r.name, "block", idx, 'name')}
                                   </h4>
-                                  <p className="text-[8px] text-slate-500">
+                                  <p style={{ color: cardStyle.textSecondary }} className="text-[8px] opacity-80">
                                     {renderEditableText(block, 'reviews', r.role, "block", idx, 'role')}
                                   </p>
                                 </div>
@@ -2890,20 +3011,32 @@ export default function LandingPageBuilder() {
 
                     {block.type === 'faq' && (
                       <div className="space-y-4">
-                        <h2 className="text-md md:text-lg font-bold text-white text-center">
+                        <h2 className="text-md md:text-lg font-bold text-center">
                           {renderEditableText(block, 'title', block.title, "block")}
                         </h2>
                         <div className="max-w-2xl mx-auto space-y-2">
                           {(block.faqs || []).map((faq, idx) => (
-                            <div key={idx} className="bg-slate-950/40 border border-slate-850 rounded-lg overflow-hidden">
-                              <div className="px-4 py-2.5 flex justify-between items-center text-left hover:bg-slate-800/20">
-                                <span className="font-semibold text-white text-xs">
+                            <div
+                              key={idx}
+                              style={{ backgroundColor: cardStyle.bg, borderColor: cardStyle.border }}
+                              className="border rounded-lg overflow-hidden"
+                            >
+                              <div
+                                style={{ borderBottomColor: cardStyle.border }}
+                                className="px-4 py-2.5 flex justify-between items-center text-left hover:bg-black/5 hover:dark:bg-white/5 cursor-pointer"
+                              >
+                                <span className="font-semibold text-xs flex-1">
                                   {renderEditableText(block, 'faqs', faq.question, "block flex-1", idx, 'question')}
                                 </span>
-                                <span className="text-slate-550 text-[10px]">▼</span>
+                                <span className="text-slate-400 text-[10px]">▼</span>
                               </div>
-                              <div className="px-4 py-2 bg-slate-950/20 border-t border-slate-850 text-slate-400 text-xs">
-                                {renderEditableText(block, 'faqs', faq.answer, "block", idx, 'answer')}
+                              <div
+                                style={{ backgroundColor: 'rgba(0, 0, 0, 0.01)', borderColor: cardStyle.border }}
+                                className="px-4 py-2 border-t"
+                              >
+                                <p style={{ color: cardStyle.textSecondary }} className="text-xs">
+                                  {renderEditableText(block, 'faqs', faq.answer, "block", idx, 'answer')}
+                                </p>
                               </div>
                             </div>
                           ))}
@@ -2912,9 +3045,9 @@ export default function LandingPageBuilder() {
                     )}
 
                     {block.type === 'footer' && (
-                      <div className="flex justify-between items-center text-xs text-slate-400">
+                      <div style={{ color: cardStyle.textSecondary }} className="flex justify-between items-center text-xs">
                         <div>
-                          <h4 className="text-white font-bold">
+                          <h4 style={{ color: block.textColor }} className="font-bold">
                             {renderEditableText(block, 'title', block.title, "block")}
                           </h4>
                           <p className="text-[10px]">

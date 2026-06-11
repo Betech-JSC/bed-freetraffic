@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
+import { cache, invalidateWorkspaceCache } from '../lib/cache';
 
 const router = Router();
 router.use(authenticate);
@@ -30,12 +31,26 @@ router.post('/groups', requireWrite, async (req: AuthRequest, res: Response): Pr
 });
 
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
-  const keywords = await prisma.seoKeyword.findMany({
-    where: { workspaceId: req.workspaceId },
-    include: { channel: true, group: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  res.json(keywords);
+  const cacheKey = `ws:${req.workspaceId}:keywords`;
+  try {
+    const cached = await cache.get<any>(cacheKey);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
+    const keywords = await prisma.seoKeyword.findMany({
+      where: { workspaceId: req.workspaceId },
+      include: { channel: true, group: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    await cache.set(cacheKey, keywords, 300); // Cache for 5 minutes
+    res.json(keywords);
+  } catch (error) {
+    console.error('[GET /keywords]', error);
+    res.status(500).json({ error: 'Lỗi máy chủ' });
+  }
 });
 
 router.get('/:id/history', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -87,6 +102,13 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
     });
   }
 
+  // Invalidate cache
+  if (req.workspaceId) {
+    void invalidateWorkspaceCache(req.workspaceId, ['keywords', 'report', 'dashboard']).catch(err => {
+      console.error('[Cache Invalidation Error]:', err);
+    });
+  }
+
   res.status(201).json(seoKeyword);
 });
 
@@ -123,6 +145,13 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
     });
   }
 
+  // Invalidate cache
+  if (req.workspaceId) {
+    void invalidateWorkspaceCache(req.workspaceId, ['keywords', 'report', 'dashboard']).catch(err => {
+      console.error('[Cache Invalidation Error]:', err);
+    });
+  }
+
   res.json(seoKeyword);
 });
 
@@ -136,6 +165,14 @@ router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Pro
     return;
   }
   await prisma.seoKeyword.delete({ where: { id } });
+
+  // Invalidate cache
+  if (req.workspaceId) {
+    void invalidateWorkspaceCache(req.workspaceId, ['keywords', 'report', 'dashboard']).catch(err => {
+      console.error('[Cache Invalidation Error]:', err);
+    });
+  }
+
   res.status(204).send();
 });
 

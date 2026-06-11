@@ -277,12 +277,12 @@ export default function AbTestsPage() {
               return (
                 <tr key={test.id}>
                   <td className="font-semibold text-white">
-                    <button
-                      onClick={() => fetchStats(test.id)}
+                    <Link
+                      href={`/dashboard/abtests/${test.id}/analytics`}
                       className="hover:underline text-left text-[#f25c22] font-extrabold hover:text-[#d94d1a]"
                     >
                       {test.name}
-                    </button>
+                    </Link>
                   </td>
                   <td>
                     <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${isLp ? 'bg-sky-900/30 text-sky-400 border border-sky-800/40' : 'bg-purple-900/30 text-purple-400 border border-purple-800/40'}`}>
@@ -328,13 +328,12 @@ export default function AbTestsPage() {
                   </td>
                   <td className="space-y-1 whitespace-nowrap">
                     <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs px-2.5 py-1"
-                        onClick={() => fetchStats(test.id)}
+                      <Link
+                        href={`/dashboard/abtests/${test.id}/analytics`}
+                        className="btn-secondary text-xs px-2.5 py-1 inline-block"
                       >
                         {t('Chi tiết')}
-                      </button>
+                      </Link>
                       {test.status === 'RUNNING' && (
                         <button
                           type="button"

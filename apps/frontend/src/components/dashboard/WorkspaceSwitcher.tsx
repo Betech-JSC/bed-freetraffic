@@ -20,6 +20,7 @@ export default function WorkspaceSwitcher() {
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Load workspaces and active workspace info
@@ -71,6 +72,7 @@ export default function WorkspaceSwitcher() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         setShowNewForm(false);
+        setSearchTerm('');
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
@@ -81,6 +83,7 @@ export default function WorkspaceSwitcher() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('workspaceId', id.toString());
       setIsOpen(false);
+      setSearchTerm('');
       window.location.reload();
     }
   };
@@ -150,26 +153,51 @@ export default function WorkspaceSwitcher() {
             {t('workspaceSelect')}
           </div>
 
+          {/* Search bar for enterprise scale */}
+          <div className="px-2 py-1.5 border-b border-slate-100">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm kiếm workspace..."
+              className="w-full bg-slate-50 border border-slate-200/60 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 placeholder-slate-450 focus:outline-none focus:border-brand/40 focus:ring-4 focus:ring-brand/5 transition-all"
+            />
+          </div>
+
           <div className="max-h-[200px] overflow-y-auto custom-scrollbar my-1.5 space-y-0.5">
-            {workspaces.map((ws) => {
-              const isSelected = ws.id === currentWorkspace?.id;
-              return (
-                <button
-                  key={ws.id}
-                  onClick={() => handleSwitch(ws.id)}
-                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-all text-left ${
-                    isSelected
-                      ? 'bg-brand/10 text-brand font-medium'
-                      : 'text-slate-600 hover:bg-orange-50 hover:text-brand'
-                  }`}
-                >
-                  <span className="truncate">{ws.name}</span>
-                  {isSelected && (
-                    <span className="text-xs text-brand font-bold">Selected</span>
-                  )}
-                </button>
-              );
-            })}
+            {workspaces
+              .filter(ws => ws.name.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map((ws) => {
+                const isSelected = ws.id === currentWorkspace?.id;
+                return (
+                  <button
+                    key={ws.id}
+                    onClick={() => handleSwitch(ws.id)}
+                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-all text-left ${
+                      isSelected
+                        ? 'bg-brand/10 text-brand font-medium'
+                        : 'text-slate-600 hover:bg-orange-50 hover:text-brand'
+                    }`}
+                  >
+                    <div className="flex flex-col truncate min-w-0">
+                      <span className="truncate">{ws.name}</span>
+                      {ws.role && (
+                        <span className="text-[9px] font-extrabold uppercase text-slate-400 tracking-wide mt-0.5">
+                          {ws.role}
+                        </span>
+                      )}
+                    </div>
+                    {isSelected && (
+                      <span className="text-xs text-brand font-bold shrink-0 ml-2">✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            {workspaces.filter(ws => ws.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+              <div className="text-xs text-slate-450 text-center py-4">
+                Không tìm thấy workspace
+              </div>
+            )}
           </div>
 
           {error && (

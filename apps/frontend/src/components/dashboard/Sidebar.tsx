@@ -20,61 +20,43 @@ export function Sidebar() {
       title: t('Tổng quan & Báo cáo'),
       items: [
         { href: '/dashboard', label: t('dashboard'), exact: true },
-        { href: '/dashboard/campaigns', label: t('Chiến dịch') },
-        { href: '/dashboard/sources', label: t('sources') },
         { href: '/dashboard/reports', label: t('Báo cáo') },
-        { href: '/dashboard/schedule', label: t('schedule') },
+        { href: '/dashboard/sources', label: t('sources') },
+        { href: '/dashboard/abtests', label: t('abtests') },
       ]
     },
     {
-      title: t('SEO & Nội dung (CMS)'),
+      title: t('SEO & Tiếp thị Nội dung'),
       items: [
         { href: '/dashboard/seo', label: t('seoAudit') },
         { href: '/dashboard/backlinks', label: t('backlinks') },
         { href: '/dashboard/blog', label: 'Blog CMS' },
         { href: '/dashboard/landing', label: 'Landing Pages' },
+        { href: '/dashboard/automation', label: t('automation') + ' Bot', exact: true },
+        { href: '/dashboard/schedule', label: t('Lịch trình đăng bài') },
       ]
     },
     {
-      title: t('CRM & Tự động hóa'),
+      title: t('CRM, Bán hàng & Chăm sóc'),
       items: [
-        { href: '/dashboard/forms', label: 'Custom Forms' },
         { href: '/dashboard/customers', label: t('customers') },
+        { href: '/dashboard/forms', label: 'Custom Forms' },
         { href: '/dashboard/email', label: t('emailCampaigns') },
         { href: '/dashboard/automation/workflows', label: 'Email Automation' },
-        { href: '/dashboard/automation', label: t('automation') + ' Bot', exact: true },
-      ]
-    },
-    {
-      title: t('Cửa hàng & Bán hàng'),
-      items: [
+        { href: '/dashboard/cskh/settings', label: 'CSKH & Chatbot AI' },
         { href: '/dashboard/store/products', label: 'Sản phẩm số' },
         { href: '/dashboard/store/orders', label: 'Đơn hàng & Doanh thu' },
       ]
     },
     {
-      title: t('Trí tuệ nhân tạo (AI)'),
+      title: t('Trí tuệ Nhân tạo & Cài đặt'),
       items: [
         { href: '/dashboard/copilot', label: t('copilot') },
         { href: '/dashboard/content', label: t('Soạn thảo nội dung') },
         { href: '/dashboard/analytics', label: t('Phân tích Bot') },
-      ]
-    },
-    {
-      title: t('CSKH & Tối ưu hóa'),
-      items: [
-        { href: '/dashboard/cskh/settings', label: 'CSKH & Chatbot AI' },
-        { href: '/dashboard/abtests', label: t('abtests') },
-        { href: '/dashboard/insights', label: t('insights') },
-        { href: '/dashboard/alerts', label: t('alerts') },
-      ]
-    },
-    {
-      title: t('Trợ giúp & Cài đặt'),
-      items: [
-        { href: '/dashboard/guide', label: 'Hướng dẫn sử dụng' },
-        { href: '/dashboard/users', label: t('Người dùng') },
         { href: '/dashboard/settings', label: t('settings') },
+        { href: '/dashboard/users', label: t('Người dùng') },
+        { href: '/dashboard/guide', label: 'Hướng dẫn sử dụng' },
       ]
     }
   ];

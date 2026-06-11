@@ -34,20 +34,36 @@ router.get('/channels-status', async (req: AuthRequest, res: Response): Promise<
 
 router.get('/golden-hour', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    const workspaceId = req.workspaceId;
+
+    // 1. Lấy dữ liệu Email Clicks & Opens
     const campaigns = await prisma.emailCampaign.findMany({
-      where: { workspaceId: req.workspaceId },
+      where: { workspaceId },
       select: { id: true }
     });
     const campaignIds = campaigns.map(c => c.id);
-
-    const events = campaignIds.length > 0
+    const emailEvents = campaignIds.length > 0
       ? await prisma.emailEvent.findMany({
           where: { campaignId: { in: campaignIds } },
           select: { createdAt: true, eventType: true }
         })
       : [];
 
-    if (events.length < 5) {
+    // 2. Lấy dữ liệu Form Submissions
+    const submissions = await prisma.formSubmission.findMany({
+      where: { workspaceId },
+      select: { createdAt: true }
+    });
+
+    // 3. Lấy dữ liệu Chat Sessions
+    const chats = await prisma.chatSession.findMany({
+      where: { workspaceId },
+      select: { createdAt: true }
+    });
+
+    const totalInteractions = emailEvents.length + submissions.length + chats.length;
+
+    if (totalInteractions < 5) {
       res.json({
         recommendedHours: [9, 12, 20],
         isFallback: true,
@@ -57,10 +73,21 @@ router.get('/golden-hour', async (req: AuthRequest, res: Response): Promise<void
     }
 
     const hourWeights = Array(24).fill(0);
-    events.forEach(e => {
+
+    emailEvents.forEach(e => {
       const hr = new Date(e.createdAt).getHours();
       const weight = e.eventType === 'click' ? 3 : 1;
       hourWeights[hr] += weight;
+    });
+
+    submissions.forEach(s => {
+      const hr = new Date(s.createdAt).getHours();
+      hourWeights[hr] += 4; // Form submission thể hiện tương tác rất mạnh
+    });
+
+    chats.forEach(c => {
+      const hr = new Date(c.createdAt).getHours();
+      hourWeights[hr] += 2; // Tương tác chat
     });
 
     const sorted = hourWeights
@@ -72,7 +99,7 @@ router.get('/golden-hour', async (req: AuthRequest, res: Response): Promise<void
     res.json({
       recommendedHours,
       isFallback: false,
-      message: `Khung giờ vàng được đề xuất dựa trên phân tích ${events.length} lượt tương tác.`
+      message: `Khung giờ vàng được đề xuất dựa trên phân tích ${totalInteractions} lượt tương tác tổng hợp (Email, Form, Chat).`
     });
   } catch (error) {
     res.status(500).json({ error: 'Lỗi phân tích giờ vàng' });
@@ -106,9 +133,10 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
       overlayWatermark,
       overlayPosition,
       overlayFontSize,
+      autopilot,
     } = body;
 
-    if (!title?.trim() || !content?.trim() || !platforms || !scheduledAt) {
+    if (!title?.trim() || !content?.trim() || !platforms || (!scheduledAt && !autopilot)) {
       res.status(400).json({ error: 'Tiêu đề, nội dung, kênh gửi và thời gian là bắt buộc' });
       return;
     }
@@ -128,10 +156,74 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
       return;
     }
 
-    const scheduledDate = new Date(scheduledAt);
-    if (Number.isNaN(scheduledDate.getTime())) {
-      res.status(400).json({ error: 'Ngày giờ không hợp lệ' });
-      return;
+    let scheduledDate = new Date(scheduledAt);
+    if (autopilot) {
+      // 1. Calculate best hour weights based on unified events
+      let topHour = 9; // Default
+      try {
+        const campaigns = await prisma.emailCampaign.findMany({
+          where: { workspaceId: req.workspaceId },
+          select: { id: true }
+        });
+        const campaignIds = campaigns.map(c => c.id);
+        const emailEvents = campaignIds.length > 0
+          ? await prisma.emailEvent.findMany({
+              where: { campaignId: { in: campaignIds } },
+              select: { createdAt: true, eventType: true }
+            })
+          : [];
+        const submissions = await prisma.formSubmission.findMany({
+          where: { workspaceId: req.workspaceId },
+          select: { createdAt: true }
+        });
+        const chats = await prisma.chatSession.findMany({
+          where: { workspaceId: req.workspaceId },
+          select: { createdAt: true }
+        });
+
+        const hourWeights = Array(24).fill(0);
+        emailEvents.forEach(e => { hourWeights[new Date(e.createdAt).getHours()] += e.eventType === 'click' ? 3 : 1; });
+        submissions.forEach(s => { hourWeights[new Date(s.createdAt).getHours()] += 4; });
+        chats.forEach(c => { hourWeights[new Date(c.createdAt).getHours()] += 2; });
+
+        let maxWeight = -1;
+        for (let h = 0; h < 24; h++) {
+          if (hourWeights[h] > maxWeight) {
+            maxWeight = hourWeights[h];
+            topHour = h;
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi khi tính giờ vàng cho Autopilot:', err);
+      }
+
+      // 2. Find closest pending schedule to place this after it
+      const latestSchedule = await prisma.contentSchedule.findFirst({
+        where: { workspaceId: req.workspaceId, status: 'PENDING' },
+        orderBy: { scheduledAt: 'desc' }
+      });
+
+      let baseDate = new Date();
+      if (latestSchedule && latestSchedule.scheduledAt > baseDate) {
+        baseDate = new Date(latestSchedule.scheduledAt);
+        baseDate.setDate(baseDate.getDate() + 1);
+      } else {
+        baseDate.setHours(baseDate.getHours() + 2);
+      }
+
+      baseDate.setHours(topHour, 0, 0, 0);
+
+      if (baseDate.getTime() < Date.now() + 60 * 60 * 1000) {
+        baseDate.setDate(baseDate.getDate() + 1);
+        baseDate.setHours(topHour, 0, 0, 0);
+      }
+
+      scheduledDate = baseDate;
+    } else {
+      if (Number.isNaN(scheduledDate.getTime())) {
+        res.status(400).json({ error: 'Ngày giờ không hợp lệ' });
+        return;
+      }
     }
 
     const imageUrl = req.file ? uploadedImageUrl(req.file.filename) : body.imageUrl || null;

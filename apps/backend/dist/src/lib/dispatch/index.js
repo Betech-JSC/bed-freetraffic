@@ -12,6 +12,7 @@ const youtube_1 = require("./youtube");
 const zalo_1 = require("./zalo");
 const telegram_1 = require("./telegram");
 const reddit_1 = require("./reddit");
+const tiktok_1 = require("./tiktok");
 var types_1 = require("./types");
 Object.defineProperty(exports, "DISPATCH_PLATFORMS", { enumerable: true, get: function () { return types_1.DISPATCH_PLATFORMS; } });
 async function dispatchToPlatform(platform, payload) {
@@ -30,6 +31,8 @@ async function dispatchToPlatform(platform, payload) {
         return (0, telegram_1.dispatchTelegram)(payload);
     if (p === 'reddit')
         return (0, reddit_1.dispatchReddit)(payload);
+    if (p === 'tiktok')
+        return (0, tiktok_1.dispatchTiktok)(payload);
     return { success: false, message: `Kênh "${platform}" chưa hỗ trợ` };
 }
 function parsePlatforms(platforms) {

@@ -554,31 +554,31 @@ export async function generateAiContentPlan(
     const plan: CopilotPlanItem[] = [];
     const mockPosts = [
       {
-        title: `🚀 Khởi đầu đột phá: Tối ưu ${topic} cho doanh nghiệp ${industry}`,
+        title: `🚀 [TOFU] Khởi đầu đột phá: Tối ưu ${topic} cho doanh nghiệp ${industry}`,
         content: `Bạn muốn nâng tầm doanh số trong lĩnh vực ${industry}? Khám phá giải pháp tự động hóa và tăng trưởng lưu lượng truy cập tối ưu tại {url}! Giọng điệu ${tone} đảm bảo chuyên nghiệp và hiệu quả.\n\n#${industry.toLowerCase()} #marketing #sales`,
         platform: 'facebook',
         suggestedTime: '09:00'
       },
       {
-        title: `⚠️ 3 Sai lầm chí mạng khi triển khai ${topic}`,
+        title: `⚠️ [TOFU] 3 Sai lầm chí mạng khi triển khai ${topic}`,
         content: `Nhiều đơn vị trong ngành ${industry} vẫn đang mắc phải những sai lầm này. Đọc ngay bài viết phân tích chi tiết và cách khắc phục tại {url} để tránh lãng phí ngân sách!`,
         platform: 'email',
         suggestedTime: '12:00'
       },
       {
-        title: `💡 Case Study: Tăng 200% doanh thu nhờ áp dụng ${topic}`,
+        title: `💡 [MOFU] Case Study: Tăng 200% doanh thu nhờ áp dụng ${topic}`,
         content: `Khám phá câu chuyện thành công thực tế của một doanh nghiệp trong ngành ${industry}. Xem chi tiết cách họ tối ưu quy trình và gặt hái kết quả tại {url}!\n\n#casestudy #growth`,
         platform: 'zalo',
         suggestedTime: '20:00'
       },
       {
-        title: `🔥 Hướng dẫn từng bước: Làm chủ ${topic} trong 7 ngày`,
+        title: `🔥 [BOFU] Hướng dẫn từng bước: Làm chủ ${topic} trong 7 ngày`,
         content: `Cẩm nang chi tiết dành riêng cho các nhà quản lý trong lĩnh vực ${industry}. Bắt đầu hành trình chuyển đổi số của bạn ngay hôm nay tại {url}!`,
         platform: 'facebook',
         suggestedTime: '09:00'
       },
       {
-        title: `🎁 Ưu đãi đặc biệt: Tư vấn miễn phí chiến lược ${topic}`,
+        title: `🎁 [BOFU] Ưu đãi đặc biệt: Tư vấn miễn phí chiến lược ${topic}`,
         content: `Chỉ dành riêng cho 50 doanh nghiệp ${industry} đăng ký sớm nhất tuần này. Đặt lịch hẹn tư vấn miễn phí 1-1 cùng chuyên gia tại {url}!`,
         platform: 'email',
         suggestedTime: '12:00'
@@ -599,10 +599,10 @@ Hãy tạo một kế hoạch nội dung đa kênh gồm ${postCount} ngày dự
 
 Mỗi ngày, hãy tạo một bài viết chất lượng cao phù hợp với kênh được đề xuất (facebook, email, zalo).
 Quy tắc viết bài:
-1. Nội dung phải đa dạng góc nhìn qua từng ngày:
-   - Ngày giáo dục/chia sẻ kiến thức có giá trị.
-   - Ngày vạch trần sai lầm hoặc phân tích case study thực tế.
-   - Ngày khuyến mãi/ưu đãi giới hạn thời gian để chuyển đổi.
+1. Nội dung của chiến dịch phải được phân bổ chặt chẽ theo Phễu Marketing (Marketing Funnel):
+   - Nhóm bài viết TOFU (Top of Funnel - Nhận diện - ngày đầu chiến dịch): Tập trung chia sẻ kiến thức, chia sẻ giá trị hữu ích hoàn toàn miễn phí, giải quyết nỗi đau chung của tệp khách hàng nhằm tạo lòng tin và sự chú ý.
+   - Nhóm bài viết MOFU (Middle of Funnel - Cân nhắc - ngày giữa chiến dịch): Giới thiệu giải pháp cụ thể, phân tích Case Study thành công, so sánh các giải pháp, nêu bật lợi ích độc quyền của sản phẩm/dịch vụ nhằm nuôi dưỡng sự hứng thú.
+   - Nhóm bài viết BOFU (Bottom of Funnel - Quyết định - ngày cuối chiến dịch): Đưa ra lời chào mua hàng mạnh mẽ, cam kết chất lượng, ưu đãi giới hạn thời gian (Scarcity), kêu gọi hành động (CTA) trực tiếp nhằm thúc đẩy chuyển đổi thanh toán/đăng ký.
 2. Bài viết phải cực kỳ lôi cuốn, viết theo công thức AIDA (Attention - Gây chú ý, Interest - Tạo hứng thú, Desire - Khơi gợi khao khát, Action - Kêu gọi hành động):
    - Tiêu đề (title): Phải thật giật gân, khơi gợi tò mò hoặc giải quyết trực tiếp vấn đề/nỗi đau của khách hàng, có sử dụng emoji phù hợp.
    - Nội dung (content):

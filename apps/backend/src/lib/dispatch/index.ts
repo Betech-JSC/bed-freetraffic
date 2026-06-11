@@ -5,6 +5,7 @@ import { dispatchYoutube } from './youtube';
 import { dispatchZalo } from './zalo';
 import { dispatchTelegram } from './telegram';
 import { dispatchReddit } from './reddit';
+import { dispatchTiktok } from './tiktok';
 import type { ChannelResult, DispatchPayload, DispatchPlatform, DispatchResult } from './types';
 
 export type { ChannelResult, DispatchPayload, DispatchPlatform, DispatchResult };
@@ -22,6 +23,7 @@ export async function dispatchToPlatform(
   if (p === 'community') return dispatchCommunity(payload);
   if (p === 'telegram') return dispatchTelegram(payload);
   if (p === 'reddit') return dispatchReddit(payload);
+  if (p === 'tiktok') return dispatchTiktok(payload);
   return { success: false, message: `Kênh "${platform}" chưa hỗ trợ` };
 }
 

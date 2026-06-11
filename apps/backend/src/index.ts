@@ -46,8 +46,10 @@ import { startEmailCampaignEngine } from './workers/emailCampaignEngine';
 import { startEmailWorkflowEngine } from './workers/emailWorkflowEngine';
 import { startCskhFollowupWorker } from './workers/cskhFollowupWorker';
 import { startPageSpeedAuditorEngine } from './workers/pagespeedAuditorEngine';
-
+import { startTikTokSyncWorker } from './workers/tiktokSyncWorker';
+import { startKeywordCrawlerEngine } from './workers/keywordCrawlerWorker';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { apiLimiter } from './middleware/rateLimiter';
 
 dotenv.config();
 
@@ -61,7 +63,11 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, res: any, buf: Buffer) => {
+    req.rawBody = buf;
+  }
+}));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Validate numeric params globally to prevent parsing NaN issues
@@ -81,6 +87,14 @@ app.param('campaignId', (req: Request, res: Response, next: NextFunction, val: s
     return;
   }
   next();
+});
+
+// Apply global rate limiter for /api/ routes, excluding public endpoints
+app.use('/api', (req, res, next) => {
+  if (req.originalUrl.startsWith('/api/public')) {
+    return next();
+  }
+  return apiLimiter(req, res, next);
 });
 
 app.get('/api/health', (_req: Request, res: Response) => {
@@ -133,17 +147,54 @@ app.use('/api', notFoundHandler);
 // Global Error Handler (must be registered last)
 app.use(errorHandler);
 
+import { initVectorDb } from './lib/embeddings';
+import { initAuditLogDb } from './lib/auditInit';
+
 app.listen(port, () => {
   console.log(`Backend is running at http://localhost:${port}`);
   console.log(`✅ API ${API_VERSION} — Quét backlink: GET/POST /api/backlinks/scan`);
-  startBots();
-  startRssScannerEngine();
-  startBacklinkAuditorEngine();
-  startSyncEngine();
-  startSchedulerEngine();
-  startAlertEngine();
-  startEmailCampaignEngine();
-  startEmailWorkflowEngine();
-  startCskhFollowupWorker();
-  startPageSpeedAuditorEngine();
+  
+  // Khởi tạo Vector DB cho RAG (Neon)
+  void initVectorDb();
+  // Khởi tạo bảng Audit Log
+  void initAuditLogDb();
+
+  if (process.env.DISABLE_LOCAL_WORKERS !== 'true') {
+    startBots();
+    startRssScannerEngine();
+    startBacklinkAuditorEngine();
+    startSyncEngine();
+    startSchedulerEngine();
+    startAlertEngine();
+    startEmailCampaignEngine();
+    startEmailWorkflowEngine();
+    startCskhFollowupWorker();
+    startPageSpeedAuditorEngine();
+    startTikTokSyncWorker();
+    startKeywordCrawlerEngine();
+  } else {
+    console.log('👷 DISABLE_LOCAL_WORKERS=true: Đang chạy ở chế độ API thuần. Bỏ qua chạy các tác vụ nền cục bộ.');
+  }
+
+  // Tự động phát hiện ngrok tunnel đang hoạt động và in các địa chỉ Webhook công khai
+  setTimeout(async () => {
+    try {
+      const axios = require('axios');
+      const response = await axios.get('http://127.0.0.1:4040/api/tunnels');
+      if (response.status === 200 && response.data) {
+        const tunnels = response.data.tunnels;
+        if (tunnels && tunnels.length > 0) {
+          const httpsTunnel = tunnels.find((t: any) => t.proto === 'https' || t.public_url.startsWith('https:'));
+          const publicUrl = httpsTunnel ? httpsTunnel.public_url : tunnels[0].public_url;
+          console.log('\n==================================================================');
+          console.log(`🚀 [Ngrok Detected] Phát hiện ngrok tunnel đang hoạt động tại: ${publicUrl}`);
+          console.log(`🔗 Webhook SePay:   \x1b[36m${publicUrl}/api/payments/sepay-webhook\x1b[0m`);
+          console.log(`🔗 Webhook Zalo OA: \x1b[36m${publicUrl}/api/public/zalo/webhook\x1b[0m`);
+          console.log('==================================================================\n');
+        }
+      }
+    } catch (err) {
+      // ngrok không chạy, không cần báo lỗi
+    }
+  }, 3000);
 });

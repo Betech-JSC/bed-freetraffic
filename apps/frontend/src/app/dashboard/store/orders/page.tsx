@@ -11,6 +11,7 @@ type Order = {
   status: 'PENDING' | 'PAID' | 'CANCELLED';
   paymentMethod: string | null;
   gatewayTxnId: string | null;
+  source: string;
   createdAt: string;
   customer: {
     name: string;
@@ -20,8 +21,15 @@ type Order = {
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Payment credentials credentials config state
   const [showConfig, setShowConfig] = useState(false);
@@ -31,6 +39,11 @@ export default function OrdersPage() {
     payosChecksumKey: '',
     stripeSecretKey: '',
     stripeWebhookSecret: '',
+    sepayBankCode: '',
+    sepayAccountNumber: '',
+    sepayAccountName: '',
+    sepayApikey: '',
+    sepayWebhookSecret: '',
   });
   const [configSuccess, setConfigSuccess] = useState('');
   const [configError, setConfigError] = useState('');
@@ -38,15 +51,38 @@ export default function OrdersPage() {
   const loadOrders = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await apiJson<Order[]>('/orders');
-      setOrders(Array.isArray(data) ? data : []);
+      const query = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+
+      interface PaginatedResponse {
+        data: Order[];
+        meta: {
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        };
+      }
+
+      const res = await apiJson<PaginatedResponse>(`/orders?${query.toString()}`);
+      if (res && Array.isArray(res.data)) {
+        setOrders(res.data);
+        setTotal(res.meta.total);
+        setTotalPages(res.meta.totalPages);
+      } else {
+        setOrders([]);
+        setTotal(0);
+        setTotalPages(1);
+      }
       setError('');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Không thể tải danh sách đơn hàng.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, limit]);
 
   useEffect(() => {
     setTimeout(() => {
@@ -64,6 +100,11 @@ export default function OrdersPage() {
           payosChecksumKey: data.payosChecksumKey || '',
           stripeSecretKey: data.stripeSecretKey || '',
           stripeWebhookSecret: data.stripeWebhookSecret || '',
+          sepayBankCode: data.sepayBankCode || '',
+          sepayAccountNumber: data.sepayAccountNumber || '',
+          sepayAccountName: data.sepayAccountName || '',
+          sepayApikey: data.sepayApikey || '',
+          sepayWebhookSecret: data.sepayWebhookSecret || '',
         });
       }
       setShowConfig(true);
@@ -87,7 +128,11 @@ export default function OrdersPage() {
     }
   };
 
-  const totalRevenue = orders
+  const filteredOrders = orders.filter(
+    o => sourceFilter === 'ALL' || (o.source || 'WEB').toUpperCase() === sourceFilter
+  );
+
+  const totalRevenue = filteredOrders
     .filter(o => o.status === 'PAID')
     .reduce((sum, o) => sum + o.totalAmount, 0);
 
@@ -115,14 +160,14 @@ export default function OrdersPage() {
         <div className="card p-5 space-y-2">
           <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Số đơn hàng đã bán</span>
           <h2 className="text-2xl font-extrabold text-brand">
-            {orders.filter(o => o.status === 'PAID').length} đơn
+            {filteredOrders.filter(o => o.status === 'PAID').length} đơn
           </h2>
           <p className="text-[10px] text-slate-400">Tổng số lượng đơn chuyển khoản/thẻ tín dụng thành công.</p>
         </div>
         <div className="card p-5 space-y-2">
           <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Số đơn đang chờ xử lý</span>
           <h2 className="text-2xl font-extrabold text-amber-600">
-            {orders.filter(o => o.status === 'PENDING').length} đơn
+            {filteredOrders.filter(o => o.status === 'PENDING').length} đơn
           </h2>
           <p className="text-[10px] text-slate-400">Khách đặt hàng nhưng chưa quét QR/thanh toán thẻ.</p>
         </div>
@@ -213,6 +258,64 @@ export default function OrdersPage() {
               </div>
             </div>
 
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-brand">3. Cấu hình Cổng SePay (VietQR tự động đối soát)</h4>
+              <div className="space-y-2 pl-3 border-l-2 border-slate-100">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="label mb-0.5 text-[11px]">Ngân hàng thụ hưởng</label>
+                    <input
+                      type="text"
+                      value={configForm.sepayBankCode}
+                      onChange={(e) => setConfigForm({ ...configForm, sepayBankCode: e.target.value })}
+                      placeholder="Vietcombank, MBBank..."
+                      className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="label mb-0.5 text-[11px]">Số tài khoản</label>
+                    <input
+                      type="text"
+                      value={configForm.sepayAccountNumber}
+                      onChange={(e) => setConfigForm({ ...configForm, sepayAccountNumber: e.target.value })}
+                      placeholder="1017588888"
+                      className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="label mb-0.5 text-[11px]">Tên chủ tài khoản</label>
+                  <input
+                    type="text"
+                    value={configForm.sepayAccountName}
+                    onChange={(e) => setConfigForm({ ...configForm, sepayAccountName: e.target.value })}
+                    placeholder="NGUYEN VAN A"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="label mb-0.5 text-[11px]">SePay API Key / Token</label>
+                  <input
+                    type="password"
+                    value={configForm.sepayApikey}
+                    onChange={(e) => setConfigForm({ ...configForm, sepayApikey: e.target.value })}
+                    placeholder="Nhập API Key nếu sử dụng"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="label mb-0.5 text-[11px]">SePay Webhook Secret (HMAC-SHA256)</label>
+                  <input
+                    type="password"
+                    value={configForm.sepayWebhookSecret}
+                    onChange={(e) => setConfigForm({ ...configForm, sepayWebhookSecret: e.target.value })}
+                    placeholder="Nhập Webhook Secret để kiểm tra chữ ký"
+                    className="input text-xs py-1.5 px-2.5 bg-slate-50/50"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
@@ -234,21 +337,42 @@ export default function OrdersPage() {
 
       {/* Orders Table */}
       <div className="card overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#f25c22]"></div>
+        <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+          <h4 className="text-sm font-bold text-slate-800">Danh sách giao dịch</h4>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500 font-semibold">Nguồn đơn:</label>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="text-xs border border-slate-200 rounded px-2.5 py-1 bg-white outline-none focus:border-brand font-medium text-slate-700"
+            >
+              <option value="ALL">Tất cả kênh</option>
+              <option value="WEB">Web Store</option>
+              <option value="TIKTOKSHOP">TikTok Shop</option>
+              <option value="ZALO">Zalo OA</option>
+            </select>
           </div>
-        ) : orders.length === 0 ? (
+        </div>
+
+        {loading ? (
+          <div className="p-4 space-y-2.5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-10 rounded-xl bg-slate-100/80 animate-pulse" />
+            ))}
+          </div>
+        ) : filteredOrders.length === 0 ? (
           <div className="text-center py-16 text-slate-500">
             <p className="text-sm font-semibold">Chưa có giao dịch phát sinh nào.</p>
             <p className="text-xs text-slate-400 mt-1">Đơn đặt hàng sẽ tự xuất hiện sau khi khách quét mã QR/thanh toán thẻ.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+            <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50 text-slate-650 uppercase tracking-wider font-bold">
                   <th className="py-3.5 px-4">Mã đơn hàng</th>
+                  <th className="py-3.5 px-4">Nguồn</th>
                   <th className="py-3.5 px-4">Thời gian</th>
                   <th className="py-3.5 px-4">Khách hàng</th>
                   <th className="py-3.5 px-4">Số tiền</th>
@@ -258,10 +382,19 @@ export default function OrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {orders.map((o) => (
+                {filteredOrders.map((o) => (
                   <tr key={o.id} className="hover:bg-brand-light/30 text-slate-700 transition-colors duration-150">
                     <td className="py-3.5 px-4 font-bold text-slate-800 font-mono whitespace-nowrap">
                       {o.orderNumber}
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      {(o.source || 'WEB').toUpperCase() === 'TIKTOKSHOP' ? (
+                        <span className="px-2 py-0.5 rounded bg-black text-white text-[10px] font-bold">TikTok Shop</span>
+                      ) : (o.source || 'WEB').toUpperCase() === 'ZALO' ? (
+                        <span className="px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold">Zalo OA</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 text-[10px] font-bold">Web Store</span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap">
                       {new Date(o.createdAt).toLocaleString('vi-VN')}
@@ -289,6 +422,32 @@ export default function OrdersPage() {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination Controls */}
+          <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between text-xs font-semibold">
+            <span className="text-slate-500">
+              Trang {page} / {totalPages} (tổng số {total} đơn hàng)
+            </span>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                Trước
+              </button>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+              >
+                Sau
+              </button>
+            </div>
+          </div>
+          </>
         )}
       </div>
     </div>

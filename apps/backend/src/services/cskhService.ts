@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma';
 import { getAiConfig, fetchWithRetry } from '../lib/ai';
+import { createSmtpTransporter, getSmtpConfig } from '../lib/smtp';
 
 
 export interface ChatMessageData {
@@ -207,6 +208,389 @@ Yêu cầu trả về kết quả định dạng JSON với các trường sau (
 }
 
 
+function detectTakeoverIntent(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  
+  // Danh sách từ khóa thể hiện ý định gặp nhân viên hoặc thái độ bực dọc cần can thiệp khẩn cấp
+  const takeoverKeywords = [
+    'gặp nhân viên', 'nhân viên', 'người thật', 'gặp người', 'tư vấn viên',
+    'hỗ trợ trực tiếp', 'gặp admin', 'nói chuyện với người', 'hotline', 'gặp kỹ thuật',
+    'chậm quá', 'lừa đảo', 'tệ hại', 'tệ quá', 'không dùng được', 'lỗi hoài',
+    'gọi lại', 'liên hệ lại', 'chăm sóc khách hàng', 'cskh', 'gặp hỗ trợ', 
+    'admin đâu', 'ad đâu', 'hỗ trợ đâu'
+  ];
+  
+  return takeoverKeywords.some(kw => lowerMsg.includes(kw));
+}
+
+async function sendEmailAlert(workspaceId: number, subject: string, htmlContent: string): Promise<void> {
+  try {
+    const smtpConfig = await getSmtpConfig(workspaceId);
+    const transporter = await createSmtpTransporter(workspaceId);
+    
+    if (transporter && smtpConfig) {
+      await transporter.sendMail({
+        from: `"${smtpConfig.email.split('@')[0]}" <${smtpConfig.email}>`,
+        to: smtpConfig.email, // Gửi về chính email của admin/doanh nghiệp cấu hình
+        subject,
+        html: htmlContent,
+      });
+      console.log(`[EmailAlert] Đã gửi email cảnh báo tới ${smtpConfig.email}`);
+    }
+  } catch (e: any) {
+    console.error('[EmailAlert] Lỗi gửi email cảnh báo:', e.message || e);
+  }
+}
+
+export interface KnowledgeChunk {
+  source: string;
+  content: string;
+}
+
+export function chunkKnowledgeBase(kbText: string): KnowledgeChunk[] {
+  const chunks: KnowledgeChunk[] = [];
+  if (!kbText) return chunks;
+
+  const sourceMarkerRegex = /---\s*\[Nguồn\s+(?:tài liệu|URL):\s*([^\]]+)\]\s*---/g;
+  const matches: { source: string; index: number; length: number }[] = [];
+  let match;
+  
+  while ((match = sourceMarkerRegex.exec(kbText)) !== null) {
+    matches.push({
+      source: match[1].trim(),
+      index: match.index,
+      length: match[0].length,
+    });
+  }
+
+  const splitIntoParagraphs = (text: string, source: string) => {
+    const paragraphs = text
+      .split(/\n+/)
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    let currentChunk = '';
+    const maxChunkLength = 1000;
+
+    for (const paragraph of paragraphs) {
+      if (currentChunk.length + paragraph.length > maxChunkLength && currentChunk.length > 0) {
+        chunks.push({
+          source,
+          content: currentChunk.trim()
+        });
+        currentChunk = '';
+      }
+      currentChunk += (currentChunk ? '\n' : '') + paragraph;
+    }
+
+    if (currentChunk.trim().length > 0) {
+      chunks.push({
+        source,
+        content: currentChunk.trim()
+      });
+    }
+  };
+
+  if (matches.length === 0) {
+    splitIntoParagraphs(kbText, 'Hướng dẫn chung');
+    return chunks;
+  }
+
+  if (matches[0].index > 0) {
+    const generalText = kbText.substring(0, matches[0].index).trim();
+    if (generalText) {
+      splitIntoParagraphs(generalText, 'Hướng dẫn chung');
+    }
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const currentMatch = matches[i];
+    const startIndex = currentMatch.index + currentMatch.length;
+    const endIndex = (i + 1 < matches.length) ? matches[i + 1].index : kbText.length;
+    const sourceText = kbText.substring(startIndex, endIndex).trim();
+    
+    if (sourceText) {
+      splitIntoParagraphs(sourceText, currentMatch.source);
+    }
+  }
+
+  return chunks;
+}
+
+export function retrieveRelevantChunks(kbText: string, query: string, topN: number = 5): string[] {
+  const chunks = chunkKnowledgeBase(kbText);
+  if (chunks.length === 0) return [];
+
+  const queryTerms = query
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, ' ')
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(t => t.length > 1);
+
+  if (queryTerms.length === 0) {
+    return chunks.slice(0, topN).map(c => `[Nguồn: ${c.source}]\n${c.content}`);
+  }
+
+  const scoredChunks = chunks.map(chunk => {
+    const contentLower = chunk.content.toLowerCase();
+    let score = 0;
+    let termMatches = 0;
+
+    for (const term of queryTerms) {
+      const occurrences = contentLower.split(term).length - 1;
+      if (occurrences > 0) {
+        score += Math.sqrt(occurrences);
+        termMatches++;
+      }
+    }
+
+    if (termMatches > 0) {
+      score *= (1 + (termMatches / queryTerms.length) * 0.5);
+    }
+
+    for (let i = 0; i < queryTerms.length - 1; i++) {
+      const bigram = `${queryTerms[i]} ${queryTerms[i+1]}`;
+      if (contentLower.includes(bigram)) {
+        score += 2.0;
+      }
+      if (i < queryTerms.length - 2) {
+        const trigram = `${queryTerms[i]} ${queryTerms[i+1]} ${queryTerms[i+2]}`;
+        if (contentLower.includes(trigram)) {
+          score += 3.5;
+        }
+      }
+    }
+
+    return {
+      chunk,
+      score
+    };
+  });
+
+  scoredChunks.sort((a, b) => b.score - a.score);
+  const matchingChunks = scoredChunks.filter(sc => sc.score > 0);
+
+  const finalChunks = matchingChunks.length > 0 
+    ? matchingChunks.slice(0, topN).map(sc => sc.chunk)
+    : chunks.slice(0, Math.min(3, topN));
+
+  console.log(`[RAG-Retriever] Đã xử lý RAG. Tìm thấy ${matchingChunks.length} chunks trùng khớp. Trả về top ${finalChunks.length} chunks liên quan nhất.`);
+  
+  return finalChunks.map(c => `[Nguồn: ${c.source}]\n${c.content}`);
+}
+
+export interface ToolCall {
+  toolName: string;
+  args: Record<string, string>;
+  raw: string;
+}
+
+export function parseToolCalls(text: string): ToolCall[] {
+  const regex = /<call:([a-zA-Z0-9_]+)(?:\s+([^>]+?))?\s*\/>/g;
+  const calls: ToolCall[] = [];
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const toolName = match[1];
+    const argsStr = match[2] || '';
+    const args: Record<string, string> = {};
+    
+    const attrRegex = /([a-zA-Z0-9_]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+    let attrMatch;
+    while ((attrMatch = attrRegex.exec(argsStr)) !== null) {
+      const name = attrMatch[1];
+      const val = attrMatch[2] !== undefined ? attrMatch[2] : attrMatch[3];
+      args[name] = val;
+    }
+    calls.push({
+      toolName,
+      args,
+      raw: match[0]
+    });
+  }
+  return calls;
+}
+
+export function cleanReplyText(text: string): string {
+  return text.replace(/<call:[a-zA-Z0-9_]+(?:\s+[^>]+?)?\s*\/>/g, '').trim();
+}
+
+async function executeTool(workspaceId: number, toolName: string, args: Record<string, string>): Promise<string> {
+  console.log(`[ReAct Tool] Executing tool ${toolName} with args:`, args);
+  try {
+    switch (toolName) {
+      case 'searchProducts': {
+        const query = args.query || '';
+        if (!query) return JSON.stringify({ error: 'Thiếu từ khóa tìm kiếm (query).' });
+        const products = await prisma.product.findMany({
+          where: {
+            workspaceId,
+            name: {
+              contains: query,
+              mode: 'insensitive'
+            }
+          },
+          take: 5
+        });
+        return JSON.stringify(products.map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          currency: p.currency,
+          description: p.description
+        })));
+      }
+      
+      case 'checkOrderStatus': {
+        const orderNumber = args.orderNumber || '';
+        if (!orderNumber) return JSON.stringify({ error: 'Thiếu mã đơn hàng (orderNumber).' });
+        const order = await prisma.order.findFirst({
+          where: {
+            workspaceId,
+            orderNumber: {
+              equals: orderNumber.trim(),
+              mode: 'insensitive'
+            }
+          },
+          include: {
+            customer: true,
+            items: {
+              include: {
+                product: true
+              }
+            }
+          }
+        });
+        if (!order) return JSON.stringify({ error: `Không tìm thấy đơn hàng ${orderNumber}.` });
+        return JSON.stringify({
+          orderNumber: order.orderNumber,
+          customerName: order.customer.name,
+          totalAmount: order.totalAmount,
+          status: order.status,
+          paymentMethod: order.paymentMethod,
+          createdAt: order.createdAt,
+          items: order.items.map(item => ({
+            productName: item.product.name,
+            quantity: item.quantity,
+            price: item.price
+          }))
+        });
+      }
+      
+      case 'checkCustomerOrders': {
+        const query = args.query || '';
+        if (!query) return JSON.stringify({ error: 'Thiếu thông tin khách hàng (email hoặc sđt).' });
+        
+        const customer = await prisma.customer.findFirst({
+          where: {
+            workspaceId,
+            OR: [
+              { email: { equals: query.trim().toLowerCase() } },
+              { phone: { contains: query.trim() } }
+            ]
+          }
+        });
+        if (!customer) return JSON.stringify({ error: `Không tìm thấy khách hàng ứng với từ khóa: ${query}` });
+        
+        const orders = await prisma.order.findMany({
+          where: {
+            workspaceId,
+            customerId: customer.id
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 5,
+          include: {
+            items: {
+              include: {
+                product: true
+              }
+            }
+          }
+        });
+        
+        return JSON.stringify({
+          customer: {
+            name: customer.name,
+            email: customer.email,
+            phone: customer.phone
+          },
+          orders: orders.map(o => ({
+            orderNumber: o.orderNumber,
+            totalAmount: o.totalAmount,
+            status: o.status,
+            createdAt: o.createdAt,
+            items: o.items.map(item => ({
+              productName: item.product.name,
+              quantity: item.quantity,
+              price: item.price
+            }))
+          }))
+        });
+      }
+      
+      default:
+        return JSON.stringify({ error: `Không hỗ trợ công cụ: ${toolName}` });
+    }
+  } catch (err: any) {
+    console.error(`Error executing tool ${toolName}:`, err);
+    return JSON.stringify({ error: `Lỗi hệ thống khi thực thi công cụ: ${err.message || err}` });
+  }
+}
+
+async function analyzeSentiment(
+  message: string,
+  apiKey: string,
+  url: string,
+  model: string,
+  headers: Record<string, string>
+): Promise<{ sentiment: 'HAPPY' | 'NEUTRAL' | 'FRUSTRATED' | 'ANGRY'; score: number; reason: string }> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: `Bạn là trợ lý AI chuyên nghiệp phân tích cảm xúc tin nhắn của khách hàng bằng tiếng Việt.
+Dựa trên nội dung tin nhắn, hãy xác định cảm xúc chính và chấm điểm cảm xúc của khách hàng.
+Các nhóm cảm xúc gồm: "HAPPY" (vui vẻ, cảm ơn), "NEUTRAL" (bình thường, hỏi đáp thông thường), "FRUSTRATED" (khó chịu, sốt ruột), "ANGRY" (tức giận, mắng mỏ, khiếu nại).
+Điểm số (score) nằm trong khoảng từ 0 (cực kỳ tức giận/thất vọng) đến 100 (cực kỳ vui vẻ/hài lòng). Tin nhắn bình thường trung tính có điểm khoảng 50.
+
+Trả về duy nhất một đối tượng JSON hợp lệ không bao bọc bởi markdown block, ví dụ:
+{"sentiment": "NEUTRAL", "score": 50, "reason": "Lý do ngắn gọn dưới 15 từ"}`
+          },
+          { role: 'user', content: `Nội dung tin nhắn: "${message}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 150,
+        response_format: { type: 'json_object' }
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    
+    if (response.ok) {
+      const data = await response.json() as any;
+      const resText = data.choices?.[0]?.message?.content?.trim();
+      if (resText) {
+        const result = JSON.parse(resText) as { sentiment: string; score: number; reason: string };
+        const sentiment = (result.sentiment || 'NEUTRAL').toUpperCase() as 'HAPPY' | 'NEUTRAL' | 'FRUSTRATED' | 'ANGRY';
+        return {
+          sentiment: ['HAPPY', 'NEUTRAL', 'FRUSTRATED', 'ANGRY'].includes(sentiment) ? sentiment : 'NEUTRAL',
+          score: result.score !== undefined ? Number(result.score) : 50,
+          reason: result.reason || ''
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Lỗi khi phân tích cảm xúc tin nhắn:', err);
+  }
+  return { sentiment: 'NEUTRAL', score: 50, reason: 'Lỗi hệ thống' };
+}
+
 export async function handleVisitorMessage(
   workspaceId: number,
   sessionId: string | undefined,
@@ -241,6 +625,152 @@ export async function handleVisitorMessage(
     }
   });
 
+  const ai = getAiConfig('/chat/completions');
+
+  // Check if visitor wants to talk to a human or expresses frustration
+  let takeoverIntent = detectTakeoverIntent(message);
+  let sentimentResult: { sentiment: 'HAPPY' | 'NEUTRAL' | 'FRUSTRATED' | 'ANGRY'; score: number; reason: string } = {
+    sentiment: 'NEUTRAL',
+    score: 50,
+    reason: ''
+  };
+
+  if (ai.apiKey) {
+    try {
+      sentimentResult = await analyzeSentiment(message, ai.apiKey, ai.url, ai.model, ai.headers);
+      console.log(`[Sentiment Analysis] Message: "${message}" -> Sentiment: ${sentimentResult.sentiment} (Score: ${sentimentResult.score})`);
+      if (sentimentResult.sentiment === 'ANGRY' || (sentimentResult.sentiment === 'FRUSTRATED' && sentimentResult.score < 40)) {
+        takeoverIntent = true;
+      }
+    } catch (sentErr) {
+      console.error('Lỗi phân tích cảm xúc:', sentErr);
+    }
+  }
+
+  if (takeoverIntent) {
+    // Activate agent takeover by creating a system/agent message
+    await prisma.chatMessage.create({
+      data: {
+        sessionId: session.id,
+        sender: 'agent',
+        content: `[AI Auto-Takeover]: Khách hàng yêu cầu hỗ trợ trực tiếp hoặc phản hồi khẩn cấp. Cảm xúc: ${sentimentResult.sentiment} (${sentimentResult.score}/100) - ${sentimentResult.reason || 'N/A'}`,
+      }
+    });
+
+    // Send Telegram urgent alert
+    const customerInfo = session.customerId 
+      ? await prisma.customer.findUnique({ where: { id: session.customerId } })
+      : null;
+    const name = customerInfo?.name || 'Khách truy cập';
+    const email = customerInfo?.email || 'Chưa cung cấp';
+    const phone = customerInfo?.phone || 'Chưa cung cấp';
+    
+    // Ghi nhận cảnh báo khẩn cấp lên Dashboard Alert Logs
+    try {
+      let liveChatRule = await prisma.alertRule.findFirst({
+        where: { workspaceId, name: 'Hệ thống Live Chat' }
+      });
+      if (!liveChatRule) {
+        liveChatRule = await prisma.alertRule.create({
+          data: {
+            name: 'Hệ thống Live Chat',
+            metric: 'live_chat_takeover',
+            threshold: 1,
+            comparison: 'gt',
+            workspaceId,
+            enabled: true,
+          }
+        });
+      }
+      await prisma.alertLog.create({
+        data: {
+          ruleId: liveChatRule.id,
+          message: `🚨 KHẨN CẤP: Khách hàng "${name}" yêu cầu hỗ trợ trực tiếp! Tin nhắn: "${message}". Cảm xúc: ${sentimentResult.sentiment} (Score: ${sentimentResult.score})`,
+          severity: 'CRITICAL'
+        }
+      });
+    } catch (dbErr) {
+      console.error('[AlertLogs] Lỗi ghi nhận cảnh báo lên Dashboard:', dbErr);
+    }
+
+    // Đọc cấu hình thông báo khẩn cấp
+    const cskhConfig = await prisma.cskhConfig.findUnique({
+      where: { workspaceId }
+    });
+    const channels = (cskhConfig?.notificationChannels || 'email,telegram')
+      .split(',')
+      .map(c => c.trim().toLowerCase())
+      .filter(Boolean);
+
+    // Gửi Telegram Alert
+    if (channels.includes('telegram')) {
+      const sentimentEmoji = sentimentResult.sentiment === 'ANGRY' ? '😡 Cực kỳ giận dữ' :
+                             sentimentResult.sentiment === 'FRUSTRATED' ? '😟 Khó chịu/Sốt ruột' :
+                             sentimentResult.sentiment === 'HAPPY' ? '😊 Vui vẻ/Hài lòng' : '😐 Bình thường';
+      const alertMsg = `🚨 <b>KHẨN CẤP: Khách hàng cần hỗ trợ trực tiếp!</b>\n\n` +
+        `• <b>Khách hàng:</b> ${name}\n` +
+        `• <b>Email:</b> ${email}\n` +
+        `• <b>SĐT:</b> ${phone}\n` +
+        `• <b>Cảm xúc phát hiện:</b> ${sentimentEmoji} (Điểm: ${sentimentResult.score}/100)\n` +
+        `• <b>Lý do cảm xúc:</b> <i>"${sentimentResult.reason || 'N/A'}"</i>\n` +
+        `• <b>Nội dung tin nhắn:</b> <i>"${message}"</i>\n\n` +
+        `<i>AI đã tự động tạm dừng chatbot trong 30 phút. Vui lòng vào mục CSKH để hỗ trợ khách hàng ngay!</i>`;
+      
+      void sendTelegramAlert(workspaceId, alertMsg);
+    }
+
+    // Gửi Email Alert
+    if (channels.includes('email')) {
+      const emailSubject = `🚨 [Khẩn cấp] Khách hàng ${name} yêu cầu hỗ trợ trực tiếp!`;
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const emailHtml = `
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ffccd5; border-radius: 12px; background-color: #fff5f6; max-width: 600px;">
+          <h2 style="color: #d90429; margin-top: 0;">🚨 Khách hàng yêu cầu hỗ trợ trực tiếp!</h2>
+          <p>Hệ thống AI Chatbot đã tự động phát hiện ý định khẩn cấp và tạm dừng chatbot trong 30 phút để chuyên viên tiếp quản.</p>
+          <hr style="border: 0; border-top: 1px solid #ffccd5; margin: 20px 0;">
+          <table style="width: 100%; text-align: left; font-size: 14px;">
+            <tr>
+              <th style="padding: 5px 0; width: 120px;">Khách hàng:</th>
+              <td style="padding: 5px 0;"><strong>${name}</strong></td>
+            </tr>
+            <tr>
+              <th style="padding: 5px 0;">Email:</th>
+              <td style="padding: 5px 0;">${email}</td>
+            </tr>
+            <tr>
+              <th style="padding: 5px 0;">Số điện thoại:</th>
+              <td style="padding: 5px 0;">${phone}</td>
+            </tr>
+            <tr>
+              <th style="padding: 5px 0; vertical-align: top;">Tin nhắn cuối:</th>
+              <td style="padding: 5px 0; background-color: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ffccd5; font-style: italic;">"${message}"</td>
+            </tr>
+          </table>
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${frontendUrl}/dashboard/cskh/settings" style="background-color: #d90429; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; display: inline-block;">Truy cập Live Chat ngay</a>
+          </div>
+        </div>
+      `;
+      void sendEmailAlert(workspaceId, emailSubject, emailHtml);
+    }
+
+    // Save bot response
+    const replyText = 'Dạ em đã ghi nhận yêu cầu của anh/chị và chuyển tiếp ngay đến chuyên viên tư vấn hỗ trợ trực tiếp. Chuyên viên sẽ phản hồi lại anh/chị ngay trong giây lát ạ!';
+    await prisma.chatMessage.create({
+      data: {
+        sessionId: session.id,
+        sender: 'bot',
+        content: replyText,
+      }
+    });
+
+    return {
+      sessionId: session.id,
+      reply: replyText,
+      customerId: session.customerId,
+    };
+  }
+
   // Check if agent takeover is active (any agent message in the last 30 minutes)
   const lastAgentMsg = await prisma.chatMessage.findFirst({
     where: { sessionId: session.id, sender: 'agent' },
@@ -263,7 +793,6 @@ export async function handleVisitorMessage(
 
   const aiEnabled = config?.aiChatbotEnabled ?? false;
   const kbText = config?.knowledgeBaseText ?? '';
-  const ai = getAiConfig('/chat/completions');
 
   let replyText = 'Cảm ơn bạn đã liên hệ. Hiện tại chatbot AI đang bận. Vui lòng để lại số điện thoại hoặc email để chúng tôi liên hệ hỗ trợ sớm nhất!';
 
@@ -292,8 +821,23 @@ Các tính năng và dịch vụ chính:
 6. CSKH AI & Chatbot: Hỗ trợ live chat trực tuyến, tự động ghi nhận lead (Email, SĐT) và cảnh báo về Telegram, tự động follow-up sau khi chat kết thúc.
 7. Thanh toán đối soát tự động: Tích hợp cổng PayOS VietQR và Stripe quốc tế để nâng hạng khách hàng khi thanh toán thành công.`;
 
-      const effectiveKb = kbText 
-        ? `${kbText}\n\nThông tin thêm về hệ thống:\n${defaultKb}` 
+      // RAG Động qua pgvector (Neon Postgres), tự động fallback sang text-matching nếu không có dữ liệu/lỗi
+      let relevantChunks: string[] = [];
+      if (kbText) {
+        try {
+          const { retrieveRelevantChunksVector } = await import('../lib/embeddings');
+          relevantChunks = await retrieveRelevantChunksVector(workspaceId, message, 5);
+        } catch (err) {
+          console.warn('[cskhService] Lỗi khi sử dụng pgvector RAG, tự động chuyển sang fallback:', err);
+        }
+        
+        if (relevantChunks.length === 0) {
+          relevantChunks = retrieveRelevantChunks(kbText, message, 5);
+        }
+      }
+      
+      const effectiveKb = relevantChunks.length > 0 
+        ? `${relevantChunks.join('\n\n')}\n\nThông tin thêm về hệ thống:\n${defaultKb}` 
         : defaultKb;
 
       const systemPrompt = `Bạn là chatbot chăm sóc khách hàng tự động thông minh bằng tiếng Việt của chúng tôi.
@@ -301,36 +845,43 @@ Dưới đây là tri thức của hệ thống (Knowledge Base):
 ---
 ${effectiveKb}
 ---
+
+Bạn cũng được cung cấp một số công cụ (Tools) dạng thẻ XML để truy vấn thông tin thực tế từ hệ thống. Khi khách hàng hỏi về thông tin sản phẩm hoặc đơn hàng, bạn BẮT BUỘC phải gọi công cụ này để lấy thông tin chính xác thay vì tự bịa ra thông tin.
+
+Các công cụ sẵn có:
+1. Tìm kiếm sản phẩm:
+   Cú pháp: <call:searchProducts query="tên sản phẩm" />
+   Ví dụ: <call:searchProducts query="áo thun" />
+2. Kiểm tra trạng thái đơn hàng cụ thể bằng mã đơn hàng:
+   Cú pháp: <call:checkOrderStatus orderNumber="mã đơn hàng" />
+   Ví dụ: <call:checkOrderStatus orderNumber="ORD-12345" />
+3. Kiểm tra danh sách đơn hàng của khách hàng bằng Email hoặc Số điện thoại:
+   Cú pháp: <call:checkCustomerOrders query="email hoặc số điện thoại" />
+   Ví dụ: <call:checkCustomerOrders query="0987654321" /> hoặc <call:checkCustomerOrders query="khachhang@gmail.com" />
+
+Quy trình sử dụng công cụ:
+- Khi nhận được tin nhắn cần thông tin đơn hàng/sản phẩm, hãy viết thẻ <call:toolName param="value" /> tương ứng trong phản hồi. Hãy kết thúc câu trả lời ngay sau khi gọi công cụ để hệ thống xử lý.
+- Sau khi hệ thống trả về kết quả truy vấn, bạn sẽ nhận được thông tin. Lúc này, hãy sử dụng kết quả đó để trả lời khách hàng một cách tự nhiên và chính xác nhất.
+- Tuyệt đối không tự bịa đặt mã đơn hàng, sản phẩm hoặc thông tin trạng thái đơn hàng nếu chưa gọi công cụ và nhận được kết quả.
+- Khi trả lời khách hàng, hãy trả lời bằng tiếng Việt thân thiện, rõ ràng. Không lặp lại thẻ gọi công cụ nếu đã có kết quả.
+
 Nhiệm vụ của bạn:
-1. Trả lời câu hỏi của khách hàng dựa trên thông tin Tri thức trên một cách lịch sự, thân thiện và chuyên nghiệp.
+1. Trả lời câu hỏi của khách hàng dựa trên thông tin Tri thức hoặc kết quả trả về của các công cụ một cách lịch sự, thân thiện và chuyên nghiệp.
 2. Hãy tư vấn linh hoạt và trả lời trực tiếp câu hỏi của khách dựa trên Tri thức. Tránh việc chào hỏi lặp lại nhiều lần nếu khách đã ở trong cuộc hội thoại.
-3. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
+3. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức và không thể truy vấn qua công cụ, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
 4. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
 5. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
 
-      let response = await fetchWithRetry(ai.url, {
-        method: 'POST',
-        headers: ai.headers,
-        body: JSON.stringify({
-          model: ai.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messagesForAi
-          ],
-          temperature: 0.7,
-          max_tokens: 500,
-        }),
-        signal: AbortSignal.timeout(15000),
-      });
+      let loopCount = 0;
+      const maxLoops = 3;
+      let finished = false;
 
-      // Fallback model if primary failed (e.g. rate limit 429 or 502)
-      if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
-        console.warn(`[cskhChat] Primary model ${ai.model} failed (${response.status}). Trying fallback Qwen...`);
-        response = await fetchWithRetry(ai.url, {
+      while (loopCount < maxLoops && !finished) {
+        let response = await fetchWithRetry(ai.url, {
           method: 'POST',
           headers: ai.headers,
           body: JSON.stringify({
-            model: 'meta-llama/llama-3.2-3b-instruct:free',
+            model: ai.model,
             messages: [
               { role: 'system', content: systemPrompt },
               ...messagesForAi
@@ -340,19 +891,65 @@ Nhiệm vụ của bạn:
           }),
           signal: AbortSignal.timeout(15000),
         });
-      }
 
-      if (response.ok) {
-        const data = await response.json() as {
-          choices?: { message?: { content?: string } }[];
-        };
-        const generated = data.choices?.[0]?.message?.content?.trim();
-        if (generated) {
-          replyText = generated;
+        // Fallback model if primary failed (e.g. rate limit 429 or 502)
+        if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
+          console.warn(`[cskhChat] Primary model ${ai.model} failed (${response.status}). Trying fallback Llama...`);
+          response = await fetchWithRetry(ai.url, {
+            method: 'POST',
+            headers: ai.headers,
+            body: JSON.stringify({
+              model: 'meta-llama/llama-3.2-3b-instruct:free',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                ...messagesForAi
+              ],
+              temperature: 0.7,
+              max_tokens: 500,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
         }
-      } else {
-        const errorText = await response.text();
-        console.error('OpenAI API error in CSKH:', response.status, errorText);
+
+        if (response.ok) {
+          const data = await response.json() as {
+            choices?: { message?: { content?: string } }[];
+          };
+          const generated = data.choices?.[0]?.message?.content?.trim();
+          if (generated) {
+            console.log(`[ReAct Loop ${loopCount}] LLM Output:`, generated);
+            const toolCalls = parseToolCalls(generated);
+            if (toolCalls.length > 0) {
+              messagesForAi.push({
+                role: 'assistant' as const,
+                content: generated
+              });
+
+              const results: string[] = [];
+              for (const call of toolCalls) {
+                const result = await executeTool(workspaceId, call.toolName, call.args);
+                results.push(`[Kết quả ${call.toolName}]: ${result}`);
+              }
+
+              const toolResponseText = results.join('\n');
+              messagesForAi.push({
+                role: 'user' as const,
+                content: `Hệ thống trả về thông tin truy vấn sau đây cho các công cụ bạn vừa gọi:\n${toolResponseText}\nHãy dựa vào dữ liệu thực tế này để trả lời cho khách hàng. Không lặp lại các thẻ <call:... /> đã chạy.`
+              });
+
+              loopCount++;
+            } else {
+              replyText = cleanReplyText(generated);
+              finished = true;
+            }
+          } else {
+            finished = true;
+          }
+        } else {
+          const errorText = await response.text();
+          console.error('OpenAI API error in CSKH:', response.status, errorText);
+          finished = true;
+        }
       }
     } catch (err) {
       console.error('Lỗi khi gọi OpenAI Chatbot CSKH:', err);

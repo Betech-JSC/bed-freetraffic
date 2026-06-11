@@ -84,6 +84,7 @@ const emailCampaignEngine_1 = require("./workers/emailCampaignEngine");
 const emailWorkflowEngine_1 = require("./workers/emailWorkflowEngine");
 const cskhFollowupWorker_1 = require("./workers/cskhFollowupWorker");
 const pagespeedAuditorEngine_1 = require("./workers/pagespeedAuditorEngine");
+const tiktokSyncWorker_1 = require("./workers/tiktokSyncWorker");
 const errorHandler_1 = require("./middleware/errorHandler");
 dotenv_1.default.config();
 if (process.env.GSC_SITE_URL) {
@@ -171,4 +172,5 @@ app.listen(port, () => {
     (0, emailWorkflowEngine_1.startEmailWorkflowEngine)();
     (0, cskhFollowupWorker_1.startCskhFollowupWorker)();
     (0, pagespeedAuditorEngine_1.startPageSpeedAuditorEngine)();
+    (0, tiktokSyncWorker_1.startTikTokSyncWorker)();
 });

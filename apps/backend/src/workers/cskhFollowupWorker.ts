@@ -1,6 +1,9 @@
 import prisma from '../lib/prisma';
 import { createSmtpTransporter, getSmtpConfig } from '../lib/smtp';
 import { getAiConfig, fetchWithRetry } from '../lib/ai';
+import { cskhFollowupQueue } from '../queues/cskhFollowupQueue';
+import { useRedis } from '../queues/connection';
+
 
 
 const TICK_MS = 60_000; // Quét mỗi 60 giây
@@ -139,13 +142,34 @@ Quy tắc:
 export async function dispatchDueCskhFollowUps(): Promise<void> {
   try {
     const now = new Date();
-    // Lấy các phiên chat đã đến lịch gửi follow-up nhưng chưa gửi, và có liên kết khách hàng
+    // Claim các chat session hết hạn, chuyển tiếp scheduled time 10 phút để "khóa" tạm thời
+    const claimTime = new Date(Date.now() + 10 * 60 * 1000);
+
+    const claimedIds = await prisma.$transaction(async (tx) => {
+      const due = await tx.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT id FROM "ChatSession"
+         WHERE "followUpScheduledAt" <= $1
+           AND "followUpSent" = false
+           AND "customerId" IS NOT NULL
+         FOR UPDATE SKIP LOCKED
+         LIMIT 20`,
+        now
+      );
+      if (due.length === 0) return [];
+      const ids = due.map((s) => s.id);
+      await tx.chatSession.updateMany({
+        where: { id: { in: ids } },
+        data: { followUpScheduledAt: claimTime },
+      });
+      return ids;
+    });
+
+    if (claimedIds.length === 0) return;
+
+    console.log(`[CskhFollowupWorker] Khóa thành công ${claimedIds.length} phiên chat để gửi follow-up.`);
+
     const dueSessions = await prisma.chatSession.findMany({
-      where: {
-        followUpScheduledAt: { lte: now },
-        followUpSent: false,
-        customerId: { not: null },
-      },
+      where: { id: { in: claimedIds } },
       include: {
         customer: true,
         messages: {
@@ -154,17 +178,12 @@ export async function dispatchDueCskhFollowUps(): Promise<void> {
       },
     });
 
-    if (dueSessions.length === 0) return;
-
-    console.log(`[CskhFollowupWorker] Tìm thấy ${dueSessions.length} phiên chat đến hạn gửi follow-up.`);
-
     for (const session of dueSessions) {
       try {
         await processSession(session);
       } catch (err: any) {
         console.error(`[CskhFollowupWorker] Lỗi xử lý phiên chat ${session.id}:`, err);
         // Để tránh loop vô tận khi lỗi liên tục, lùi lịch gửi 30 phút.
-        // Bọc trong try-catch riêng biệt để đảm bảo không crash app nếu truy cập DB thất bại.
         try {
           await prisma.chatSession.update({
             where: { id: session.id },
@@ -198,49 +217,65 @@ export async function dispatchDueCskhAutoCare(): Promise<void> {
       // Đọc các kênh được cấu hình để gửi chăm sóc tự động
       const channels = (config.autoCareChannels || 'email')
         .split(',')
-        .map(c => c.trim().toLowerCase())
+        .map((c: string) => c.trim().toLowerCase())
         .filter(Boolean);
 
       if (channels.length === 0) continue;
 
-      // 2. Tìm danh sách khách hàng cần gửi chăm sóc tự động
-      let dueCustomers: any[] = [];
+      // 2. Tìm danh sách khách hàng cần gửi chăm sóc tự động bằng cách LOCK dòng Postgres
+      let dueCustomerIds: number[] = [];
 
-      if (config.autoCareScheduleType === 'AFTER_CREATION') {
-        const threshold = new Date(Date.now() - config.autoCareDelayHours * 60 * 60 * 1000);
-        dueCustomers = await prisma.customer.findMany({
-          where: {
+      await prisma.$transaction(async (tx) => {
+        if (config.autoCareScheduleType === 'AFTER_CREATION') {
+          const threshold = new Date(Date.now() - config.autoCareDelayHours * 60 * 60 * 1000);
+          const rows = await tx.$queryRawUnsafe<{ id: number }[]>(
+            `SELECT id FROM "Customer"
+             WHERE "workspaceId" = $1
+               AND "createdAt" <= $2
+               AND "lastAiCareSentAt" IS NULL
+               AND "status" <> 'INACTIVE'
+             FOR UPDATE SKIP LOCKED
+             LIMIT 50`,
             workspaceId,
-            createdAt: { lte: threshold },
-            lastAiCareSentAt: null,
-            status: { not: 'INACTIVE' },
-          },
-          include: {
-            notes: { orderBy: { createdAt: 'desc' } },
-            orders: { orderBy: { createdAt: 'desc' } },
-          }
-        });
-      } else if (config.autoCareScheduleType === 'PERIODIC') {
-        const threshold = new Date(Date.now() - config.autoCareIntervalDays * 24 * 60 * 60 * 1000);
-        dueCustomers = await prisma.customer.findMany({
-          where: {
+            threshold
+          );
+          dueCustomerIds = rows.map(r => r.id);
+        } else if (config.autoCareScheduleType === 'PERIODIC') {
+          const threshold = new Date(Date.now() - config.autoCareIntervalDays * 24 * 60 * 60 * 1000);
+          const rows = await tx.$queryRawUnsafe<{ id: number }[]>(
+            `SELECT id FROM "Customer"
+             WHERE "workspaceId" = $1
+               AND "status" <> 'INACTIVE'
+               AND ("lastAiCareSentAt" IS NULL OR "lastAiCareSentAt" <= $2)
+             FOR UPDATE SKIP LOCKED
+             LIMIT 50`,
             workspaceId,
-            status: { not: 'INACTIVE' },
-            OR: [
-              { lastAiCareSentAt: null },
-              { lastAiCareSentAt: { lte: threshold } }
-            ]
-          },
-          include: {
-            notes: { orderBy: { createdAt: 'desc' } },
-            orders: { orderBy: { createdAt: 'desc' } },
-          }
-        });
-      }
+            threshold
+          );
+          dueCustomerIds = rows.map(r => r.id);
+        }
 
-      if (dueCustomers.length === 0) continue;
+        if (dueCustomerIds.length > 0) {
+          // Claim ngay bằng cách set lastAiCareSentAt sang thời gian hiện tại
+          await tx.customer.updateMany({
+            where: { id: { in: dueCustomerIds } },
+            data: { lastAiCareSentAt: now }
+          });
+        }
+      });
 
-      console.log(`[CskhAutoCare] Workspace ${workspaceId} tìm thấy ${dueCustomers.length} khách hàng cần gửi chăm sóc tự động.`);
+      if (dueCustomerIds.length === 0) continue;
+
+      // Tải đầy đủ quan hệ của các khách hàng đã được claim
+      const dueCustomers = await prisma.customer.findMany({
+        where: { id: { in: dueCustomerIds } },
+        include: {
+          notes: { orderBy: { createdAt: 'desc' } },
+          orders: { orderBy: { createdAt: 'desc' } },
+        }
+      });
+
+      console.log(`[CskhAutoCare] Workspace ${workspaceId} khóa thành công ${dueCustomers.length} khách hàng để chăm sóc.`);
 
       // Hoist connection/config loading for the workspace before customer loop
       let transporter: any = null;
@@ -260,8 +295,15 @@ export async function dispatchDueCskhAutoCare(): Promise<void> {
       // 3. Xử lý từng khách hàng
       for (const customer of dueCustomers) {
         try {
-          // Với mỗi khách hàng, gửi tin nhắn chăm sóc qua các kênh được cấu hình
-          for (const channel of channels) {
+          // Luồng Fallback đa kênh: Ưu tiên Zalo OA trước, nếu lỗi tự động chuyển sang Email SMTP
+          const channelsToTry = [...channels];
+          if (channelsToTry.includes('zalo') && !channelsToTry.includes('email') && customer.email) {
+            channelsToTry.push('email');
+          }
+
+          let sentSuccessfully = false;
+
+          for (const channel of channelsToTry) {
             // Kiểm tra điều kiện từng kênh
             if (channel === 'email' && !customer.email) continue;
             if (channel === 'zalo' && !customer.zaloUserId && !customer.phone) continue;
@@ -445,16 +487,12 @@ Quy tắc:
 
             if (success) {
               console.log(`[CskhAutoCare] Đã gửi tin nhắn chăm sóc qua ${channel} thành công cho khách hàng ${customer.name}`);
+              sentSuccessfully = true;
+              break; // THÀNH CÔNG: Thoát khỏi vòng lặp fallback, không gửi thêm các kênh tiếp theo
             } else {
-              console.error(`[CskhAutoCare] Gửi tin nhắn chăm sóc qua ${channel} thất bại cho khách hàng ${customer.name}: ${errorMsg}`);
+              console.error(`[CskhAutoCare] Gửi tin nhắn chăm sóc qua ${channel} thất bại cho khách hàng ${customer.name}: ${errorMsg}. Đang chuyển sang kênh fallback...`);
             }
           }
-
-          // Cập nhật mốc thời gian đã gửi chăm sóc tự động cho khách hàng
-          await prisma.customer.update({
-            where: { id: customer.id },
-            data: { lastAiCareSentAt: new Date() }
-          });
 
         } catch (custErr: any) {
           console.error(`[CskhAutoCare] Lỗi xử lý khách hàng ${customer.id}:`, custErr);
@@ -467,14 +505,30 @@ Quy tắc:
 }
 
 export function startCskhFollowupWorker(): void {
-  setInterval(() => {
-    void dispatchDueCskhFollowUps().catch((err) => {
-      console.error('[CskhFollowupWorker] Lỗi tiến trình follow-up:', err);
+  if (useRedis && cskhFollowupQueue) {
+    cskhFollowupQueue.add(
+      'cskh-scanner',
+      {},
+      {
+        repeat: {
+          every: 60_000,
+        },
+        jobId: 'cskh-scanner',
+      }
+    ).then(() => {
+      console.log('✅ CSKH Follow-up & AI Auto-Care Worker — Đã đăng ký repeatable job BullMQ (quét và gửi tin nhắn tự động mỗi 60 giây)');
+    }).catch((err) => {
+      console.error('[CskhFollowupWorker] Lỗi đăng ký repeatable job:', err);
     });
-    void dispatchDueCskhAutoCare().catch((err) => {
-      console.error('[CskhFollowupWorker] Lỗi tiến trình auto-care:', err);
-    });
-  }, TICK_MS);
-
-  console.log('✅ CSKH Follow-up & AI Auto-Care Worker — quét và gửi tin nhắn tự động mỗi 60 giây');
+  } else {
+    console.log('✅ CSKH Follow-up & AI Auto-Care Worker — Đang khởi chạy ở chế độ Local Fallback (quét và gửi tin nhắn tự động mỗi 60 giây sử dụng setInterval)');
+    // Quét ngay lập tức khi khởi chạy
+    dispatchDueCskhFollowUps();
+    dispatchDueCskhAutoCare();
+    setInterval(async () => {
+      await dispatchDueCskhFollowUps();
+      await dispatchDueCskhAutoCare();
+    }, 60_000);
+  }
 }
+

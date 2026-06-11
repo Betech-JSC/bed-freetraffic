@@ -67,14 +67,18 @@ export function parseAiJson<T = any>(text: string): T {
     return JSON.parse(cleaned) as T;
   } catch (err) {
     // Strategy 2: Find and extract JSON object bounded by outermost curly braces { }
-    const startIdx = cleaned.indexOf('{');
-    const endIdx = cleaned.lastIndexOf('}');
-    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-      const jsonSub = cleaned.slice(startIdx, endIdx + 1);
-      try {
-        return JSON.parse(jsonSub) as T;
-      } catch (innerErr) {
-        // Fall through
+    // Only apply if the input is not intended to be a JSON array (i.e. does not start with '[')
+    const isArrayStr = cleaned.startsWith('[');
+    if (!isArrayStr) {
+      const startIdx = cleaned.indexOf('{');
+      const endIdx = cleaned.lastIndexOf('}');
+      if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+        const jsonSub = cleaned.slice(startIdx, endIdx + 1);
+        try {
+          return JSON.parse(jsonSub) as T;
+        } catch (innerErr) {
+          // Fall through
+        }
       }
     }
     

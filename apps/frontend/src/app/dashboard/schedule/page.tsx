@@ -94,6 +94,7 @@ export default function ScheduleBotPage() {
   const [fetchingGoldenHour, setFetchingGoldenHour] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [autopilot, setAutopilot] = useState(false);
 
   const handleSmartGoldenHour = async (checked: boolean) => {
     setSmartGoldenHour(checked);
@@ -191,6 +192,7 @@ export default function ScheduleBotPage() {
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(null);
     setSmartGoldenHour(false);
+    setAutopilot(false);
     setOverlayText('');
     setOverlayWatermark('');
     setOverlayPosition('bottom-right');
@@ -218,6 +220,8 @@ export default function ScheduleBotPage() {
     setImageFile(null);
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImagePreview(item.imageUrl || null);
+    setSmartGoldenHour(false);
+    setAutopilot(false);
     setOverlayText(item.overlayText || '');
     setOverlayWatermark(item.overlayWatermark || '');
     setOverlayPosition(item.overlayPosition || 'bottom-right');
@@ -263,7 +267,8 @@ export default function ScheduleBotPage() {
         title,
         content,
         platforms: platforms.join(','),
-        scheduledAt,
+        scheduledAt: autopilot ? undefined : scheduledAt,
+        autopilot: autopilot || undefined,
         urlTarget: urlTarget.trim() || undefined,
         recipients: platforms.includes('email') ? recipients.trim() : undefined,
         repeatRule: repeatRule || null,
@@ -297,7 +302,12 @@ export default function ScheduleBotPage() {
         fd.append('title', payload.title);
         fd.append('content', payload.content);
         fd.append('platforms', payload.platforms);
-        fd.append('scheduledAt', payload.scheduledAt);
+        if (payload.scheduledAt) {
+          fd.append('scheduledAt', payload.scheduledAt);
+        }
+        if (payload.autopilot) {
+          fd.append('autopilot', 'true');
+        }
         fd.append('status', payload.status);
         if (payload.urlTarget) fd.append('urlTarget', payload.urlTarget);
         if (payload.recipients) fd.append('recipients', payload.recipients);
@@ -369,6 +379,22 @@ export default function ScheduleBotPage() {
     } finally {
       setDeleting(false);
       setDeleteConfirmId(null);
+    }
+  };
+
+  const handleUpdateScheduleTime = async (id: number, newTime: string) => {
+    try {
+      setError('');
+      setSuccess('');
+      await apiJson(`/schedules/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledAt: newTime }),
+      });
+      setSuccess(t('Đã di chuyển lịch đăng bài thành công.'));
+      await load();
+    } catch (err: any) {
+      setError(err.message || t('Không cập nhật được lịch'));
     }
   };
 
@@ -579,45 +605,76 @@ export default function ScheduleBotPage() {
           <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">{t('3. Thời gian & lặp')}</h3>
           <div className="flex flex-col gap-2 max-w-md">
             <input
-              className="input w-full"
+              className="input w-full disabled:bg-slate-50 disabled:text-slate-400 font-medium"
               type="datetime-local"
-              value={scheduledAt}
+              value={autopilot ? '' : scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
-              required
+              required={!autopilot}
+              disabled={autopilot}
             />
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                type="checkbox"
-                id="smartGoldenHour"
-                checked={smartGoldenHour}
-                onChange={(e) => handleSmartGoldenHour(e.target.checked)}
-                className="w-4 h-4 accent-brand border-slate-300 rounded cursor-pointer"
-              />
-              <label htmlFor="smartGoldenHour" className="text-xs text-slate-600 font-semibold cursor-pointer flex items-center gap-1.5 select-none">
-                {t('smartGoldenHour')}
-                {fetchingGoldenHour && (
-                  <span className="w-3 h-3 border-2 border-brand border-t-transparent rounded-full animate-spin inline-block" />
+            {!editingId && (
+              <div className="flex flex-col gap-1 mt-1 p-3 bg-brand/5 border border-brand/10 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="autopilot"
+                    checked={autopilot}
+                    onChange={(e) => {
+                      setAutopilot(e.target.checked);
+                      if (e.target.checked) {
+                        setSmartGoldenHour(false);
+                      }
+                    }}
+                    className="w-4 h-4 accent-brand border-slate-300 rounded cursor-pointer"
+                  />
+                  <label htmlFor="autopilot" className="text-xs text-brand font-bold cursor-pointer flex items-center gap-1.5 select-none">
+                    🚀 {t('autopilotMode')}
+                  </label>
+                </div>
+                {autopilot && (
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    {t('autopilotDesc')}
+                  </p>
                 )}
-              </label>
-            </div>
-            <div className="flex gap-1.5 flex-wrap items-center mt-1">
-              <span className="text-xs text-slate-500 font-semibold mr-1">{t('Khung giờ vàng:')}</span>
-              {[
-                { label: '09:00', hour: 9 },
-                { label: '12:00', hour: 12 },
-                { label: '15:00', hour: 15 },
-                { label: '20:00', hour: 20 },
-              ].map((g) => (
-                <button
-                  key={g.hour}
-                  type="button"
-                  onClick={() => setGoldenHour(g.hour)}
-                  className="px-2 py-0.5 bg-brand/5 hover:bg-brand/10 text-brand text-xs font-semibold rounded border border-brand/10 transition-colors"
-                >
-                  {g.label}
-                </button>
-              ))}
-            </div>
+              </div>
+            )}
+            {!autopilot && (
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="checkbox"
+                  id="smartGoldenHour"
+                  checked={smartGoldenHour}
+                  onChange={(e) => handleSmartGoldenHour(e.target.checked)}
+                  className="w-4 h-4 accent-brand border-slate-300 rounded cursor-pointer"
+                />
+                <label htmlFor="smartGoldenHour" className="text-xs text-slate-600 font-semibold cursor-pointer flex items-center gap-1.5 select-none">
+                  {t('smartGoldenHour')}
+                  {fetchingGoldenHour && (
+                    <span className="w-3 h-3 border-2 border-brand border-t-transparent rounded-full animate-spin inline-block" />
+                  )}
+                </label>
+              </div>
+            )}
+            {!autopilot && (
+              <div className="flex gap-1.5 flex-wrap items-center mt-1">
+                <span className="text-xs text-slate-500 font-semibold mr-1">{t('Khung giờ vàng:')}</span>
+                {[
+                  { label: '09:00', hour: 9 },
+                  { label: '12:00', hour: 12 },
+                  { label: '15:00', hour: 15 },
+                  { label: '20:00', hour: 20 },
+                ].map((g) => (
+                  <button
+                    key={g.hour}
+                    type="button"
+                    onClick={() => setGoldenHour(g.hour)}
+                    className="px-2 py-0.5 bg-brand/5 hover:bg-brand/10 text-brand text-xs font-semibold rounded border border-brand/10 transition-colors"
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="grid sm:grid-cols-3 gap-3 max-w-2xl">
             <select className="input" value={repeatRule} onChange={(e) => setRepeatRule(e.target.value)}>
@@ -771,6 +828,7 @@ export default function ScheduleBotPage() {
           startEdit={startEdit}
           sendNow={sendNow}
           remove={remove}
+          onUpdateScheduleTime={handleUpdateScheduleTime}
         />
       ) : (
         <div className="table-wrap">
@@ -899,7 +957,19 @@ export default function ScheduleBotPage() {
   );
 }
 
-function CalendarView({ items, startEdit, sendNow, remove }: { items: Schedule[]; startEdit: (i: Schedule) => void; sendNow: (id: number) => void; remove: (id: number) => void }) {
+function CalendarView({
+  items,
+  startEdit,
+  sendNow,
+  remove,
+  onUpdateScheduleTime
+}: {
+  items: Schedule[];
+  startEdit: (i: Schedule) => void;
+  sendNow: (id: number) => void;
+  remove: (id: number) => void;
+  onUpdateScheduleTime: (id: number, newTime: string) => Promise<void>;
+}) {
   const { t, locale } = useLocale();
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -950,6 +1020,28 @@ function CalendarView({ items, startEdit, sendNow, remove }: { items: Schedule[]
   const monthNames = locale === 'vi' ? MONTH_NAMES_VI : MONTH_NAMES_EN;
   const headerText = locale === 'vi' ? `${monthNames[month]} Năm ${year}` : `${monthNames[month]} ${year}`;
 
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    e.dataTransfer.setData('text/plain', String(id));
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    const id = Number(e.dataTransfer.getData('text/plain'));
+    if (isNaN(id)) return;
+
+    const originalSchedule = items.find(item => item.id === id);
+    if (!originalSchedule) return;
+
+    const originalTime = new Date(originalSchedule.scheduledAt);
+    const newDate = new Date(targetDate);
+    newDate.setHours(originalTime.getHours());
+    newDate.setMinutes(originalTime.getMinutes());
+    newDate.setSeconds(0);
+    newDate.setMilliseconds(0);
+
+    void onUpdateScheduleTime(id, newDate.toISOString());
+  };
+
   return (
     <div className="card p-4 space-y-4">
       <div className="flex justify-between items-center pb-2 border-b">
@@ -981,9 +1073,11 @@ function CalendarView({ items, startEdit, sendNow, remove }: { items: Schedule[]
           return (
             <div
               key={idx}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, dObj.date)}
               className={`bg-white p-2 rounded min-h-[90px] flex flex-col justify-between transition-colors border ${
                 dObj.isCurrentMonth ? 'text-slate-800' : 'text-slate-300 bg-slate-50/50'
-              } ${isToday ? 'border-brand ring-1 ring-brand/20' : 'border-slate-100'}`}
+              } ${isToday ? 'border-brand ring-1 ring-brand/20' : 'border-slate-100'} hover:bg-orange-500/5`}
             >
               <div className="flex justify-between items-center mb-1">
                 <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${isToday ? 'bg-brand text-white' : ''}`}>
@@ -1003,11 +1097,15 @@ function CalendarView({ items, startEdit, sendNow, remove }: { items: Schedule[]
                   if (s.status === 'FAILED') badgeColor = 'bg-red-50 text-red-700 border-red-200 border';
                   if (s.status === 'DRAFT') badgeColor = 'bg-purple-50 text-purple-700 border-purple-200 border';
                   
+                  const isDraggable = ['PENDING', 'FAILED', 'DRAFT'].includes(s.status);
+
                   return (
                     <div
                       key={s.id}
-                      onClick={() => ['PENDING', 'FAILED', 'DRAFT'].includes(s.status) && startEdit(s)}
-                      className={`text-[10px] p-1 rounded font-medium cursor-pointer transition-all hover:scale-[1.02] ${badgeColor} flex justify-between items-center group`}
+                      onClick={() => isDraggable && startEdit(s)}
+                      draggable={isDraggable}
+                      onDragStart={(e) => isDraggable && handleDragStart(e, s.id)}
+                      className={`text-[10px] p-1 rounded font-medium cursor-pointer transition-all hover:scale-[1.02] ${badgeColor} flex justify-between items-center group ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
                       title={`${s.title} (${new Date(s.scheduledAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`}
                     >
                       <span className="truncate flex-1">

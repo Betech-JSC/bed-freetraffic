@@ -20,5 +20,5 @@ export type ChannelResult = {
   at: string;
 };
 
-export const DISPATCH_PLATFORMS = ['facebook', 'email', 'zalo', 'youtube', 'community', 'telegram', 'reddit'] as const;
+export const DISPATCH_PLATFORMS = ['facebook', 'email', 'zalo', 'youtube', 'community', 'telegram', 'reddit', 'tiktok'] as const;
 export type DispatchPlatform = (typeof DISPATCH_PLATFORMS)[number];

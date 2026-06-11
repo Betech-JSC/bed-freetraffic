@@ -7,6 +7,7 @@ exports.sendTelegramAlert = sendTelegramAlert;
 exports.handleVisitorMessage = handleVisitorMessage;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const ai_1 = require("../lib/ai");
+const smtp_1 = require("../lib/smtp");
 async function sendTelegramAlert(workspaceId, text) {
     try {
         const conn = await prisma_1.default.socialConnection.findFirst({
@@ -181,6 +182,36 @@ Yêu cầu trả về kết quả định dạng JSON với các trường sau (
         console.error('[AI-CRM-Segmentation] Lỗi phân loại khách hàng bằng AI:', err);
     }
 }
+function detectTakeoverIntent(message) {
+    const lowerMsg = message.toLowerCase();
+    // Danh sách từ khóa thể hiện ý định gặp nhân viên hoặc thái độ bực dọc cần can thiệp khẩn cấp
+    const takeoverKeywords = [
+        'gặp nhân viên', 'nhân viên', 'người thật', 'gặp người', 'tư vấn viên',
+        'hỗ trợ trực tiếp', 'gặp admin', 'nói chuyện với người', 'hotline', 'gặp kỹ thuật',
+        'chậm quá', 'lừa đảo', 'tệ hại', 'tệ quá', 'không dùng được', 'lỗi hoài',
+        'gọi lại', 'liên hệ lại', 'chăm sóc khách hàng', 'cskh', 'gặp hỗ trợ',
+        'admin đâu', 'ad đâu', 'hỗ trợ đâu'
+    ];
+    return takeoverKeywords.some(kw => lowerMsg.includes(kw));
+}
+async function sendEmailAlert(workspaceId, subject, htmlContent) {
+    try {
+        const smtpConfig = await (0, smtp_1.getSmtpConfig)(workspaceId);
+        const transporter = await (0, smtp_1.createSmtpTransporter)(workspaceId);
+        if (transporter && smtpConfig) {
+            await transporter.sendMail({
+                from: `"${smtpConfig.email.split('@')[0]}" <${smtpConfig.email}>`,
+                to: smtpConfig.email, // Gửi về chính email của admin/doanh nghiệp cấu hình
+                subject,
+                html: htmlContent,
+            });
+            console.log(`[EmailAlert] Đã gửi email cảnh báo tới ${smtpConfig.email}`);
+        }
+    }
+    catch (e) {
+        console.error('[EmailAlert] Lỗi gửi email cảnh báo:', e.message || e);
+    }
+}
 async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, userAgent) {
     // 1. Get or create session
     let session;
@@ -206,6 +237,119 @@ async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, 
             content: message,
         }
     });
+    // Check if visitor wants to talk to a human or expresses frustration
+    const takeoverIntent = detectTakeoverIntent(message);
+    if (takeoverIntent) {
+        // Activate agent takeover by creating a system/agent message
+        await prisma_1.default.chatMessage.create({
+            data: {
+                sessionId: session.id,
+                sender: 'agent',
+                content: '[AI Auto-Takeover]: Khách hàng yêu cầu hỗ trợ trực tiếp hoặc phản hồi khẩn cấp.',
+            }
+        });
+        // Send Telegram urgent alert
+        const customerInfo = session.customerId
+            ? await prisma_1.default.customer.findUnique({ where: { id: session.customerId } })
+            : null;
+        const name = customerInfo?.name || 'Khách truy cập';
+        const email = customerInfo?.email || 'Chưa cung cấp';
+        const phone = customerInfo?.phone || 'Chưa cung cấp';
+        // Ghi nhận cảnh báo khẩn cấp lên Dashboard Alert Logs
+        try {
+            let liveChatRule = await prisma_1.default.alertRule.findFirst({
+                where: { workspaceId, name: 'Hệ thống Live Chat' }
+            });
+            if (!liveChatRule) {
+                liveChatRule = await prisma_1.default.alertRule.create({
+                    data: {
+                        name: 'Hệ thống Live Chat',
+                        metric: 'live_chat_takeover',
+                        threshold: 1,
+                        comparison: 'gt',
+                        workspaceId,
+                        enabled: true,
+                    }
+                });
+            }
+            await prisma_1.default.alertLog.create({
+                data: {
+                    ruleId: liveChatRule.id,
+                    message: `🚨 KHẨN CẤP: Khách hàng "${name}" yêu cầu hỗ trợ trực tiếp! Tin nhắn: "${message}"`,
+                    severity: 'CRITICAL'
+                }
+            });
+        }
+        catch (dbErr) {
+            console.error('[AlertLogs] Lỗi ghi nhận cảnh báo lên Dashboard:', dbErr);
+        }
+        // Đọc cấu hình thông báo khẩn cấp
+        const cskhConfig = await prisma_1.default.cskhConfig.findUnique({
+            where: { workspaceId }
+        });
+        const channels = (cskhConfig?.notificationChannels || 'email,telegram')
+            .split(',')
+            .map(c => c.trim().toLowerCase())
+            .filter(Boolean);
+        // Gửi Telegram Alert
+        if (channels.includes('telegram')) {
+            const alertMsg = `🚨 <b>KHẨN CẤP: Khách hàng cần hỗ trợ trực tiếp!</b>\n\n` +
+                `• <b>Khách hàng:</b> ${name}\n` +
+                `• <b>Email:</b> ${email}\n` +
+                `• <b>SĐT:</b> ${phone}\n` +
+                `• <b>Nội dung tin nhắn:</b> <i>"${message}"</i>\n\n` +
+                `<i>AI đã tự động tạm dừng chatbot trong 30 phút. Vui lòng vào mục CSKH để hỗ trợ khách hàng ngay!</i>`;
+            void sendTelegramAlert(workspaceId, alertMsg);
+        }
+        // Gửi Email Alert
+        if (channels.includes('email')) {
+            const emailSubject = `🚨 [Khẩn cấp] Khách hàng ${name} yêu cầu hỗ trợ trực tiếp!`;
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const emailHtml = `
+        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ffccd5; border-radius: 12px; background-color: #fff5f6; max-width: 600px;">
+          <h2 style="color: #d90429; margin-top: 0;">🚨 Khách hàng yêu cầu hỗ trợ trực tiếp!</h2>
+          <p>Hệ thống AI Chatbot đã tự động phát hiện ý định khẩn cấp và tạm dừng chatbot trong 30 phút để chuyên viên tiếp quản.</p>
+          <hr style="border: 0; border-top: 1px solid #ffccd5; margin: 20px 0;">
+          <table style="width: 100%; text-align: left; font-size: 14px;">
+            <tr>
+              <th style="padding: 5px 0; width: 120px;">Khách hàng:</th>
+              <td style="padding: 5px 0;"><strong>${name}</strong></td>
+            </tr>
+            <tr>
+              <th style="padding: 5px 0;">Email:</th>
+              <td style="padding: 5px 0;">${email}</td>
+            </tr>
+            <tr>
+              <th style="padding: 5px 0;">Số điện thoại:</th>
+              <td style="padding: 5px 0;">${phone}</td>
+            </tr>
+            <tr>
+              <th style="padding: 5px 0; vertical-align: top;">Tin nhắn cuối:</th>
+              <td style="padding: 5px 0; background-color: #fff; padding: 10px; border-radius: 6px; border: 1px solid #ffccd5; font-style: italic;">"${message}"</td>
+            </tr>
+          </table>
+          <div style="margin-top: 25px; text-align: center;">
+            <a href="${frontendUrl}/dashboard/cskh/settings" style="background-color: #d90429; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; display: inline-block;">Truy cập Live Chat ngay</a>
+          </div>
+        </div>
+      `;
+            void sendEmailAlert(workspaceId, emailSubject, emailHtml);
+        }
+        // Save bot response
+        const replyText = 'Dạ em đã ghi nhận yêu cầu của anh/chị và chuyển tiếp ngay đến chuyên viên tư vấn hỗ trợ trực tiếp. Chuyên viên sẽ phản hồi lại anh/chị ngay trong giây lát ạ!';
+        await prisma_1.default.chatMessage.create({
+            data: {
+                sessionId: session.id,
+                sender: 'bot',
+                content: replyText,
+            }
+        });
+        return {
+            sessionId: session.id,
+            reply: replyText,
+            customerId: session.customerId,
+        };
+    }
     // Check if agent takeover is active (any agent message in the last 30 minutes)
     const lastAgentMsg = await prisma_1.default.chatMessage.findFirst({
         where: { sessionId: session.id, sender: 'agent' },

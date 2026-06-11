@@ -39,6 +39,14 @@ function MockOAuthSandboxInner() {
     zalo: [
       { id: '1', name: 'Zalo User Việt Nam', email: 'zalo.vietnam@zalo.betraffic.com', avatarLetter: 'Z1' },
       { id: '2', name: 'Khách hàng Zalo Demo', email: 'zalo.demo@zalo.betraffic.com', avatarLetter: 'Z2' }
+    ],
+    tiktokshop: [
+      { id: '1', name: 'TikTok Shop Store A', email: 'storeA.tiktokshop@gmail.com', avatarLetter: 'TS1' },
+      { id: '2', name: 'TikTok Shop Store B', email: 'storeB.tiktokshop@gmail.com', avatarLetter: 'TS2' }
+    ],
+    tiktok: [
+      { id: '1', name: 'TikTok Creator Channel A', email: 'creatorA.tiktok@gmail.com', avatarLetter: 'TC1' },
+      { id: '2', name: 'TikTok Creator Channel B', email: 'creatorB.tiktok@gmail.com', avatarLetter: 'TC2' }
     ]
   };
 
@@ -50,6 +58,14 @@ function MockOAuthSandboxInner() {
     zalo: [
       { id: 'zalo_oa_1', name: 'Zalo OA Cửa hàng Mật Ong Rừng (Mock OA)', category: 'Sức khỏe & Sắc đẹp' },
       { id: 'zalo_oa_2', name: 'Zalo OA Thời trang công sở (Mock OA)', category: 'Cửa hàng quần áo' }
+    ],
+    tiktokshop: [
+      { id: 'tiktok_shop_1', name: 'Cửa hàng Mỹ phẩm TikTok Shop A (Mock Shop)', category: 'Thời trang & Mỹ phẩm' },
+      { id: 'tiktok_shop_2', name: 'Cửa hàng Đồ gia dụng TikTok Shop B (Mock Shop)', category: 'Gia dụng & Tiện ích' }
+    ],
+    tiktok: [
+      { id: 'tiktok_creator_1', name: 'Kênh TikTok Review Công nghệ A (Mock Channel)', category: 'Media & Review' },
+      { id: 'tiktok_creator_2', name: 'Kênh TikTok Vlogs Ẩm thực B (Mock Channel)', category: 'Giải trí & Vlogs' }
     ]
   };
 
@@ -73,6 +89,22 @@ function MockOAuthSandboxInner() {
           bgColor: 'bg-[#0068FF]',
           logo: '💬',
           scopes: ['oa_profile', 'send_message', 'manage_content']
+        };
+      case 'tiktokshop':
+        return {
+          name: 'TikTok Shop',
+          color: '#010101',
+          bgColor: 'bg-[#010101]',
+          logo: '🛍️',
+          scopes: ['orders.read', 'products.read', 'shop.info.read']
+        };
+      case 'tiktok':
+        return {
+          name: 'TikTok Creator',
+          color: '#010101',
+          bgColor: 'bg-[#010101]',
+          logo: '🎵',
+          scopes: ['user.info.profile', 'video.upload']
         };
       default:
         return {

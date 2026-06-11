@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../node_modules/@prisma/client"
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -19,6 +19,7 @@ model User {
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
   workspaces  UserWorkspace[]
+  auditLogs   AuditLog[]
 }
 
 enum Role {
@@ -59,6 +60,8 @@ model Workspace {
   paymentConfig     PaymentConfig?
   cskhConfig        CskhConfig?
   chatSessions      ChatSession[]
+  auditLogs         AuditLog[]
+  knowledgeChunks   KnowledgeChunk[]
 }
 
 model UserWorkspace {
@@ -122,6 +125,8 @@ model KeywordRankHistory {
   impressions Int?
   source      String     @default("manual")
   recordedAt  DateTime   @default(now())
+
+  @@index([keywordId, recordedAt])
 }
 
 model GoogleIntegration {
@@ -190,6 +195,8 @@ model BotLog {
   message   String
   status    String         @default("SUCCESS")
   createdAt DateTime       @default(now())
+
+  @@index([taskId, createdAt])
 }
 
 model SocialConnection {
@@ -277,6 +284,8 @@ model SeoAuditIssue {
   severity   String
   message    String
   suggestion String?
+
+  @@index([auditId])
 }
 
 model Backlink {
@@ -344,6 +353,10 @@ model Customer {
   orders              Order[]
   emailWorkflowQueues EmailWorkflowQueue[]
   chatSessions        ChatSession[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model CustomerNote {
@@ -352,6 +365,8 @@ model CustomerNote {
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   content    String
   createdAt  DateTime @default(now())
+
+  @@index([customerId])
 }
 
 model CustomerEmailLog {
@@ -364,6 +379,8 @@ model CustomerEmailLog {
   errorMessage String?
   sentAt       DateTime @default(now())
   channel      String   @default("email")
+
+  @@index([customerId, sentAt])
 }
 
 // ——— Phase 3 ———
@@ -563,6 +580,7 @@ model Order {
   status        String      @default("PENDING")
   paymentMethod String?
   gatewayTxnId  String?
+  source        String      @default("WEB")
   workspaceId   Int?
   workspace     Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   items         OrderItem[]
@@ -594,6 +612,11 @@ model PaymentConfig {
   payosChecksumKey    String?
   stripeSecretKey     String?
   stripeWebhookSecret String?
+  sepayBankCode       String?
+  sepayAccountNumber  String?
+  sepayAccountName    String?
+  sepayApikey         String?
+  sepayWebhookSecret  String?
 }
 
 model CskhConfig {
@@ -618,6 +641,7 @@ model CskhConfig {
   autoCareEmailSubject String?
   autoCareEmailBody    String?    @db.Text
   autoCareChannels     String     @default("email")
+  widgetSettings       String?    @db.Text
 }
 
 model ChatSession {
@@ -646,4 +670,33 @@ model ChatMessage {
   createdAt DateTime    @default(now())
 
   @@index([sessionId])
+}
+
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId Int
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  action      String    // Ví dụ: "EXPORT_CRM", "DELETE_ORDER", "UPDATE_GATEWAY_CONFIG"
+  ipAddress   String?
+  userAgent   String?
+  details     String?   @db.Text // JSON lưu chi tiết sự thay đổi hoặc bản ghi bị tác động
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([action])
+}
+
+model KnowledgeChunk {
+  id          Int                          @id @default(autoincrement())
+  workspaceId Int
+  workspace   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source      String
+  content     String                       @db.Text
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime                     @default(now())
+
+  @@index([workspaceId])
 }

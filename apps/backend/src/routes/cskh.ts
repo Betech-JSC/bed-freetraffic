@@ -2,9 +2,11 @@ import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, requireWrite } from '../middleware/auth';
 import { WorkspaceRequest } from '../middleware/workspace';
+import { cache, invalidateWorkspaceCache } from '../lib/cache';
 import multer from 'multer';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
+import { syncKnowledgeBaseEmbeddings } from '../lib/embeddings';
 
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
@@ -19,7 +21,14 @@ const upload = multer({
 
 // Load CSKH Config
 router.get('/config', authenticate, async (req: WorkspaceRequest, res: Response): Promise<void> => {
+  const cacheKey = `ws:${req.workspaceId}:cskh-config`;
   try {
+    const cached = await cache.get<any>(cacheKey);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
     let config = await prisma.cskhConfig.findUnique({
       where: { workspaceId: req.workspaceId },
     });
@@ -32,6 +41,7 @@ router.get('/config', authenticate, async (req: WorkspaceRequest, res: Response)
         },
       });
     }
+    await cache.set(cacheKey, config, 600); // Cache for 10 minutes
     res.json(config);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi lấy cấu hình CSKH' });
@@ -57,6 +67,7 @@ router.post('/config', authenticate, requireWrite, async (req: WorkspaceRequest,
       autoCareEmailSubject,
       autoCareEmailBody,
       autoCareChannels,
+      widgetSettings,
     } = req.body;
 
     const existing = await prisma.cskhConfig.findUnique({
@@ -85,6 +96,7 @@ router.post('/config', authenticate, requireWrite, async (req: WorkspaceRequest,
           autoCareEmailSubject: autoCareEmailSubject !== undefined ? autoCareEmailSubject : existing.autoCareEmailSubject,
           autoCareEmailBody: autoCareEmailBody !== undefined ? autoCareEmailBody : existing.autoCareEmailBody,
           autoCareChannels: autoCareChannels !== undefined ? autoCareChannels : existing.autoCareChannels,
+          widgetSettings: widgetSettings !== undefined ? widgetSettings : existing.widgetSettings,
         },
       });
     } else {
@@ -106,7 +118,18 @@ router.post('/config', authenticate, requireWrite, async (req: WorkspaceRequest,
           autoCareEmailSubject: autoCareEmailSubject || null,
           autoCareEmailBody: autoCareEmailBody || null,
           autoCareChannels: autoCareChannels || "email",
+          widgetSettings: widgetSettings || null,
         },
+      });
+    }
+
+    if (knowledgeBaseText !== undefined || !existing) {
+      void syncKnowledgeBaseEmbeddings(req.workspaceId!, config.knowledgeBaseText || '');
+    }
+
+    if (req.workspaceId) {
+      void invalidateWorkspaceCache(req.workspaceId, ['cskh-config']).catch(err => {
+        console.error('[Cache Invalidation Error]:', err);
       });
     }
 
@@ -299,6 +322,14 @@ router.post('/knowledge/upload', authenticate, requireWrite, upload.single('file
       }
     });
 
+    void syncKnowledgeBaseEmbeddings(req.workspaceId!, newKnowledge);
+
+    if (req.workspaceId) {
+      void invalidateWorkspaceCache(req.workspaceId, ['cskh-config']).catch(err => {
+        console.error('[Cache Invalidation Error]:', err);
+      });
+    }
+
     res.json({
       success: true,
       message: `Đã học thành công tri thức từ tài liệu: ${file.originalname}`,
@@ -393,6 +424,14 @@ router.post('/knowledge/crawl', authenticate, requireWrite, async (req: Workspac
       }
     });
 
+    void syncKnowledgeBaseEmbeddings(req.workspaceId!, newKnowledge);
+
+    if (req.workspaceId) {
+      void invalidateWorkspaceCache(req.workspaceId, ['cskh-config']).catch(err => {
+        console.error('[Cache Invalidation Error]:', err);
+      });
+    }
+
     res.json({
       success: true,
       message: `Đã học thành công tri thức từ URL: ${title}`,
@@ -424,6 +463,14 @@ router.post('/knowledge/reset', authenticate, requireWrite, async (req: Workspac
         knowledgeUrls: null
       }
     });
+
+    void syncKnowledgeBaseEmbeddings(req.workspaceId!, '');
+
+    if (req.workspaceId) {
+      void invalidateWorkspaceCache(req.workspaceId, ['cskh-config']).catch(err => {
+        console.error('[Cache Invalidation Error]:', err);
+      });
+    }
 
     res.json({ success: true, message: 'Đã đặt lại tri thức doanh nghiệp', config: updated });
   } catch (error: any) {

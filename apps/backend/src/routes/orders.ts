@@ -1,6 +1,9 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
+import { requireWorkspaceRole } from '../middleware/rbacMiddleware';
+import { logActivity } from '../lib/auditLogger';
+import { invalidateWorkspaceCache } from '../lib/cache';
 
 const router = Router();
 
@@ -40,6 +43,16 @@ router.post('/products', authenticate, requireWrite, async (req: AuthRequest, re
       },
     });
 
+    // Ghi audit log
+    await logActivity({
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      action: 'CREATE_PRODUCT',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      details: { productId: product.id, productName: product.name }
+    });
+
     res.status(201).json(product);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi tạo sản phẩm mới' });
@@ -70,6 +83,16 @@ router.put('/products/:id', authenticate, requireWrite, async (req: AuthRequest,
       },
     });
 
+    // Ghi audit log
+    await logActivity({
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      action: 'UPDATE_PRODUCT',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      details: { productId: id, oldName: existing.name, newName: updated.name }
+    });
+
     res.json(updated);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi cập nhật sản phẩm' });
@@ -90,6 +113,17 @@ router.delete('/products/:id', authenticate, requireWrite, async (req: AuthReque
     await prisma.product.delete({
       where: { id },
     });
+
+    // Ghi audit log
+    await logActivity({
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      action: 'DELETE_PRODUCT',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      details: { productId: id, productName: existing.name }
+    });
+
     res.status(204).send();
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi xóa sản phẩm' });
@@ -103,12 +137,32 @@ router.delete('/products/:id', authenticate, requireWrite, async (req: AuthReque
 // Get list of orders
 router.get('/', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const orders = await prisma.order.findMany({
-      where: { workspaceId: req.workspaceId },
-      include: { customer: { select: { name: true, email: true } } },
-      orderBy: { createdAt: 'desc' },
+    const page = parseInt(req.query.page as string, 10) || 1;
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+    const skip = (page - 1) * limit;
+
+    const where = { workspaceId: req.workspaceId };
+
+    const [total, orders] = await Promise.all([
+      prisma.order.count({ where }),
+      prisma.order.findMany({
+        where,
+        skip,
+        take: limit,
+        include: { customer: { select: { name: true, email: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    res.json({
+      data: orders,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     });
-    res.json(orders);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi lấy danh sách đơn hàng' });
   }
@@ -217,9 +271,69 @@ router.post('/', authenticate, requireWrite, async (req: AuthRequest, res: Respo
       },
     });
 
+    // Ghi audit log
+    await logActivity({
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      action: 'CREATE_ORDER',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      details: { orderId: newOrder.id, orderNumber: newOrder.orderNumber, totalAmount: newOrder.totalAmount }
+    });
+
+    // Invalidate cache
+    if (req.workspaceId) {
+      void invalidateWorkspaceCache(req.workspaceId, ['dashboard', 'report']).catch(err => {
+        console.error('[Cache Invalidation Error]:', err);
+      });
+    }
+
     res.status(201).json(populated);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi tạo đơn hàng' });
+  }
+});
+
+// Delete order (require OWNER role)
+router.delete('/:id', authenticate, requireWorkspaceRole(['OWNER']), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string);
+    const existing = await prisma.order.findFirst({
+      where: { id, workspaceId: req.workspaceId },
+    });
+    if (!existing) {
+      res.status(404).json({ error: 'Không tìm thấy đơn hàng' });
+      return;
+    }
+    
+    await prisma.order.delete({
+      where: { id },
+    });
+
+    // Ghi audit log
+    await logActivity({
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      action: 'DELETE_ORDER',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      details: {
+        orderId: id,
+        orderNumber: existing.orderNumber,
+        totalAmount: existing.totalAmount
+      }
+    });
+
+    // Invalidate cache
+    if (req.workspaceId) {
+      void invalidateWorkspaceCache(req.workspaceId, ['dashboard', 'report']).catch(err => {
+        console.error('[Cache Invalidation Error]:', err);
+      });
+    }
+
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi xóa đơn hàng' });
   }
 });
 

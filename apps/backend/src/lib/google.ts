@@ -150,6 +150,7 @@ export async function fetchGscSummary(days = 30, workspaceId?: number): Promise<
 const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/analytics.readonly',
   'https://www.googleapis.com/auth/webmasters.readonly',
+  'https://www.googleapis.com/auth/youtube.upload',
 ];
 
 export function createOAuth2Client() {

@@ -5,6 +5,7 @@ export interface ICache {
   set<T>(key: string, value: T, ttlSeconds?: number): Promise<void>;
   del(key: string): Promise<void>;
   flush(): Promise<void>;
+  delPattern(pattern: string): Promise<void>;
 }
 
 class MemoryCache implements ICache {
@@ -52,6 +53,15 @@ class MemoryCache implements ICache {
 
   async flush(): Promise<void> {
     this.store.clear();
+  }
+
+  async delPattern(pattern: string): Promise<void> {
+    const regexPattern = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+    for (const key of this.store.keys()) {
+      if (regexPattern.test(key)) {
+        this.store.delete(key);
+      }
+    }
   }
 }
 
@@ -114,6 +124,17 @@ class RedisCache implements ICache {
       console.error('[Redis Cache] FLUSH error:', err);
     }
   }
+
+  async delPattern(pattern: string): Promise<void> {
+    try {
+      const keys = await this.client.keys(pattern);
+      if (keys.length > 0) {
+        await this.client.del(...keys);
+      }
+    } catch (err) {
+      console.error('[Redis Cache] DEL pattern error:', err);
+    }
+  }
 }
 
 let cacheInstance: ICache;
@@ -129,3 +150,14 @@ if (redisHostOrUrl) {
 }
 
 export const cache = cacheInstance;
+
+export async function invalidateWorkspaceCache(workspaceId: number, namespaces: string[]): Promise<void> {
+  for (const ns of namespaces) {
+    if (ns === 'keywords' || ns === 'cskh-config') {
+      await cache.del(`ws:${workspaceId}:${ns}`);
+    } else {
+      const pattern = `ws:${workspaceId}:${ns}:*`;
+      await cache.delPattern(pattern);
+    }
+  }
+}

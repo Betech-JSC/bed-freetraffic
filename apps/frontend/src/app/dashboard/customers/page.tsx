@@ -58,19 +58,16 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
 
-  // Client-side filtering
-  const customers = allCustomers.filter((c) => {
-    if (filterStatus && c.status !== filterStatus) return false;
-    if (searchDebounced) {
-      const q = searchDebounced.toLowerCase();
-      return (
-        c.name.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        (c.company && c.company.toLowerCase().includes(q))
-      );
-    }
-    return true;
-  });
+  // Pagination states
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [vipTotal, setVipTotal] = useState(0);
+  const [followupTotal, setFollowupTotal] = useState(0);
+
+  // Server-side filtered list
+  const customers = allCustomers;
 
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -112,11 +109,47 @@ export default function CustomersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Reset page to 1 on filter/search change
+  useEffect(() => {
+    setPage(1);
+  }, [filterStatus, searchDebounced]);
+
   const loadList = useCallback(async () => {
-    const data = await apiJson<CustomerRow[]>('/customers');
-    setAllCustomers(Array.isArray(data) ? data : []);
+    const query = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      ...(filterStatus ? { status: filterStatus } : {}),
+      ...(searchDebounced ? { q: searchDebounced } : {}),
+    });
+
+    interface PaginatedResponse {
+      data: CustomerRow[];
+      meta: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+        vipCount?: number;
+        followupCount?: number;
+      };
+    }
+
+    const res = await apiJson<PaginatedResponse>(`/customers?${query.toString()}`);
+    if (res && Array.isArray(res.data)) {
+      setAllCustomers(res.data);
+      setTotal(res.meta.total);
+      setTotalPages(res.meta.totalPages);
+      setVipTotal(res.meta.vipCount || 0);
+      setFollowupTotal(res.meta.followupCount || 0);
+    } else {
+      setAllCustomers([]);
+      setTotal(0);
+      setTotalPages(1);
+      setVipTotal(0);
+      setFollowupTotal(0);
+    }
     setLoadError('');
-  }, []);
+  }, [page, limit, filterStatus, searchDebounced]);
 
   const loadDetail = async (id: number) => {
     setDetail(await apiJson<CustomerDetail>(`/customers/${id}`));
@@ -128,6 +161,8 @@ export default function CustomersPage() {
       .catch((e: unknown) => {
         setLoadError(e instanceof Error ? e.message : 'Lỗi tải danh sách');
         setAllCustomers([]);
+        setTotal(0);
+        setTotalPages(1);
       })
       .finally(() => setLoading(false));
   }, [loadList]);
@@ -474,9 +509,9 @@ export default function CustomersPage() {
   const needsBackendRestart = loadError.includes('404') || loadError.includes('Không kết nối');
 
   // Compute metrics
-  const totalCustomers = allCustomers.length;
-  const vipCustomers = allCustomers.filter((c) => c.status === 'VIP').length;
-  const needFollowUpCustomers = allCustomers.filter((c) => c.status === 'NEED_FOLLOWUP').length;
+  const totalCustomers = total;
+  const vipCustomers = vipTotal;
+  const needFollowUpCustomers = followupTotal;
 
   return (
     <div className="page-container">
@@ -630,41 +665,68 @@ export default function CustomersPage() {
                 </button>
               </div>
             ) : (
-              <ul className="divide-y divide-slate-100 max-h-[560px] overflow-y-auto custom-scrollbar flex-1">
-                {customers.map((c) => (
-                  <li key={c.id}>
-                    <div
-                      className={`flex gap-3 p-3.5 cursor-pointer border-l-4 transition-all ${
-                        selectedId === c.id ? 'bg-brand/5 border-brand' : 'hover:bg-slate-50 border-transparent'
-                      }`}
-                      onClick={() => setSelectedId(c.id)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked.has(c.id)}
-                        onChange={() => toggleCheck(c.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand/30"
-                        aria-label={`Chọn ${c.name}`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start gap-1">
-                          <p className="font-bold text-slate-800 text-sm truncate">{c.name}</p>
-                          <span className={`px-2 py-0.5 border rounded text-[9px] font-extrabold uppercase tracking-wide shrink-0 ${getStatusBadgeClass(c.status)}`}>
-                            {STATUS_LABELS[c.status] || c.status}
-                          </span>
+              <>
+                <ul className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto custom-scrollbar flex-1">
+                  {customers.map((c) => (
+                    <li key={c.id}>
+                      <div
+                        className={`flex gap-3 p-3.5 cursor-pointer border-l-4 transition-all ${
+                          selectedId === c.id ? 'bg-brand/5 border-brand' : 'hover:bg-slate-50 border-transparent'
+                        }`}
+                        onClick={() => setSelectedId(c.id)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked.has(c.id)}
+                          onChange={() => toggleCheck(c.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand/30"
+                          aria-label={`Chọn ${c.name}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-1">
+                            <p className="font-bold text-slate-800 text-sm truncate">{c.name}</p>
+                            <span className={`px-2 py-0.5 border rounded text-[9px] font-extrabold uppercase tracking-wide shrink-0 ${getStatusBadgeClass(c.status)}`}>
+                              {STATUS_LABELS[c.status] || c.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 truncate mt-0.5">{c.email}</p>
+                          {c.notes[0] && (
+                            <p className="text-[10px] text-slate-400 truncate mt-2 bg-slate-50 p-1 border rounded" title={c.notes[0].content}>
+                              {c.notes[0].content}
+                            </p>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-500 truncate mt-0.5">{c.email}</p>
-                        {c.notes[0] && (
-                          <p className="text-[10px] text-slate-400 truncate mt-2 bg-slate-50 p-1 border rounded" title={c.notes[0].content}>
-                            {c.notes[0].content}
-                          </p>
-                        )}
                       </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Pagination Controls */}
+                <div className="px-4 py-3 border-t border-slate-105 bg-slate-50/50 flex items-center justify-between text-xs font-semibold shrink-0">
+                  <span className="text-slate-550">
+                    Trang {page} / {totalPages} ({total} khách)
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => p - 1)}
+                      className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+                    >
+                      Trước
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => p + 1)}
+                      className="px-2 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+                    >
+                      Sau
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 

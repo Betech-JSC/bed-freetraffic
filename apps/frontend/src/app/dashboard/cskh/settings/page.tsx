@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
+import Link from 'next/link';
 
 type CskhConfig = {
   id: number;
@@ -452,6 +453,14 @@ export default function CskhSettingsPage() {
             <div className="space-y-0.5">
               <h4 className="font-bold text-slate-800 text-sm">Kích hoạt Live Chat Widget</h4>
               <p className="text-slate-500 text-xs">Hiển thị bong bóng chat hỗ trợ trực tuyến góc phải bên dưới các trang Landing Page.</p>
+              <div className="mt-1.5">
+                <Link
+                  href="/dashboard/cskh/widget-customizer"
+                  className="text-xs font-bold text-[#f25c22] hover:underline flex items-center gap-1"
+                >
+                  ⚙️ Tùy chỉnh giao diện bong bóng & Lấy mã nhúng website ngoài
+                </Link>
+              </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input

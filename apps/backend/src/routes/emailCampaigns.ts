@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { dispatchDueEmailCampaigns, sendEmailCampaign } from '../services/emailCampaignSend';
 import { authenticate, AuthRequest, requireWrite } from '../middleware/auth';
+import { emailCampaignQueue } from '../queues/emailCampaignQueue';
 
 const router = Router();
 
@@ -102,22 +103,43 @@ router.post('/:id/send', requireWrite, async (req: AuthRequest, res: Response): 
   }
 
   try {
-    const result = await sendEmailCampaign(id);
-    if (result.status === 'FAILED') {
-      res.status(400).json({
-        error: result.errors[0] || 'Không gửi được email nào. Kiểm tra SMTP trong Cài đặt.',
-        sent: 0,
-        total: result.total,
-        errors: result.errors,
-      });
-      return;
-    }
-    res.json({
-      message: `Đã gửi ${result.sent}/${result.total} email`,
-      sent: result.sent,
-      total: result.total,
-      errors: result.errors.length ? result.errors : undefined,
+    const list = campaign.recipients.split(/[,;\s]+/).filter(Boolean);
+    
+    // Update status to QUEUED
+    await prisma.emailCampaign.update({
+      where: { id },
+      data: { status: 'QUEUED' },
     });
+
+    if (emailCampaignQueue) {
+      // Add to BullMQ queue
+      await emailCampaignQueue.add(`campaign-${id}`, { campaignId: id });
+    } else {
+      // Direct async execution when Redis is disabled
+      (async () => {
+        try {
+          await prisma.emailCampaign.update({
+            where: { id },
+            data: { status: 'PROCESSING' },
+          });
+          const result = await sendEmailCampaign(id);
+          console.log(`[EmailCampaign Router (No-Redis)] Gửi thành công chiến dịch #${id}: ${result.sent}/${result.total} email.`);
+        } catch (err: any) {
+          console.error(`[EmailCampaign Router (No-Redis)] Thất bại khi gửi chiến dịch #${id}:`, err);
+          await prisma.emailCampaign.update({
+            where: { id },
+            data: { status: 'FAILED' },
+          });
+        }
+      })();
+    }
+
+    res.json({
+      message: 'Chiến dịch đã được đưa vào hàng đợi để gửi bất đồng bộ.',
+      sent: 0,
+      total: list.length,
+    });
+
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Gửi thất bại';
     res.status(400).json({ error: msg });

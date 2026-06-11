@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -1549,6 +1582,205 @@ router.get('/pages/:slug/html/register', async (req, res) => {
     }
     catch (error) {
         res.status(500).send('<h1>Lỗi hệ thống</h1>');
+    }
+});
+// Public TikTok Shop Webhook Endpoint
+router.post('/tiktokshop/webhook', async (req, res) => {
+    try {
+        const signature = req.headers['x-tts-signature'];
+        const body = req.body;
+        console.log(`[TikTokShopWebhook] Nhận tín hiệu Webhook: event_type=${body?.type || 'unknown'}`);
+        // Verify webhook signature (optional placeholder for real verification)
+        const appSecret = process.env.TIKTOK_SHOP_APP_SECRET;
+        if (signature && appSecret) {
+            const crypto = await Promise.resolve().then(() => __importStar(require('crypto')));
+            const calculatedSign = crypto
+                .createHmac('sha256', appSecret)
+                .update(JSON.stringify(body))
+                .digest('hex');
+            if (signature !== calculatedSign) {
+                console.warn('[TikTokShopWebhook] Chữ ký Webhook không hợp lệ.');
+                res.status(400).json({ error: 'Chữ ký không hợp lệ' });
+                return;
+            }
+        }
+        const eventData = body?.data;
+        if (!eventData) {
+            res.json({ success: true, message: 'Nhận gói tin ping/test thành công.' });
+            return;
+        }
+        // Extract Order details
+        const shopId = body.shop_id || eventData.shop_id || 'tiktok_shop_id';
+        const orderId = eventData.order_id || `TT-${Date.now()}`;
+        const buyerEmail = (eventData.buyer_email || `buyer-${Date.now()}@tiktok.betraffic.com`).toLowerCase();
+        const buyerName = eventData.buyer_name || 'TikTok Shop Buyer';
+        const buyerPhone = eventData.buyer_phone || '';
+        const totalAmount = eventData.total_amount ? parseFloat(eventData.total_amount) : 0;
+        // Find the workspace associated with this TikTok Shop
+        const connection = await prisma_1.default.socialConnection.findFirst({
+            where: { platform: 'tiktokshop', pageId: shopId, status: 'CONNECTED' }
+        });
+        if (!connection || !connection.workspaceId) {
+            console.warn(`[TikTokShopWebhook] Không tìm thấy liên kết Zalo/TikTok Shop cho Shop ID: ${shopId}`);
+            res.status(404).json({ error: 'Không tìm thấy liên kết Shop trong hệ thống' });
+            return;
+        }
+        const workspaceId = connection.workspaceId;
+        // 1. Upsert Customer in CRM
+        let customer = await prisma_1.default.customer.findUnique({
+            where: { email: buyerEmail }
+        });
+        if (customer) {
+            customer = await prisma_1.default.customer.update({
+                where: { id: customer.id },
+                data: {
+                    name: buyerName,
+                    phone: buyerPhone || customer.phone,
+                    workspaceId
+                }
+            });
+        }
+        else {
+            customer = await prisma_1.default.customer.create({
+                data: {
+                    name: buyerName,
+                    email: buyerEmail,
+                    phone: buyerPhone || null,
+                    status: 'ACTIVE',
+                    workspaceId
+                }
+            });
+        }
+        // 2. Create Order
+        const existingOrder = await prisma_1.default.order.findUnique({
+            where: { orderNumber: orderId }
+        });
+        if (!existingOrder) {
+            await prisma_1.default.order.create({
+                data: {
+                    orderNumber: orderId,
+                    customerId: customer.id,
+                    totalAmount,
+                    status: 'PAID',
+                    paymentMethod: 'TIKTOKSHOP',
+                    source: 'TIKTOKSHOP',
+                    workspaceId
+                }
+            });
+            console.log(`[TikTokShopWebhook] Đã tạo đơn hàng thành công cho khách hàng CRM: ${buyerEmail}`);
+        }
+        res.json({ success: true, orderId });
+    }
+    catch (error) {
+        console.error('[TikTokShopWebhook Error]:', error);
+        res.status(500).json({ error: error.message || 'Lỗi xử lý webhook' });
+    }
+});
+// Public Zalo OA Webhook Endpoint
+router.post('/zalo/webhook', async (req, res) => {
+    try {
+        const body = req.body;
+        console.log(`[ZaloWebhook] Nhận tín hiệu Webhook: event_name=${body?.event_name || 'unknown'}`);
+        // Zalo webhook validation or ping event
+        if (body?.event_name === 'ping') {
+            res.json({ success: true, message: 'pong' });
+            return;
+        }
+        // Handle user sending text message
+        if (body?.event_name === 'user_send_text') {
+            const oaId = body.oa_id || body.recipient?.id;
+            const senderId = body.sender?.id;
+            const messageText = body.message?.text;
+            if (!oaId || !senderId || !messageText) {
+                res.status(400).json({ error: 'Thiếu thông tin người gửi, người nhận hoặc nội dung' });
+                return;
+            }
+            // 1. Tìm SocialConnection của Zalo OA để xác định workspaceId và accessToken
+            const connection = await prisma_1.default.socialConnection.findFirst({
+                where: { platform: 'zalo', pageId: oaId, status: 'CONNECTED' }
+            });
+            if (!connection) {
+                console.warn(`[ZaloWebhook] Không tìm thấy liên kết Zalo OA hoạt động cho OA ID: ${oaId}`);
+                res.status(404).json({ error: 'Không tìm thấy liên kết Zalo OA' });
+                return;
+            }
+            const workspaceId = connection.workspaceId;
+            if (!workspaceId) {
+                res.status(400).json({ error: 'Không tìm thấy Workspace ID cho liên kết' });
+                return;
+            }
+            // 2. Tìm hoặc tạo Customer liên kết với Zalo User ID này
+            let customer = await prisma_1.default.customer.findFirst({
+                where: { zaloUserId: senderId, workspaceId }
+            });
+            if (!customer) {
+                // Tạo mock email duy nhất để không vi phạm ràng buộc unique
+                const mockEmail = `zalo-user-${senderId}@zalo.betraffic.com`;
+                customer = await prisma_1.default.customer.create({
+                    data: {
+                        name: `Khách hàng Zalo (${senderId.slice(-6)})`,
+                        email: mockEmail,
+                        zaloUserId: senderId,
+                        status: 'NEW',
+                        workspaceId,
+                        lastContactAt: new Date()
+                    }
+                });
+            }
+            else {
+                await prisma_1.default.customer.update({
+                    where: { id: customer.id },
+                    data: { lastContactAt: new Date() }
+                });
+            }
+            // 3. Tìm hoặc tạo ChatSession cho Customer này trong workspace
+            let session = await prisma_1.default.chatSession.findFirst({
+                where: { customerId: customer.id, workspaceId },
+                orderBy: { createdAt: 'desc' }
+            });
+            if (!session) {
+                session = await prisma_1.default.chatSession.create({
+                    data: {
+                        workspaceId,
+                        customerId: customer.id
+                    }
+                });
+            }
+            // 4. Gọi hàm handleVisitorMessage trong cskhService để lưu tin nhắn và gọi AI phản hồi
+            const { handleVisitorMessage } = require('../services/cskhService');
+            const result = await handleVisitorMessage(workspaceId, session.id, messageText, 'Zalo_Webhook', 'Zalo_Bot');
+            // 5. Gửi lại phản hồi của AI cho Zalo User qua API OA
+            if (result.reply && connection.accessToken) {
+                console.log(`[ZaloWebhook] Đang gửi phản hồi AI tới Zalo User ${senderId}: "${result.reply.slice(0, 50)}..."`);
+                const zaloRes = await fetch('https://openapi.zalo.me/v3.0/oa/message/cs', {
+                    method: 'POST',
+                    headers: {
+                        access_token: connection.accessToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        recipient: {
+                            user_id: senderId
+                        },
+                        message: {
+                            text: result.reply
+                        }
+                    })
+                });
+                const zaloData = await zaloRes.json();
+                if (zaloData.error !== 0 && zaloData.error !== undefined) {
+                    console.error(`[ZaloWebhook] Gửi tin nhắn phản hồi Zalo thất bại:`, zaloData.message || `Code ${zaloData.error}`);
+                }
+                else {
+                    console.log(`[ZaloWebhook] Đã gửi phản hồi Zalo thành công.`);
+                }
+            }
+        }
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('[ZaloWebhook Error]:', error);
+        res.status(500).json({ error: error.message || 'Lỗi xử lý webhook' });
     }
 });
 exports.default = router;

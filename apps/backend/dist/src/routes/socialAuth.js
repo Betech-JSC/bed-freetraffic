@@ -7,6 +7,7 @@ const express_1 = require("express");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
+const zaloCrypto_1 = require("../lib/zaloCrypto");
 const router = (0, express_1.Router)();
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-free-traffic-key';
 // Helper to get URLs
@@ -59,15 +60,48 @@ router.get('/:platform/url', async (req, res) => {
         if (platform === 'zalo') {
             const appId = process.env.ZALO_APP_ID;
             if (appId) {
+                const verifier = (0, zaloCrypto_1.generateCodeVerifier)();
+                const challenge = (0, zaloCrypto_1.generateCodeChallenge)(verifier);
+                zaloCrypto_1.zaloVerifiers.set(state, verifier);
+                // Tự động dọn dẹp sau 10 phút
+                setTimeout(() => zaloCrypto_1.zaloVerifiers.delete(state), 10 * 60 * 1000);
                 // OAuth Zalo User (Login) hay Zalo OA (Connect)?
-                const url = action === 'connect'
-                    ? `https://oauth.zaloapp.com/v4/oa/permission?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`
-                    : `https://oauth.zaloapp.com/v4/permission?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+                const baseUrl = action === 'connect'
+                    ? `https://oauth.zaloapp.com/v4/oa/permission`
+                    : `https://oauth.zaloapp.com/v4/permission`;
+                const url = `${baseUrl}?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge=${challenge}&state=${state}`;
                 res.json({ url, isMock: false });
                 return;
             }
             // Hàng giả lập (Sandbox)
             const mockUrl = `${frontendUrl}/oauth/mock?platform=zalo&action=${action}&workspaceId=${workspaceId}&state=${state}`;
+            res.json({ url: mockUrl, isMock: true });
+            return;
+        }
+        // TikTok Shop
+        if (platform === 'tiktokshop') {
+            const appKey = process.env.TIKTOK_SHOP_APP_KEY;
+            if (appKey) {
+                const url = `https://services.tiktokshop.com/open/authorize?app_key=${appKey}&state=${state}`;
+                res.json({ url, isMock: false });
+                return;
+            }
+            // Hàng giả lập (Sandbox)
+            const mockUrl = `${frontendUrl}/oauth/mock?platform=tiktokshop&action=${action}&workspaceId=${workspaceId}&state=${state}`;
+            res.json({ url: mockUrl, isMock: true });
+            return;
+        }
+        // TikTok Creator
+        if (platform === 'tiktok') {
+            const clientKey = process.env.TIKTOK_CREATOR_CLIENT_KEY;
+            if (clientKey) {
+                const scopes = 'user.info.profile,video.upload';
+                const url = `https://www.tiktok.com/v2/auth/authorize/?client_key=${clientKey}&scope=${encodeURIComponent(scopes)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
+                res.json({ url, isMock: false });
+                return;
+            }
+            // Hàng giả lập (Sandbox)
+            const mockUrl = `${frontendUrl}/oauth/mock?platform=tiktok&action=${action}&workspaceId=${workspaceId}&state=${state}`;
             res.json({ url: mockUrl, isMock: true });
             return;
         }
@@ -208,6 +242,8 @@ router.get('/:platform/callback', async (req, res) => {
             else if (platform === 'zalo') {
                 const appId = process.env.ZALO_APP_ID || '';
                 const appSecret = process.env.ZALO_APP_SECRET || '';
+                const codeVerifier = zaloCrypto_1.zaloVerifiers.get(state) || '';
+                zaloCrypto_1.zaloVerifiers.delete(state); // dùng xong xóa ngay
                 // Đổi code lấy Access Token
                 const tokenRes = await fetch(action === 'connect' ? 'https://oauth.zaloapp.com/v4/oa/access_token' : 'https://oauth.zaloapp.com/v4/access_token', {
                     method: 'POST',
@@ -218,7 +254,8 @@ router.get('/:platform/callback', async (req, res) => {
                     body: new URLSearchParams({
                         code,
                         app_id: appId,
-                        grant_type: 'authorization_code'
+                        grant_type: 'authorization_code',
+                        code_verifier: codeVerifier
                     })
                 });
                 const tokenData = await tokenRes.json();
@@ -251,6 +288,60 @@ router.get('/:platform/callback', async (req, res) => {
                         avatar: uData.picture?.data?.url
                     };
                 }
+            }
+            // TIKTOK SHOP
+            else if (platform === 'tiktokshop') {
+                const appKey = process.env.TIKTOK_SHOP_APP_KEY || '';
+                const appSecret = process.env.TIKTOK_SHOP_APP_SECRET || '';
+                const tokenRes = await fetch('https://auth.tiktokshop.com/api/v2/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        app_key: appKey,
+                        app_secret: appSecret,
+                        auth_code: code,
+                        grant_type: 'authorized_code'
+                    })
+                });
+                const tokenData = await tokenRes.json();
+                if (tokenData.error || !tokenData.access_token) {
+                    throw new Error(tokenData.message || 'Lỗi uỷ quyền TikTok Shop');
+                }
+                oaProfile = {
+                    pageId: tokenData.shop_id || 'tiktok_shop_id',
+                    pageName: tokenData.shop_name || 'TikTok Shop Store',
+                    accessToken: JSON.stringify(tokenData)
+                };
+            }
+            // TIKTOK CREATOR
+            else if (platform === 'tiktok') {
+                const clientKey = process.env.TIKTOK_CREATOR_CLIENT_KEY || '';
+                const clientSecret = process.env.TIKTOK_CREATOR_CLIENT_SECRET || '';
+                const tokenRes = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        client_key: clientKey,
+                        client_secret: clientSecret,
+                        code,
+                        grant_type: 'authorization_code',
+                        redirect_uri: redirectUri
+                    })
+                });
+                const tokenData = await tokenRes.json();
+                if (tokenData.error || !tokenData.access_token) {
+                    throw new Error(tokenData.error_description || 'Lỗi uỷ quyền TikTok Creator');
+                }
+                const profileRes = await fetch('https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name', {
+                    headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+                });
+                const profileData = await profileRes.json();
+                const profile = profileData.data?.user || {};
+                oaProfile = {
+                    pageId: profile.open_id || 'tiktok_creator_id',
+                    pageName: profile.display_name || 'TikTok Creator',
+                    accessToken: JSON.stringify(tokenData)
+                };
             }
         }
         // === HÀNH ĐỘNG 1: ĐĂNG NHẬP XÃ HỘI (LOGIN) ===
