@@ -5,7 +5,7 @@
   --color-brand-hover: #c44a18;
   --color-brand-light: #fff4ef;
   --color-brand-muted: #fce8de;
-  --color-surface: #f6f8fc;
+  --color-surface: #ffffff;
   --color-surface-elevated: #ffffff;
   --color-sidebar: #0f172a;
   --color-sidebar-hover: #1e293b;
@@ -144,11 +144,7 @@ body {
 }
 
 .bg-app-mesh {
-  background-color: #fffbf9;
-  background-image:
-    radial-gradient(at 0% 0%, rgb(232 93 38 / 0.08) 0, transparent 55%),
-    radial-gradient(at 100% 0%, rgb(245 158 11 / 0.05) 0, transparent 50%),
-    radial-gradient(at 50% 100%, rgb(232 93 38 / 0.03) 0, transparent 60%);
+  background-color: #ffffff;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
