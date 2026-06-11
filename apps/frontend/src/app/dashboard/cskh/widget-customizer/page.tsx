@@ -38,7 +38,7 @@ export default function WidgetCustomizerPage() {
       const wsId = localStorage.getItem('workspaceId') || '';
       setWorkspaceId(wsId);
       
-      const host = window.location.origin.replace(':3000', ':4000');
+      const host = process.env.NEXT_PUBLIC_API_URL || window.location.origin.replace(':3000', ':4000');
       setApiHost(host);
     }
   }, []);
