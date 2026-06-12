@@ -65,6 +65,22 @@ export function FacebookConnectCard({ onConnectionChange }: Props) {
     loadStatus();
   }, [fetchFbConnections, loadStatus]);
 
+  // Tự động ẩn thông báo thành công sau 4 giây để tránh hiển thị vô hạn
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Tự động ẩn thông báo lỗi sau 5 giây
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleListPages = async () => {
     if (!pageToken.trim()) {
       setError('Dán Access Token trước, rồi bấm Lấy danh sách Fanpage.');
@@ -203,10 +219,15 @@ export function FacebookConnectCard({ onConnectionChange }: Props) {
     setSuccess('');
     try {
       await apiFetch(`/social/connections/${connId}`, { method: 'DELETE' });
-      setSuccess(`Đã ngắt kết nối trang "${pageName}" thành công.`);
+      
+      // Chạy song song các tiến trình cập nhật dữ liệu để tránh cập nhật lắt nhắt gây nhấp nháy giao diện
+      await Promise.all([
+        fetchFbConnections(),
+        loadStatus()
+      ]);
+      
       onConnectionChange();
-      await fetchFbConnections();
-      await loadStatus();
+      setSuccess(`Đã ngắt kết nối trang "${pageName}" thành công.`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Lỗi ngắt kết nối');
     }
