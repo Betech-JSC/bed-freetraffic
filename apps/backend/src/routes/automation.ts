@@ -22,7 +22,7 @@ router.get('/tasks', async (req: AuthRequest, res: Response): Promise<void> => {
 // Tạo nhiệm vụ mới (Thêm Bot)
 router.post('/tasks', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { name, urlTarget, platforms, interval, emailRecipients, abTestId, useAi, aiPrompt, aiGenerateImage, rssUrl } = req.body;
+    const { name, urlTarget, platforms, interval, emailRecipients, abTestId, useAi, aiPrompt, aiGenerateImage, rssUrl, targetConnectionsJson } = req.body;
     
     if (!name || !urlTarget || !platforms) {
       res.status(400).json({ error: 'Thiếu thông tin bắt buộc' });
@@ -34,6 +34,7 @@ router.post('/tasks', async (req: AuthRequest, res: Response): Promise<void> => 
         name,
         urlTarget,
         platforms: JSON.stringify(platforms),
+        targetConnectionsJson: targetConnectionsJson || null,
         emailRecipients: emailRecipients || null,
         abTestId: abTestId ? parseInt(String(abTestId), 10) : null,
         interval: interval || 60,
@@ -60,7 +61,7 @@ router.put('/tasks/:id', async (req: AuthRequest, res: Response): Promise<void> 
       return;
     }
 
-    const { name, urlTarget, platforms, interval, emailRecipients, abTestId, useAi, aiPrompt, aiGenerateImage, rssUrl } = req.body;
+    const { name, urlTarget, platforms, interval, emailRecipients, abTestId, useAi, aiPrompt, aiGenerateImage, rssUrl, targetConnectionsJson } = req.body;
 
     const existing = await prisma.automationTask.findFirst({
       where: { id, workspaceId: req.workspaceId }
@@ -77,6 +78,7 @@ router.put('/tasks/:id', async (req: AuthRequest, res: Response): Promise<void> 
         name: name !== undefined ? name : existing.name,
         urlTarget: urlTarget !== undefined ? urlTarget : existing.urlTarget,
         platforms: platforms !== undefined ? JSON.stringify(platforms) : existing.platforms,
+        targetConnectionsJson: targetConnectionsJson !== undefined ? targetConnectionsJson : existing.targetConnectionsJson,
         emailRecipients: emailRecipients !== undefined ? (emailRecipients || null) : existing.emailRecipients,
         abTestId: abTestId !== undefined ? (abTestId ? parseInt(String(abTestId), 10) : null) : existing.abTestId,
         interval: interval !== undefined ? (parseInt(String(interval), 10) || 60) : existing.interval,
