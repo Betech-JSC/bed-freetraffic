@@ -14,7 +14,7 @@ export async function sendEmailCampaign(campaignId: number): Promise<SendCampaig
     throw new Error('Không tìm thấy chiến dịch');
   }
 
-  const transporter = await createSmtpTransporter();
+  const transporter = await createSmtpTransporter(campaign.workspaceId || undefined);
   if (!transporter) {
     throw new Error(
       'Chưa cấu hình SMTP. Vào Cài đặt → Email hoặc thêm SMTP_USER/SMTP_PASS vào backend .env.'
@@ -29,7 +29,7 @@ export async function sendEmailCampaign(campaignId: number): Promise<SendCampaig
 
   let sent = 0;
   const errors: string[] = [];
-  const smtpCfg = await getSmtpConfig();
+  const smtpCfg = await getSmtpConfig(campaign.workspaceId || undefined);
   const fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
 
   for (const email of list) {

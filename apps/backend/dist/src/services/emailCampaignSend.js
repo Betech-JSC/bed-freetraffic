@@ -12,7 +12,7 @@ async function sendEmailCampaign(campaignId) {
     if (!campaign) {
         throw new Error('Không tìm thấy chiến dịch');
     }
-    const transporter = await (0, smtp_1.createSmtpTransporter)();
+    const transporter = await (0, smtp_1.createSmtpTransporter)(campaign.workspaceId || undefined);
     if (!transporter) {
         throw new Error('Chưa cấu hình SMTP. Vào Cài đặt → Email hoặc thêm SMTP_USER/SMTP_PASS vào backend .env.');
     }
@@ -23,7 +23,7 @@ async function sendEmailCampaign(campaignId) {
     }
     let sent = 0;
     const errors = [];
-    const smtpCfg = await (0, smtp_1.getSmtpConfig)();
+    const smtpCfg = await (0, smtp_1.getSmtpConfig)(campaign.workspaceId || undefined);
     const fromAddress = process.env.SMTP_FROM || smtpCfg?.email || '';
     for (const email of list) {
         const trackOpen = `${baseUrl}/api/email-campaigns/track/open/${campaignId}?r=${encodeURIComponent(email)}`;
