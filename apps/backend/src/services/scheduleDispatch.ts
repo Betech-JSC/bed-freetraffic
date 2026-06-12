@@ -95,13 +95,29 @@ export async function executeContentSchedule(
       pageName = conn?.pageName || undefined;
     }
 
+    let targetUrlTarget = resolved.urlTarget || undefined;
+    if (row.utmTagEnabled && targetUrlTarget) {
+      try {
+        const u = new URL(targetUrlTarget);
+        if (!u.searchParams.has('utm_source')) {
+          u.searchParams.set('utm_source', target.platform);
+          u.searchParams.set('utm_medium', target.platform === 'email' ? 'email' : 'social');
+          u.searchParams.set('utm_campaign', `post-${row.id}`);
+          targetUrlTarget = u.toString();
+        }
+      } catch {
+        const separator = targetUrlTarget.includes('?') ? '&' : '?';
+        targetUrlTarget = `${targetUrlTarget}${separator}utm_source=${target.platform}&utm_medium=${target.platform === 'email' ? 'email' : 'social'}&utm_campaign=post-${row.id}`;
+      }
+    }
+
     let result;
     try {
       result = await dispatchToPlatform(target.platform, {
         title: resolved.title,
         content: resolved.content,
         imageUrl: finalImageUrl,
-        urlTarget: resolved.urlTarget || undefined,
+        urlTarget: targetUrlTarget,
         emailRecipients: target.platform === 'email' ? row.recipients?.trim() || undefined : undefined,
         workspaceId: row.workspaceId || undefined,
         connectionId: target.connectionId > 0 ? target.connectionId : undefined,
@@ -120,15 +136,20 @@ export async function executeContentSchedule(
 
   const { status, errorMessage } = summarizeChannelResults(channelResults);
 
-  await prisma.contentSchedule.update({
-    where: { id: item.id },
-    data: {
-      status,
-      publishedAt: channelResults.some((r) => r.success) ? new Date() : null,
-      errorMessage,
-      channelResults: JSON.stringify(channelResults),
-    },
-  });
+  let finalStatus: string = status;
+  if (status === 'FAILED') {
+    finalStatus = await handleFailedScheduleRetry(item.id, errorMessage || 'Unknown error', channelResults);
+  } else {
+    await prisma.contentSchedule.update({
+      where: { id: item.id },
+      data: {
+        status,
+        publishedAt: channelResults.some((r) => r.success) ? new Date() : null,
+        errorMessage,
+        channelResults: JSON.stringify(channelResults),
+      },
+    });
+  }
 
   await scheduleNextOccurrence(
     {
@@ -138,10 +159,47 @@ export async function executeContentSchedule(
       repeatUntil: row.repeatUntil,
       cronExpression: row.cronExpression,
     },
-    status
+    finalStatus
   );
 
-  return { status, channelResults, errorMessage };
+  return { status: finalStatus, channelResults, errorMessage };
+}
+
+async function handleFailedScheduleRetry(
+  id: number,
+  errorMessage: string,
+  channelResults?: ChannelResult[]
+): Promise<string> {
+  const row = await prisma.contentSchedule.findUnique({
+    where: { id },
+    select: { attemptCount: true }
+  });
+  const currentAttempts = row?.attemptCount || 1;
+
+  if (currentAttempts < 3) {
+    const delayMinutes = Math.pow(2, currentAttempts); // 2 mins, 4 mins
+    const nextRun = new Date(Date.now() + delayMinutes * 60 * 1000);
+    await prisma.contentSchedule.update({
+      where: { id },
+      data: {
+        status: 'PENDING',
+        scheduledAt: nextRun,
+        errorMessage: `[Thử lại ${currentAttempts}/3 thất bại: ${errorMessage}]. Sẽ thử lại sau ${delayMinutes} phút.`,
+        channelResults: channelResults ? JSON.stringify(channelResults) : undefined,
+      },
+    });
+    return 'PENDING';
+  } else {
+    await prisma.contentSchedule.update({
+      where: { id },
+      data: {
+        status: 'FAILED',
+        errorMessage: `[Thử lại thất bại hoàn toàn sau 3 lần]: ${errorMessage}`,
+        channelResults: channelResults ? JSON.stringify(channelResults) : undefined,
+      },
+    });
+    return 'FAILED';
+  }
 }
 
 export async function dispatchDueSchedules(limit = 10): Promise<number> {
@@ -156,10 +214,7 @@ export async function dispatchDueSchedules(limit = 10): Promise<number> {
       await executeContentSchedule(item);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Dispatch failed';
-      await prisma.contentSchedule.update({
-        where: { id: item.id },
-        data: { status: 'FAILED', errorMessage: msg },
-      });
+      await handleFailedScheduleRetry(item.id, msg);
     }
   }
 

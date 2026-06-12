@@ -132,7 +132,7 @@ router.delete('/:id', async (req, res) => {
 });
 // Tạo bài viết tự động bằng AI (GPT + DALL-E)
 router.post('/generate-ai', async (req, res) => {
-    const { urlTarget, aiPrompt, generateImage } = req.body;
+    const { urlTarget, aiPrompt, generateImage, contentType } = req.body;
     if (!urlTarget?.trim()) {
         res.status(400).json({ error: 'URL đích là bắt buộc để AI phân tích' });
         return;
@@ -146,13 +146,45 @@ router.post('/generate-ai', async (req, res) => {
                 domain = new URL(urlTarget).hostname.replace('www.', '');
             }
             catch { }
-            result = {
-                title: `⚡ Khám phá giải pháp từ ${domain}`,
-                content: `🔥 Giải pháp tối ưu hóa doanh số và thu hút khách hàng tiềm năng bền vững. Khám phá chi tiết ngay tại {url}!\n\n#freeship #sales #traffic #viral`
-            };
+            if (contentType === 'blog') {
+                result = {
+                    title: `⚡ Tầm quan trọng của giải pháp từ ${domain}`,
+                    slug: `tam-quan-trong-giai-phap-${domain.replace(/\./g, '-')}`,
+                    metaDescription: `Hướng dẫn tối ưu doanh thu và thu hút khách hàng từ trang ${domain}.`,
+                    content: `## 1. Giới thiệu\n\nTrang ${domain} đem đến giải pháp đột phá giúp tự động hóa và tối ưu nguồn traffic tự nhiên.\n\n## 2. Điểm cốt lõi\n\nBạn có thể quản lý lịch biểu đăng bài và CRM tích hợp, tham khảo tại {url}.`
+                };
+            }
+            else if (contentType === 'facebook') {
+                result = {
+                    title: `⚡ Bản tin marketing ${domain}`,
+                    content: `👉 Khám phá giải pháp tuyệt vời từ ${domain}. Xem ngay tại {url}!`,
+                    variations: {
+                        short: `🚀 Giải pháp tuyệt vời từ ${domain}. Xem ngay tại {url}!`,
+                        curious: `🤔 Bạn đã biết bí mật đằng sau thành công của ${domain} chưa? Tìm hiểu tại {url}!`,
+                        cta: `🔥 Đăng ký ngay hôm nay để nhận ưu đãi đặc biệt từ ${domain}! Click: {url}`
+                    }
+                };
+            }
+            else if (contentType === 'video_script') {
+                result = {
+                    title: `⚡ Kịch bản video ${domain}`,
+                    content: `[Hook] Dừng lại 3 giây! Bạn đã biết cách tăng traffic chưa? [Body] Giải pháp từ ${domain} sẽ giúp bạn. [CTA] Xem link tại {url}`,
+                    script: {
+                        hook: `🛑 Dừng lại 3 giây nếu bạn muốn nhân đôi doanh thu website!`,
+                        body: `Hôm nay mình sẽ bật mí giải pháp tự động hóa CRM và phễu khách hàng từ ${domain} cực kỳ đơn giản mà hiệu quả.`,
+                        cta: `Đăng ký dùng thử miễn phí ngay hôm nay tại đường link: {url}`
+                    }
+                };
+            }
+            else {
+                result = {
+                    title: `⚡ Khám phá giải pháp từ ${domain}`,
+                    content: `🔥 Giải pháp tối ưu hóa doanh số và thu hút khách hàng tiềm năng bền vững. Khám phá chi tiết ngay tại {url}!\n\n#freeship #sales #traffic #viral`
+                };
+            }
         }
         else {
-            result = await (0, aiGenerate_1.generateAiPostContent)(urlTarget, aiPrompt);
+            result = await (0, aiGenerate_1.generateAiPostContent)(urlTarget, aiPrompt, contentType);
         }
         let imageUrl = null;
         if (generateImage) {
@@ -161,6 +193,10 @@ router.post('/generate-ai', async (req, res) => {
         res.json({
             title: result.title,
             content: result.content,
+            slug: result.slug,
+            metaDescription: result.metaDescription,
+            variations: result.variations,
+            script: result.script,
             imageUrl,
             isDemo: !apiKey
         });
@@ -240,6 +276,28 @@ router.post('/copilot-save', async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: error.message || 'Lỗi lưu mẫu nội dung' });
+    }
+});
+// Tự động tối ưu SEO bài viết bằng AI
+router.post('/optimize-seo', async (req, res) => {
+    const { title, slug, metaDescription, content, focusKeyword } = req.body;
+    if (!focusKeyword?.trim()) {
+        res.status(400).json({ error: 'Từ khóa chính là bắt buộc để tối ưu SEO.' });
+        return;
+    }
+    if (!title || content == null) {
+        res.status(400).json({ error: 'Tiêu đề và nội dung bài viết là bắt buộc để tối ưu.' });
+        return;
+    }
+    try {
+        const optimized = await (0, aiGenerate_1.optimizeSeoContent)(title, slug || '', metaDescription || '', content, focusKeyword.trim());
+        res.json({
+            ...optimized,
+            isDemo: !process.env.OPENAI_API_KEY
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err instanceof Error ? err.message : 'Lỗi tối ưu SEO bằng AI' });
     }
 });
 exports.default = router;

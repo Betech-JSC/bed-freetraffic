@@ -176,4 +176,50 @@ router.delete('/:id', requireWrite, async (req: AuthRequest, res: Response): Pro
   res.status(204).send();
 });
 
+router.post('/import', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { keywords, groupId } = req.body;
+  if (!keywords || !Array.isArray(keywords)) {
+    res.status(400).json({ error: 'Danh sách từ khóa (keywords) dưới dạng mảng là bắt buộc' });
+    return;
+  }
+
+  const createdKeywords = [];
+
+  try {
+    for (const item of keywords) {
+      if (!item.keyword || typeof item.keyword !== 'string') continue;
+
+      const k = item.keyword.trim();
+      if (!k) continue;
+
+      const created = await prisma.seoKeyword.create({
+        data: {
+          keyword: k,
+          url: item.url || null,
+          searchVolume: item.searchVolume ? parseInt(String(item.searchVolume)) : null,
+          groupId: groupId ? parseInt(String(groupId)) : null,
+          workspaceId: req.workspaceId,
+        }
+      });
+      createdKeywords.push(created);
+    }
+
+    // Invalidate cache
+    if (req.workspaceId) {
+      void invalidateWorkspaceCache(req.workspaceId, ['keywords', 'report', 'dashboard']).catch(err => {
+        console.error('[Cache Invalidation Error]:', err);
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      count: createdKeywords.length,
+      keywords: createdKeywords,
+    });
+  } catch (err: any) {
+    console.error('[POST /keywords/import]', err);
+    res.status(500).json({ error: 'Lỗi import từ khóa: ' + err.message });
+  }
+});
+
 export default router;

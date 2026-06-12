@@ -21,6 +21,7 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@types/pdfkit": "^0.17.6",
+    "adm-zip": "^0.5.17",
     "axios": "^1.17.0",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.78.0",
@@ -47,6 +48,7 @@
     "stripe": "^22.2.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

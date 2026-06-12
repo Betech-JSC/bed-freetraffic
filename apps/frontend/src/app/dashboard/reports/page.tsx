@@ -12,7 +12,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip as ChartTooltip,
-  Legend
+  Legend,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
 
 type TrafficRow = {
@@ -34,13 +37,42 @@ type KeywordRow = {
   lastImpressions?: number;
 };
 
+type TrafficSourceRow = {
+  source: string;
+  sessions: number;
+  users: number;
+  pageviews: number;
+};
+
+type LandingPageRow = {
+  path: string;
+  sessions: number;
+  users: number;
+  pageviews: number;
+};
+
+type ContentRoiRow = {
+  id: number;
+  title: string;
+  platforms: string;
+  publishedAt: string;
+  clicks: number;
+  leads: number;
+  orders: number;
+  revenue: number;
+  conversionRate: number;
+};
+
 export default function ReportsPage() {
   const { t } = useLocale();
   const [traffic, setTraffic] = useState<{ rows: TrafficRow[] } | null>(null);
   const [keywords, setKeywords] = useState<{ rows: KeywordRow[] } | null>(null);
+  const [trafficSources, setTrafficSources] = useState<{ sources: TrafficSourceRow[]; landingPages: LandingPageRow[] } | null>(null);
+  const [contentRoi, setContentRoi] = useState<{ rows: ContentRoiRow[] } | null>(null);
   const [days, setDays] = useState(30);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'overview' | 'roi'>('overview');
 
   // AI report state variables
   const [aiReport, setAiReport] = useState<AiAnalysisResult | null>(null);
@@ -55,12 +87,16 @@ export default function ReportsPage() {
     (async () => {
       setLoading(true);
       try {
-        const [tData, kData] = await Promise.all([
+        const [tData, kData, sData, rData] = await Promise.all([
           apiJson<{ rows: TrafficRow[] }>(`/reports/traffic?days=${days}`),
           apiJson<{ rows: KeywordRow[] }>('/reports/keywords'),
+          apiJson<{ sources: TrafficSourceRow[]; landingPages: LandingPageRow[] }>(`/reports/traffic-sources?days=${days}`),
+          apiJson<{ rows: ContentRoiRow[] }>('/reports/content-roi'),
         ]);
         setTraffic(tData);
         setKeywords(kData);
+        setTrafficSources(sData);
+        setContentRoi(rData);
         setError('');
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : t('Lỗi tải báo cáo'));
@@ -171,11 +207,26 @@ ${aiReport.markdown}`;
     ? (keywordsWithRank.reduce((sum, k) => sum + (k.position || 0), 0) / keywordsWithRank.length).toFixed(1)
     : '—';
 
+  // Calculate dynamic growth rate
+  const currentPeriodRows = traffic?.rows || [];
+  const midPoint = Math.floor(currentPeriodRows.length / 2);
+  const prevPeriodSessions = currentPeriodRows.slice(0, midPoint).reduce((sum, r) => sum + r.sessions, 0);
+  const currPeriodSessions = currentPeriodRows.slice(midPoint).reduce((sum, r) => sum + r.sessions, 0);
+  let growthPercent = '+0.0%';
+  if (prevPeriodSessions > 0) {
+    const diff = ((currPeriodSessions - prevPeriodSessions) / prevPeriodSessions) * 100;
+    growthPercent = (diff >= 0 ? '+' : '') + diff.toFixed(1) + '%';
+  } else if (currPeriodSessions > 0) {
+    growthPercent = '+100.0%';
+  }
+
+  const PIE_COLORS = ['#e85d26', '#10b981', '#6366f1', '#f59e0b', '#8b5cf6'];
+
   return (
     <div className="space-y-8 page-container">
       <PageHeader
         title={t('Báo cáo tiếp thị')}
-        description={t('Phân tích lượng truy cập (Traffic) và Từ khóa SEO. Hỗ trợ xem trực quan và xuất file.')}
+        description={t('Phân tích lượng truy cập (Traffic), Từ khóa SEO và ROI nội dung. Hỗ trợ xem trực quan và xuất file.')}
         actions={
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 font-bold uppercase">{t('Khoảng thời gian:')}</span>
@@ -203,196 +254,425 @@ ${aiReport.markdown}`;
 
       {error && <div className="rounded-xl bg-red-50 text-red-700 px-4 py-3 text-sm border border-red-100">{error}</div>}
 
-      {/* Quick Help Onboarding Banner */}
-      <div className="bg-brand/5 border border-brand/10 rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-        <div>
-          <h4 className="font-bold text-slate-800 text-sm">{t('Hướng dẫn đọc Báo cáo')}</h4>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            {t('Dữ liệu')} <strong>Traffic</strong> {t('được đồng bộ tự động từ Google Analytics (GA4), phản ánh số người dùng và lượt xem trang thật.')}{' '}
-            {t('Dữ liệu')} <strong>{t('Từ khóa (Keywords)')}</strong> {t('thống kê vị trí trung bình trên Google.')}{' '}
-            {t('Bạn có thể xem trước 5 dòng dữ liệu mới nhất bên dưới và sử dụng các nút xuất báo cáo chuyên dụng để tải về tài liệu (CSV, Excel hoặc PDF) trình bày cho khách hàng / đối tác.')}
-          </p>
-        </div>
-      </div>
-
-      {/* Stats Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-bold uppercase">REP</div>
-          <div>
-            <div className="text-xs font-bold text-gray-500 uppercase">{t('Tổng Sessions (Lượt truy cập)')}</div>
-            <div className="text-2xl font-extrabold text-gray-900">{totalSessions.toLocaleString()}</div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xs font-bold uppercase">PVS</div>
-          <div>
-            <div className="text-xs font-bold text-gray-500 uppercase">{t('Lượt xem trang (Pageviews)')}</div>
-            <div className="text-2xl font-extrabold text-gray-900">{totalPageviews.toLocaleString()}</div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xs font-bold uppercase">SEO</div>
-          <div>
-            <div className="text-xs font-bold text-gray-500 uppercase">{t('Vị trí Từ khóa trung bình')}</div>
-            <div className="text-2xl font-extrabold text-gray-900">{avgRank}</div>
-          </div>
-        </div>
+      {/* Tab Selector */}
+      <div className="flex border-b border-slate-200 pb-px">
+        <button
+          type="button"
+          onClick={() => setActiveTab('overview')}
+          className={`pb-3 text-sm font-extrabold px-6 transition-all border-b-2 cursor-pointer ${
+            activeTab === 'overview'
+              ? 'border-brand text-brand'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          {t('Lưu lượng & SEO')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('roi')}
+          className={`pb-3 text-sm font-extrabold px-6 transition-all border-b-2 cursor-pointer ${
+            activeTab === 'roi'
+              ? 'border-brand text-brand'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+        >
+          {t('Hiệu quả nội dung (Content ROI)')}
+        </button>
       </div>
 
       {loading ? (
         <div className="text-center py-10 text-slate-500 font-medium">{t('Đang tải dữ liệu báo cáo...')}</div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Card 1: Traffic Report */}
-          <div className="card p-6 flex flex-col justify-between space-y-6">
-            <div>
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-lg">{t('Báo cáo lượng truy cập (Traffic)')}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{t('Xu hướng lượt truy cập & lượt xem trang đồng bộ từ GA4.')}</p>
+      ) : activeTab === 'overview' ? (
+        <div className="space-y-8 animate-[fadeIn_0.3s_ease-out]">
+          {/* Stats Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-bold uppercase">REP</div>
+              <div className="flex-1">
+                <div className="text-xs font-bold text-gray-500 uppercase flex items-center justify-between">
+                  <span>{t('Tổng Sessions')}</span>
+                  <span className={`badge text-[9px] font-bold ${growthPercent.startsWith('+') ? 'badge-success' : 'badge-warning'}`}>
+                    {growthPercent}
+                  </span>
                 </div>
-                {/* Export Dropdown buttons grouped */}
-                <div className="flex items-center gap-1.5 bg-gray-50 p-1 border rounded-lg">
-                  <button type="button" onClick={() => download('traffic', 'csv')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">CSV</button>
-                  <button type="button" onClick={() => download('traffic', 'xlsx')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">Excel</button>
-                  <button type="button" onClick={() => download('traffic', 'pdf')} className="text-xs font-bold px-2.5 py-1 bg-brand text-white rounded shadow-sm transition-all">PDF</button>
-                </div>
-              </div>
-
-              {/* Traffic Chart */}
-              <div className="h-[220px] w-full pt-2">
-                {traffic?.rows && traffic.rows.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={traffic.rows} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="colorSessions" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#FB6F1D" stopOpacity={0.2}/>
-                          <stop offset="95%" stopColor="#FB6F1D" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                      <XAxis dataKey="date" tickLine={false} tickFormatter={(str) => String(str).slice(5)} style={{ fontSize: 10, fill: '#64748B' }} />
-                      <YAxis tickLine={false} style={{ fontSize: 10, fill: '#64748B' }} />
-                      <ChartTooltip />
-                      <Legend style={{ fontSize: 10 }} />
-                      <Area type="monotone" name="Sessions" dataKey="sessions" stroke="#FB6F1D" strokeWidth={2} fillOpacity={1} fill="url(#colorSessions)" />
-                      <Area type="monotone" name="Pageviews" dataKey="pageviews" stroke="#10B981" strokeWidth={2} fillOpacity={0} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium">{t('Chưa có dữ liệu xu hướng truy cập')}</div>
-                )}
+                <div className="text-2xl font-extrabold text-gray-900 mt-1">{totalSessions.toLocaleString()}</div>
               </div>
             </div>
-
-            {/* Preview Table */}
-            <div>
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2.5">{t('Xem trước dữ liệu mới nhất')}</h4>
-              <div className="overflow-x-auto border border-slate-100 rounded-lg">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b font-semibold text-slate-600">
-                      <th className="p-2.5">{t('Ngày')}</th>
-                      <th className="p-2.5">Sessions</th>
-                      <th className="p-2.5">Users</th>
-                      <th className="p-2.5">Pageviews</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-500">
-                    {traffic?.rows && traffic.rows.length > 0 ? (
-                      traffic.rows.slice(-5).reverse().map((r, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50">
-                          <td className="p-2.5 font-medium text-slate-700">{r.date}</td>
-                          <td className="p-2.5">{r.sessions.toLocaleString()}</td>
-                          <td className="p-2.5">{r.users.toLocaleString()}</td>
-                          <td className="p-2.5">{r.pageviews.toLocaleString()}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} className="p-6 text-center">{t('Chưa có dữ liệu lịch sử')}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xs font-bold uppercase">PVS</div>
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase">{t('Lượt xem trang (Pageviews)')}</div>
+                <div className="text-2xl font-extrabold text-gray-900 mt-1">{totalPageviews.toLocaleString()}</div>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xs font-bold uppercase">SEO</div>
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase">{t('Vị trí Từ khóa trung bình')}</div>
+                <div className="text-2xl font-extrabold text-gray-900 mt-1">{avgRank}</div>
               </div>
             </div>
           </div>
 
-          {/* Card 2: Keywords Report */}
-          <div className="card p-6 flex flex-col justify-between space-y-6">
-            <div>
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-lg">{t('Báo cáo từ khóa SEO (Keywords)')}</h3>
-                  <p className="text-xs text-slate-500 mt-1">{t('Quản lý thứ hạng từ khóa trên Google Search Console.')}</p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Card 1: Traffic Report */}
+            <div className="card p-6 flex flex-col justify-between space-y-6">
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg">{t('Báo cáo lượng truy cập (Traffic)')}</h3>
+                    <p className="text-xs text-slate-500 mt-1">{t('Xu hướng lượt truy cập & lượt xem trang đồng bộ từ GA4.')}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-gray-50 p-1 border rounded-lg">
+                    <button type="button" onClick={() => download('traffic', 'csv')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">CSV</button>
+                    <button type="button" onClick={() => download('traffic', 'xlsx')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">Excel</button>
+                    <button type="button" onClick={() => download('traffic', 'pdf')} className="text-xs font-bold px-2.5 py-1 bg-brand text-white rounded shadow-sm transition-all">PDF</button>
+                  </div>
                 </div>
-                {/* Export Dropdown buttons grouped */}
-                <div className="flex items-center gap-1.5 bg-gray-50 p-1 border rounded-lg">
-                  <button type="button" onClick={() => download('keywords', 'csv')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">CSV</button>
-                  <button type="button" onClick={() => download('keywords', 'xlsx')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">Excel</button>
-                  <button type="button" onClick={() => download('keywords', 'pdf')} className="text-xs font-bold px-2.5 py-1 bg-brand text-white rounded shadow-sm transition-all">PDF</button>
+
+                {/* Traffic Chart */}
+                <div className="h-[220px] w-full pt-2">
+                  {traffic?.rows && traffic.rows.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={traffic.rows} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="colorSessions" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#FB6F1D" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#FB6F1D" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                        <XAxis dataKey="date" tickLine={false} tickFormatter={(str) => String(str).slice(5)} style={{ fontSize: 10, fill: '#64748B' }} />
+                        <YAxis tickLine={false} style={{ fontSize: 10, fill: '#64748B' }} />
+                        <ChartTooltip />
+                        <Legend style={{ fontSize: 10 }} />
+                        <Area type="monotone" name="Sessions" dataKey="sessions" stroke="#FB6F1D" strokeWidth={2} fillOpacity={1} fill="url(#colorSessions)" />
+                        <Area type="monotone" name="Pageviews" dataKey="pageviews" stroke="#10B981" strokeWidth={2} fillOpacity={0} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-xs text-slate-400 font-medium">{t('Chưa có dữ liệu xu hướng truy cập')}</div>
+                  )}
                 </div>
               </div>
 
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-500 uppercase">{t('Tổng từ khóa theo dõi')}</span>
-                  <div className="text-2xl font-black text-slate-800 mt-1">{keywords?.rows?.length ?? 0} {t('từ khóa')}</div>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-bold text-slate-500 uppercase">{t('Độ bao phủ trung bình')}</span>
-                  <div className="text-sm font-semibold text-emerald-600 mt-1">{t('Đã đồng bộ thành công')}</div>
+              {/* Preview Table */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2.5">{t('Xem trước dữ liệu mới nhất')}</h4>
+                <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b font-semibold text-slate-600">
+                        <th className="p-2.5">{t('Ngày')}</th>
+                        <th className="p-2.5">Sessions</th>
+                        <th className="p-2.5">Users</th>
+                        <th className="p-2.5">Pageviews</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-500">
+                      {traffic?.rows && traffic.rows.length > 0 ? (
+                        traffic.rows.slice(-5).reverse().map((r, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50">
+                            <td className="p-2.5 font-medium text-slate-700">{r.date}</td>
+                            <td className="p-2.5">{r.sessions.toLocaleString()}</td>
+                            <td className="p-2.5">{r.users.toLocaleString()}</td>
+                            <td className="p-2.5">{r.pageviews.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="p-6 text-center">{t('Chưa có dữ liệu lịch sử')}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              
-              <p className="text-xs text-slate-400 leading-relaxed mt-4">
-                {t('Báo cáo từ khóa hiển thị thứ hạng hiện tại của trang web trên công cụ tìm kiếm của Google, giúp bạn dễ dàng theo dõi hiệu suất tối ưu hóa nội dung (SEO) và độ tăng trưởng thứ hạng.')}
+            </div>
+
+            {/* Card 2: Traffic Sources Distribution */}
+            <div className="card p-6 flex flex-col justify-between space-y-6">
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg mb-1">{t('Phân bố nguồn lưu lượng (Traffic Sources)')}</h3>
+                <p className="text-xs text-slate-500 mb-6">{t('Kênh thu hút khách hàng dựa trên sessions của GA4.')}</p>
+                
+                <div className="flex flex-col md:flex-row gap-6 items-center">
+                  <div className="w-full md:w-1/2 flex justify-center">
+                    {trafficSources?.sources && trafficSources.sources.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie
+                            data={trafficSources.sources}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={75}
+                            paddingAngle={3}
+                            dataKey="sessions"
+                            nameKey="source"
+                          >
+                            {trafficSources.sources.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <ChartTooltip formatter={(value: any) => [`${Number(value || 0).toLocaleString()} sessions`, t('Nguồn')]} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-xs text-slate-400 font-medium">{t('Chưa có dữ liệu nguồn truy cập')}</div>
+                    )}
+                  </div>
+                  
+                  <div className="w-full md:w-1/2 space-y-2">
+                    {trafficSources?.sources?.slice(0, 5).map((src, index) => {
+                      const totalSess = trafficSources.sources.reduce((sum, s) => sum + s.sessions, 0) || 1;
+                      const percent = Math.round((src.sessions / totalSess) * 100);
+                      return (
+                        <div key={src.source} className="flex justify-between items-center text-xs font-semibold p-2.5 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100/50 transition-colors">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }} />
+                            <span className="text-slate-700 capitalize truncate max-w-[120px]">{src.source}</span>
+                          </div>
+                          <div className="text-slate-500 font-bold whitespace-nowrap">
+                            {src.sessions.toLocaleString()} <span className="text-[10px] text-slate-450 font-normal">({percent}%)</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {t('Biểu đồ phân bổ nguồn lưu lượng phản ánh kênh kéo khách trực tiếp từ Internet, giúp bạn nhận diện bài viết social hay SEO từ khóa mang lại hiệu suất tiếp cận thực tế cao nhất.')}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Card 3: Top Landing Pages */}
+            <div className="card p-6 flex flex-col justify-between space-y-6">
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg mb-1">{t('Trang đích phổ biến nhất (Landing Pages)')}</h3>
+                <p className="text-xs text-slate-500 mb-4">{t('Các trang nội dung thu hút được nhiều lượt truy cập trực tiếp nhất.')}</p>
+                
+                <div className="overflow-x-auto border border-slate-100 rounded-lg mt-3">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b font-semibold text-slate-600">
+                        <th className="p-3">{t('Đường dẫn')}</th>
+                        <th className="p-3 text-right">Sessions</th>
+                        <th className="p-3 text-right">Pageviews</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-500">
+                      {trafficSources?.landingPages && trafficSources.landingPages.length > 0 ? (
+                        trafficSources.landingPages.slice(0, 5).map((page, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50">
+                            <td className="p-3 font-semibold text-brand hover:underline cursor-pointer truncate max-w-[200px]">{page.path}</td>
+                            <td className="p-3 text-right">{page.sessions.toLocaleString()}</td>
+                            <td className="p-3 text-right">{page.pageviews.toLocaleString()}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={3} className="p-6 text-center">{t('Chưa có dữ liệu trang đích')}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {t('Việc theo dõi Landing Pages giúp tối ưu hóa luồng trải nghiệm khách hàng (UX/UI) và nâng cấp nội dung cho các trang có tỷ lệ bounce rate thấp nhằm tăng tỷ lệ chuyển đổi.')}
               </p>
             </div>
 
-            {/* Preview Table */}
-            <div>
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2.5">{t('Danh sách xem trước từ khóa')}</h4>
-              <div className="overflow-x-auto border border-slate-100 rounded-lg">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b font-semibold text-slate-600">
-                      <th className="p-2.5">{t('Từ khóa')}</th>
-                      <th className="p-2.5">{t('Vị trí Rank')}</th>
-                      <th className="p-2.5">{t('Volume tìm kiếm')}</th>
-                      <th className="p-2.5">{t('Kênh nguồn')}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-500">
-                    {keywords?.rows && keywords.rows.length > 0 ? (
-                      keywords.rows.slice(0, 5).map((r, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/50">
-                          <td className="p-2.5 font-medium text-slate-700">{r.keyword}</td>
-                          <td className="p-2.5">
-                            {r.position !== null ? (
-                              <span className={`px-1.5 py-0.5 rounded font-bold ${
-                                r.position <= 3 ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'
-                              }`}>
-                                #{r.position}
-                              </span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td className="p-2.5">{r.searchVolume?.toLocaleString() ?? '—'}</td>
-                          <td className="p-2.5 capitalize">{r.channel || '—'}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={4} className="p-6 text-center">{t('Chưa có dữ liệu từ khóa nào')}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+            {/* Card 4: Keywords Report */}
+            <div className="card p-6 flex flex-col justify-between space-y-6">
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-bold text-slate-800 text-lg">{t('Báo cáo từ khóa SEO (Keywords)')}</h3>
+                    <p className="text-xs text-slate-500 mt-1">{t('Quản lý thứ hạng từ khóa trên Google Search Console.')}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-gray-50 p-1 border rounded-lg">
+                    <button type="button" onClick={() => download('keywords', 'csv')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">CSV</button>
+                    <button type="button" onClick={() => download('keywords', 'xlsx')} className="text-xs font-bold px-2.5 py-1 text-slate-600 hover:bg-white rounded transition-all">Excel</button>
+                    <button type="button" onClick={() => download('keywords', 'pdf')} className="text-xs font-bold px-2.5 py-1 bg-brand text-white rounded shadow-sm transition-all">PDF</button>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-500 uppercase">{t('Tổng từ khóa theo dõi')}</span>
+                    <div className="text-2xl font-black text-slate-800 mt-1">{keywords?.rows?.length ?? 0} {t('từ khóa')}</div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-bold text-slate-500 uppercase">{t('Độ bao phủ trung bình')}</span>
+                    <div className="text-sm font-semibold text-emerald-600 mt-1">{t('Đã đồng bộ thành công')}</div>
+                  </div>
+                </div>
               </div>
+
+              {/* Preview Table */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-2.5">{t('Danh sách xem trước từ khóa')}</h4>
+                <div className="overflow-x-auto border border-slate-100 rounded-lg">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b font-semibold text-slate-600">
+                        <th className="p-2.5">{t('Từ khóa')}</th>
+                        <th className="p-2.5">{t('Vị trí Rank')}</th>
+                        <th className="p-2.5">{t('Volume tìm kiếm')}</th>
+                        <th className="p-2.5">{t('Kênh nguồn')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-500">
+                      {keywords?.rows && keywords.rows.length > 0 ? (
+                        keywords.rows.slice(0, 5).map((r, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/50">
+                            <td className="p-2.5 font-medium text-slate-700">{r.keyword}</td>
+                            <td className="p-2.5">
+                              {r.position !== null ? (
+                                <span className={`px-1.5 py-0.5 rounded font-bold ${
+                                  r.position <= 3 ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-700'
+                                }`}>
+                                  #{r.position}
+                                </span>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td className="p-2.5">{r.searchVolume?.toLocaleString() ?? '—'}</td>
+                            <td className="p-2.5 capitalize">{r.channel || '—'}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="p-6 text-center">{t('Chưa có dữ liệu từ khóa nào')}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-8 animate-[fadeIn_0.3s_ease-out]">
+          {/* Content ROI Stats cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold uppercase">LDS</div>
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase">{t('Leads từ Content')}</div>
+                <div className="text-2xl font-extrabold text-gray-900 mt-1">
+                  {contentRoi?.rows?.reduce((sum, r) => sum + r.leads, 0).toLocaleString() ?? 0} {t('khách hàng')}
+                </div>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-brand/10 text-brand flex items-center justify-center text-xs font-bold uppercase">REV</div>
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase">{t('Doanh thu ghi nhận')}</div>
+                <div className="text-2xl font-extrabold text-gray-900 mt-1">
+                  {(contentRoi?.rows?.reduce((sum, r) => sum + r.revenue, 0) ?? 0).toLocaleString()} ₫
+                </div>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-xl border border-brand/20 shadow-sm flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-violet-50 text-violet-600 flex items-center justify-center text-xs font-bold uppercase">VAL</div>
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase">{t('Giá trị truyền thông (CPC)')}</div>
+                <div className="text-2xl font-extrabold text-gray-900 mt-1">
+                  {((contentRoi?.rows?.reduce((sum, r) => sum + r.clicks, 0) ?? 0) * 15000).toLocaleString()} ₫
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Content ROI Table */}
+          <div className="card p-6">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="font-bold text-slate-800 text-lg">{t('Hiệu quả chuyển đổi Nội dung (Content ROI)')}</h3>
+                <p className="text-xs text-slate-500 mt-1">{t('Phân tích số khách hàng (Leads) và đơn hàng phát sinh từ từng bài đăng qua thẻ UTM.')}</p>
+              </div>
+            </div>
+            
+            <div className="overflow-x-auto border border-slate-100 rounded-xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b font-bold text-slate-600 uppercase text-[10px]">
+                    <th className="p-4">{t('Nội dung / Tiêu đề')}</th>
+                    <th className="p-4">{t('Kênh đăng')}</th>
+                    <th className="p-4 text-center">{t('Clicks (GA4)')}</th>
+                    <th className="p-4 text-center">{t('Leads (CRM)')}</th>
+                    <th className="p-4 text-center">{t('Đơn hàng')}</th>
+                    <th className="p-4 text-right">{t('Doanh thu')}</th>
+                    <th className="p-4 text-center">{t('Tỷ lệ chuyển đổi')}</th>
+                    <th className="p-4">{t('Đánh giá')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-500">
+                  {contentRoi?.rows && contentRoi.rows.length > 0 ? (
+                    contentRoi.rows.map((row) => (
+                      <tr key={row.id} className="hover:bg-slate-50/50">
+                        <td className="p-4">
+                          <div className="font-semibold text-slate-800 text-sm line-clamp-1 max-w-[280px]">{row.title}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">Campaign ID: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-[9px]">post-{row.id}</code></div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-wrap gap-1">
+                            {row.platforms.split(',').map((p) => {
+                              const platform = p.trim().toLowerCase();
+                              return (
+                                <span key={platform} className={`px-1.5 py-0.5 rounded font-bold uppercase text-[9px] ${
+                                  platform === 'wordpress' ? 'bg-blue-100 text-blue-800' :
+                                  platform === 'facebook' ? 'bg-indigo-100 text-indigo-800' :
+                                  'bg-slate-100 text-slate-800'
+                                }`}>
+                                  {platform}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </td>
+                        <td className="p-4 text-center font-bold text-slate-700">{row.clicks.toLocaleString()}</td>
+                        <td className="p-4 text-center font-bold text-emerald-600">{row.leads.toLocaleString()}</td>
+                        <td className="p-4 text-center font-semibold text-slate-600">{row.orders.toLocaleString()}</td>
+                        <td className="p-4 text-right font-black text-slate-800">{row.revenue > 0 ? `${row.revenue.toLocaleString()} ₫` : '—'}</td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="font-bold text-slate-700">{row.conversionRate}%</span>
+                            {row.conversionRate > 0 && (
+                              <div className="w-10 bg-slate-100 h-1.5 rounded-full overflow-hidden shrink-0">
+                                <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${Math.min(row.conversionRate * 4, 100)}%` }} />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          {row.revenue > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-green-100 text-green-800 uppercase ring-1 ring-green-600/10">High converting</span>
+                          ) : row.leads > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-800 uppercase ring-1 ring-blue-600/10">Active leads</span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-650 uppercase">Traffic only</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400 font-medium">{t('Chưa có dữ liệu bài viết đã xuất bản')}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>

@@ -11,14 +11,76 @@ export type GeneratedPost = {
 
 export async function generateAiPostContent(
   urlTarget: string,
-  aiPrompt?: string | null
-): Promise<{ title: string; content: string }> {
+  aiPrompt?: string | null,
+  contentType?: 'blog' | 'facebook' | 'video_script'
+): Promise<{
+  title: string;
+  content: string;
+  slug?: string;
+  metaDescription?: string;
+  variations?: { short: string; curious: string; cta: string };
+  script?: { hook: string; body: string; cta: string };
+}> {
   const ai = getAiConfig('/chat/completions');
   if (!ai.apiKey) {
     throw new Error('Chưa cấu hình OPENAI_API_KEY trong file .env');
   }
 
-  const systemInstructions = `Bạn là chuyên gia marketing chuyên viết bài quảng cáo mạng xã hội (Facebook, Zalo) bằng tiếng Việt với mục tiêu tối ưu tỷ lệ nhấp chuột (CTR).
+  let systemInstructions = '';
+  if (contentType === 'blog') {
+    systemInstructions = `Bạn là chuyên gia SEO Copywriter chuyên nghiệp viết bài bằng tiếng Việt.
+Nhiệm vụ của bạn là phân tích URL đích và định hướng/chủ đề từ người dùng để tạo ra một bài Blog chuẩn SEO thu hút độc giả.
+
+Quy tắc viết bài:
+1. Tiêu đề (title): Dưới 60 ký tự, hấp dẫn, chứa từ khóa chính.
+2. Slug (slug): Thân thiện SEO, không dấu, viết thường, ngăn cách bằng dấu gạch ngang (ví dụ: tieu-de-viet-nam).
+3. Meta Description (metaDescription): Khoảng 120-160 ký tự, tóm tắt bài viết hấp dẫn, chứa từ khóa chính.
+4. Nội dung bài viết (content): Định dạng Markdown chuẩn hóa (TUYỆT ĐỐI không sử dụng các thẻ HTML như <h2>, <p>, <strong>, <a>, <ul>, <li>, v.v.). Sử dụng các ký tự Markdown chuẩn: '##' hoặc '###' cho tiêu đề phụ, các đoạn văn ngăn cách bằng dòng trống, '**chữ đậm**' cho in đậm, và dấu gạch đầu dòng '- ' cho danh sách. Bài viết phải có độ dài tốt (tối thiểu 500 từ), có giá trị thực tế cao, lập luận sắc bén và kết cấu tự nhiên. BẮT BUỘC chèn placeholder '{url}' ở vị trí thích hợp nhất.
+
+BẮT BUỘC: Trả về DUY NHẤT một đối tượng JSON hợp lệ (KHÔNG có bất kỳ text nào khác trước hoặc sau), với đúng các thuộc tính:
+{"title": "tiêu đề bài viết", "slug": "slug-than-thien", "metaDescription": "mô tả bài viết", "content": "nội dung Markdown bài viết"}`;
+  } else if (contentType === 'facebook') {
+    systemInstructions = `Bạn là chuyên gia Social Media Marketing viết bài quảng cáo tiếng Việt trên Facebook tối ưu CTR.
+Nhiệm vụ của bạn là phân tích URL đích và yêu cầu từ người dùng để tạo ra 3 biến thể caption khác nhau nhằm mục đích thử nghiệm và lựa chọn.
+
+Yêu cầu 3 biến thể caption:
+1. Biến thể Ngắn gọn (short): Tối giản, tập trung thẳng vào lợi ích cốt lõi hoặc ưu đãi, cực kỳ súc tích.
+2. Biến thể Gây tò mò (curious): Sử dụng câu hỏi gợi mở, hé lộ một phần thông tin hấp dẫn để kích thích tính tò mò của độc giả.
+3. Biến thể Thôi thúc hành động (cta): Tập trung tối đa vào lời kêu gọi hành động (CTA), giới hạn thời gian (Scarcity) hoặc cam kết mạnh mẽ để thúc đẩy click.
+
+Cả 3 biến thể đều phải có emoji phù hợp, chèn placeholder '{url}' tự nhiên và có 3-5 hashtag ở cuối.
+
+BẮT BUỘC: Trả về DUY NHẤT một đối tượng JSON hợp lệ (KHÔNG có bất kỳ text nào khác trước hoặc sau), với đúng các thuộc tính:
+{
+  "title": "tiêu đề chung bài viết",
+  "content": "nội dung biến thể ngắn gọn",
+  "variations": {
+    "short": "nội dung biến thể ngắn gọn",
+    "curious": "nội dung biến thể gây tò mò",
+    "cta": "nội dung biến thể cta"
+  }
+}`;
+  } else if (contentType === 'video_script') {
+    systemInstructions = `Bạn là chuyên gia biên kịch video ngắn (TikTok, Reels, Shorts) chuyên nghiệp.
+Nhiệm vụ của bạn là thiết kế một kịch bản video ngắn lôi cuốn từ giây đầu tiên bằng tiếng Việt để giới thiệu/quảng bá sản phẩm liên quan đến URL đích.
+
+Khung kịch bản bắt buộc:
+1. Hook (giây 1-3): Một câu mở đầu gây sốc, đánh thẳng vào nỗi đau hoặc khơi gợi sự tò mò tột độ để giữ chân người xem không lướt qua.
+2. Body (giây 4-50): Trình bày ngắn gọn giải pháp, 2-3 điểm mấu chốt một cách trực quan, nhịp độ nhanh.
+3. CTA (giây 51-60): Lời kêu gọi hành động rõ ràng (đăng ký, mua hàng, click link). Bắt buộc lồng ghép placeholder '{url}' một cách tự nhiên.
+
+BẮT BUỘC: Trả về DUY NHẤT một đối tượng JSON hợp lệ (KHÔNG có bất kỳ text nào khác trước hoặc sau), với đúng các thuộc tính:
+{
+  "title": "tiêu đề kịch bản video",
+  "content": "kịch bản đầy đủ định dạng text",
+  "script": {
+    "hook": "câu mở đầu (3 giây đầu)",
+    "body": "nội dung chính chi tiết",
+    "cta": "lời kêu gọi hành động ở cuối"
+  }
+}`;
+  } else {
+    systemInstructions = `Bạn là chuyên gia marketing chuyên viết bài quảng cáo mạng xã hội (Facebook, Zalo) bằng tiếng Việt với mục tiêu tối ưu tỷ lệ nhấp chuột (CTR).
 Nhiệm vụ của bạn là phân tích URL đích và định hướng/chủ đề từ người dùng (nếu có) để tạo ra tiêu đề và nội dung bài viết lôi cuốn theo công thức AIDA (Attention - Gây chú ý, Interest - Tạo hứng thú, Desire - Khơi gợi khao khát, Action - Kêu gọi hành động).
 
 Quy tắc viết bài:
@@ -32,6 +94,7 @@ Quy tắc viết bài:
 3. BẮT BUỘC: Chỉ trả về DUY NHẤT một đối tượng JSON hợp lệ (KHÔNG có bất kỳ text nào khác trước hoặc sau), với đúng 2 thuộc tính:
    {"title": "tiêu đề bài viết", "content": "nội dung bài viết"}
 4. TUYỆT ĐỐI KHÔNG viết lời giải thích, lời dẫn, markdown, hay bất kỳ ký tự nào ngoài đối tượng JSON.`;
+  }
 
   let urlMetadataText = '';
   try {
@@ -44,7 +107,6 @@ Quy tắc viết bài:
       const html = await fetchRes.text();
       const pageTitle = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
       
-      // Match description or og:description
       const metaDesc = html.match(
         /<meta[^>]+(?:name|property)=["'](?:description|og:description)["'][^>]+content=["']([^"']*)["']/i
       )?.[1]?.trim() || html.match(
@@ -92,7 +154,17 @@ ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy 
     };
     const contentText = data.choices?.[0]?.message?.content?.trim() || '';
 
-    // === CHIẾN LƯỢC PARSE ĐA TẦNG (Multi-strategy parsing) ===
+    if (contentType) {
+      try {
+        const parsed = parseAiJson(contentText);
+        if (!parsed.title) parsed.title = 'Bài viết tự động';
+        if (!parsed.content) parsed.content = 'Khám phá ngay tại {url}';
+        return parsed;
+      } catch (parseErr) {
+        console.warn('Failed to parse specific contentType JSON, falling back to legacy extractor:', parseErr);
+      }
+    }
+
     return extractTitleContent(contentText);
   } catch (err: any) {
     console.error('Lỗi khi gọi AI:', err);
@@ -660,6 +732,115 @@ Giọng điệu: ${tone}`;
     }
   } catch (err) {
     console.error('Lỗi gọi OpenAI cho Copilot Plan:', err);
+    throw err;
+  }
+}
+
+export async function optimizeSeoContent(
+  title: string,
+  slug: string,
+  metaDescription: string,
+  content: string,
+  focusKeyword: string
+): Promise<{
+  title: string;
+  slug: string;
+  metaDescription: string;
+  content: string;
+}> {
+  const ai = getAiConfig('/chat/completions');
+  if (!ai.apiKey) {
+    const cleanKw = focusKeyword.trim();
+    const updatedTitle = title.toLowerCase().includes(cleanKw.toLowerCase())
+      ? title
+      : `Cách tối ưu ${cleanKw} hiệu quả: ${title}`;
+    const cleanSlug = updatedTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
+    const updatedMeta = metaDescription.toLowerCase().includes(cleanKw.toLowerCase())
+      ? metaDescription
+      : `Hướng dẫn ${cleanKw}. ${metaDescription}`;
+    
+    let updatedContent = content;
+    if (!content.toLowerCase().includes(cleanKw.toLowerCase())) {
+      updatedContent = `## Khái niệm về ${cleanKw} trong thực tế\n\nKhi tối ưu hóa **${cleanKw}**, chúng ta cần chú ý đến nhiều yếu tố.\n\n${content}`;
+    }
+    
+    return {
+      title: updatedTitle,
+      slug: cleanSlug,
+      metaDescription: updatedMeta.substring(0, 160),
+      content: updatedContent
+    };
+  }
+
+  const systemInstructions = `Bạn là chuyên gia tối ưu hóa SEO Copywriting chuyên nghiệp bằng tiếng Việt.
+Nhiệm vụ của bạn là tối ưu hóa tiêu đề, mô tả, slug và nội dung của một bài viết hiện có để đạt điểm SEO cao nhất dựa trên "Từ khóa chính" (Focus Keyword) được cung cấp.
+
+Hãy thực hiện các tối ưu hóa bắt buộc sau:
+1. Tiêu đề (title): Độ dài từ 10 đến 60 ký tự, hấp dẫn, BẮT BUỘC chứa từ khóa chính.
+2. Đường dẫn (slug): Slug thân thiện SEO, không dấu, viết thường, ngăn cách bằng dấu gạch ngang (ví dụ: dac-san-tom-ca).
+3. Meta Description (metaDescription): Độ dài từ 50 đến 160 ký tự, tóm tắt bài viết lôi cuốn, BẮT BUỘC chứa từ khóa chính.
+4. Nội dung bài viết (content):
+   - Định dạng Markdown chuẩn hóa (TUYỆT ĐỐI KHÔNG dùng các thẻ HTML như <h2>, <p>, <strong>, <a>, <ul>, <li>, v.v.).
+   - Phân chia bố cục rõ ràng bằng các tiêu đề phụ bắt đầu bằng "## " hoặc "### ". Đảm bảo từ khóa chính xuất hiện trong ít nhất một tiêu đề phụ.
+   - Chèn từ khóa chính vào nội dung một cách tự nhiên với mật độ khoảng 1% đến 2.5% tổng số từ (in đậm từ khóa chính dạng **từ khóa chính** khi xuất hiện lần đầu hoặc lần quan trọng).
+   - Đảm bảo bài viết có độ dài tốt (tối thiểu 300-500 từ). Nếu bài viết hiện tại quá ngắn, hãy viết thêm 1-2 đoạn văn chất lượng cao, sâu sắc về chủ đề này để bổ sung.
+   - Giữ nguyên các thông tin thực tế, cấu trúc cốt lõi và placeholders như '{url}' ở các vị trí tự nhiên nhất.
+
+BẮT BUỘC: Trả về DUY NHẤT một đối tượng JSON hợp lệ (KHÔNG có bất kỳ text nào khác trước hoặc sau), với đúng các thuộc tính:
+{"title": "tiêu đề tối ưu", "slug": "slug-toi-uu", "metaDescription": "mô tả tối ưu", "content": "nội dung Markdown tối ưu"}`;
+
+  const userPrompt = `Từ khóa chính (Focus Keyword): ${focusKeyword}
+
+Thông tin bài viết hiện tại:
+- Tiêu đề hiện tại: ${title}
+- Slug hiện tại: ${slug}
+- Mô tả hiện tại: ${metaDescription}
+- Nội dung hiện tại:
+${content}`;
+
+  try {
+    const res = await fetchWithRetry(ai.url, {
+      method: 'POST',
+      headers: ai.headers,
+      body: JSON.stringify({
+        model: ai.model,
+        messages: [
+          { role: 'system', content: systemInstructions },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 4000,
+      }),
+      signal: AbortSignal.timeout(90000),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OpenAI API returned status ${res.status}: ${errText}`);
+    }
+
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const contentText = data.choices?.[0]?.message?.content?.trim() || '';
+
+    try {
+      const parsed = parseAiJson(contentText);
+      if (!parsed.title) parsed.title = title;
+      if (!parsed.content) parsed.content = content;
+      if (!parsed.slug) parsed.slug = slug;
+      if (!parsed.metaDescription) parsed.metaDescription = metaDescription;
+      return parsed;
+    } catch {
+      console.warn('Failed to parse AI optimized JSON, falling back to legacy extractor:', contentText);
+      throw new Error('AI không trả về đúng định dạng JSON tối ưu.');
+    }
+  } catch (err) {
+    console.error('Lỗi gọi OpenAI để tối ưu bài viết:', err);
     throw err;
   }
 }

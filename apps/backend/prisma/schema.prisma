@@ -259,6 +259,8 @@ model ContentSchedule {
   overlayWatermark String?
   overlayPosition  String?    @default("bottom-right")
   overlayFontSize  Int?       @default(32)
+  assignedUserId  Int?
+  utmTagEnabled   Boolean    @default(false)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 }
@@ -346,6 +348,8 @@ model Customer {
   lastAiCareSentAt DateTime?
   workspaceId   Int?
   workspace     Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  trafficSource String?
+  utmCampaign   String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
   notes         CustomerNote[]
@@ -444,6 +448,7 @@ model BlogPost {
   publishedAt  DateTime?
   authorName   String     @default("Admin")
   tags         String?
+  targetKeyword String?
   workspaceId  Int?
   workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt    DateTime   @default(now())
@@ -469,6 +474,7 @@ model LandingPage {
   forms        CustomForm[]
   abTestsA     AbTest[]         @relation("LpVariantA")
   abTestsB     AbTest[]         @relation("LpVariantB")
+  targetKeyword String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 

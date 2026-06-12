@@ -134,6 +134,8 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
       overlayPosition,
       overlayFontSize,
       autopilot,
+      assignedUserId,
+      utmTagEnabled,
     } = body;
 
     if (!title?.trim() || !content?.trim() || !platforms || (!scheduledAt && !autopilot)) {
@@ -260,6 +262,8 @@ async function createSchedule(req: AuthRequest, res: Response): Promise<void> {
         overlayWatermark: overlayWatermark ? String(overlayWatermark).trim() : null,
         overlayPosition: overlayPosition ? String(overlayPosition).trim() : 'bottom-right',
         overlayFontSize: overlayFontSize ? parseInt(String(overlayFontSize), 10) : 32,
+        assignedUserId: assignedUserId ? parseInt(String(assignedUserId), 10) : null,
+        utmTagEnabled: !!utmTagEnabled,
         status: body.status === 'DRAFT' ? 'DRAFT' : 'PENDING',
         workspaceId: req.workspaceId,
       },
@@ -381,6 +385,12 @@ router.patch('/:id', requireWrite, async (req: AuthRequest, res: Response): Prom
   if (body.overlayPosition !== undefined) data.overlayPosition = body.overlayPosition ? String(body.overlayPosition).trim() : 'bottom-right';
   if (body.overlayFontSize !== undefined) {
     data.overlayFontSize = body.overlayFontSize ? parseInt(String(body.overlayFontSize), 10) : 32;
+  }
+  if (body.assignedUserId !== undefined) {
+    data.assignedUserId = body.assignedUserId ? parseInt(String(body.assignedUserId), 10) : null;
+  }
+  if (body.utmTagEnabled !== undefined) {
+    data.utmTagEnabled = !!body.utmTagEnabled;
   }
   if (body.scheduledAt != null) {
     const scheduledDate = new Date(body.scheduledAt);

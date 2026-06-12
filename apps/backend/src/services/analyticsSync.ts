@@ -20,6 +20,7 @@ export async function syncAnalyticsData(workspaceId?: number): Promise<{ success
     let usersTotal = 0;
 
     if (ga4) {
+      // 1. Sync daily summary
       const [response] = await ga4.runReport({
         property: `properties/${propertyId}`,
         dateRanges: [{ startDate: '30daysAgo', endDate: 'today' }],
@@ -85,6 +86,145 @@ export async function syncAnalyticsData(workspaceId?: number): Promise<{ success
           });
         }
       }
+
+      // 2. Sync Traffic Sources
+      try {
+        const [sourcesRes] = await ga4.runReport({
+          property: `properties/${propertyId}`,
+          dateRanges: [{ startDate: '29daysAgo', endDate: 'today' }],
+          dimensions: [{ name: 'date' }, { name: 'sessionSource' }, { name: 'sessionMedium' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'activeUsers' },
+            { name: 'screenPageViews' },
+          ],
+        });
+
+        if (sourcesRes.rows) {
+          for (const r of sourcesRes.rows) {
+            const dateStr = r.dimensionValues?.[0]?.value || '';
+            const iso = dateStr.length === 8 ? `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}` : dateStr;
+            const date = new Date(iso);
+            const source = r.dimensionValues?.[1]?.value || '(direct)';
+            const medium = r.dimensionValues?.[2]?.value || '(none)';
+            const channelType = `source:${source} / ${medium}`;
+
+            await prisma.analyticsSnapshot.upsert({
+              where: {
+                date_channelType_workspaceId: { date, channelType, workspaceId: (workspaceId || null) as any },
+              },
+              create: {
+                date,
+                channelType,
+                sessions: parseInt(r.metricValues?.[0]?.value || '0'),
+                users: parseInt(r.metricValues?.[1]?.value || '0'),
+                pageviews: parseInt(r.metricValues?.[2]?.value || '0'),
+                workspaceId,
+              },
+              update: {
+                sessions: parseInt(r.metricValues?.[0]?.value || '0'),
+                users: parseInt(r.metricValues?.[1]?.value || '0'),
+                pageviews: parseInt(r.metricValues?.[2]?.value || '0'),
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi đồng bộ nguồn truy cập GA4:', err);
+      }
+
+      // 3. Sync Top Landing Pages
+      try {
+        const [landingRes] = await ga4.runReport({
+          property: `properties/${propertyId}`,
+          dateRanges: [{ startDate: '29daysAgo', endDate: 'today' }],
+          dimensions: [{ name: 'date' }, { name: 'landingPage' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'activeUsers' },
+            { name: 'screenPageViews' },
+          ],
+        });
+
+        if (landingRes.rows) {
+          for (const r of landingRes.rows) {
+            const dateStr = r.dimensionValues?.[0]?.value || '';
+            const iso = dateStr.length === 8 ? `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}` : dateStr;
+            const date = new Date(iso);
+            const landingPage = r.dimensionValues?.[1]?.value || '/';
+            const channelType = `landing:${landingPage}`;
+
+            await prisma.analyticsSnapshot.upsert({
+              where: {
+                date_channelType_workspaceId: { date, channelType, workspaceId: (workspaceId || null) as any },
+              },
+              create: {
+                date,
+                channelType,
+                sessions: parseInt(r.metricValues?.[0]?.value || '0'),
+                users: parseInt(r.metricValues?.[1]?.value || '0'),
+                pageviews: parseInt(r.metricValues?.[2]?.value || '0'),
+                workspaceId,
+              },
+              update: {
+                sessions: parseInt(r.metricValues?.[0]?.value || '0'),
+                users: parseInt(r.metricValues?.[1]?.value || '0'),
+                pageviews: parseInt(r.metricValues?.[2]?.value || '0'),
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi đồng bộ Landing Pages GA4:', err);
+      }
+
+      // 4. Sync Campaign Clicks
+      try {
+        const [campaignRes] = await ga4.runReport({
+          property: `properties/${propertyId}`,
+          dateRanges: [{ startDate: '29daysAgo', endDate: 'today' }],
+          dimensions: [{ name: 'date' }, { name: 'sessionCampaign' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'activeUsers' },
+            { name: 'screenPageViews' },
+          ],
+        });
+
+        if (campaignRes.rows) {
+          for (const r of campaignRes.rows) {
+            const dateStr = r.dimensionValues?.[0]?.value || '';
+            const iso = dateStr.length === 8 ? `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}` : dateStr;
+            const date = new Date(iso);
+            const campaign = r.dimensionValues?.[1]?.value || '';
+            if (!campaign || campaign === '(organic)' || campaign === '(referral)' || campaign === '(direct)') continue;
+            const channelType = `campaign:${campaign}`;
+
+            await prisma.analyticsSnapshot.upsert({
+              where: {
+                date_channelType_workspaceId: { date, channelType, workspaceId: (workspaceId || null) as any },
+              },
+              create: {
+                date,
+                channelType,
+                sessions: parseInt(r.metricValues?.[0]?.value || '0'),
+                users: parseInt(r.metricValues?.[1]?.value || '0'),
+                pageviews: parseInt(r.metricValues?.[2]?.value || '0'),
+                workspaceId,
+              },
+              update: {
+                sessions: parseInt(r.metricValues?.[0]?.value || '0'),
+                users: parseInt(r.metricValues?.[1]?.value || '0'),
+                pageviews: parseInt(r.metricValues?.[2]?.value || '0'),
+              },
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi đồng bộ Chiến dịch UTM GA4:', err);
+      }
+    } else {
+      return { success: false, message: 'Chưa kết nối tài khoản Google Analytics' };
     }
 
     if (integration) {
@@ -185,6 +325,29 @@ export async function getDashboardFromSnapshots(days = 7, channelType?: string, 
     where: { platform: 'facebook', status: 'CONNECTED', workspaceId },
   });
 
+  // Calculate dynamic growth rate
+  const prevSince = new Date();
+  prevSince.setDate(prevSince.getDate() - (days * 2));
+
+  const previousSnapshots = await prisma.analyticsSnapshot.findMany({
+    where: {
+      date: { gte: prevSince, lt: since },
+      channelType: 'all',
+      workspaceId,
+    }
+  });
+
+  const currentSessions = snapshots.reduce((s, r) => s + r.sessions, 0);
+  const previousSessions = previousSnapshots.reduce((s, r) => s + r.sessions, 0);
+
+  let growthStr = '+0.0%';
+  if (previousSessions > 0) {
+    const change = ((currentSessions - previousSessions) / previousSessions) * 100;
+    growthStr = (change >= 0 ? '+' : '') + change.toFixed(1) + '%';
+  } else if (currentSessions > 0) {
+    growthStr = '+100.0%';
+  }
+
   const latest = snapshots[snapshots.length - 1];
   const totalTraffic = snapshots.reduce((s, r) => s + r.sessions, 0);
   const organicSearch = snapshots.reduce((s, r) => s + r.clicks, 0);
@@ -202,7 +365,7 @@ export async function getDashboardFromSnapshots(days = 7, channelType?: string, 
       organicSearch: organicSearch || 0,
       activeChannels,
       totalKeywords,
-      growth: integration?.syncStatus === 'CONNECTED' ? '+5.4%' : '+0%',
+      growth: growthStr,
       ga4Connected: integration?.syncStatus === 'CONNECTED',
       gscConnected: !!integration?.gscSiteUrl || !!getGscSiteUrl(),
       facebookConnected: !!fbConn,

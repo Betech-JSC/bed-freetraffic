@@ -101,7 +101,7 @@ export default function AlertsPage() {
     <div className="space-y-8">
       <PageHeader
         title={t('Cảnh báo')}
-        description={t('FR-11 — Ngưỡng traffic/organic, giảm đột ngột, lỗi SEO audit. Mỗi rule tối đa 1 alert / 24h.')}
+        description={t('Ngưỡng traffic/organic, giảm đột ngột, lỗi SEO audit. Mỗi rule tối đa 1 alert / 24h.')}
       />
       {error && <p className="alert-error text-sm">{error}</p>}
       <form onSubmit={submit} className="card p-6 grid md:grid-cols-3 gap-3">

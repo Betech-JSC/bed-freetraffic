@@ -65,6 +65,38 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   }
 });
 
+router.get('/export/csv', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const customers = await prisma.customer.findMany({
+      where: { workspaceId: req.workspaceId },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    let csv = 'ID,Họ tên,Email,Số điện thoại,Công ty,Trạng thái,Nguồn traffic,Chiến dịch UTM,Thời gian tạo\n';
+    for (const c of customers) {
+      const formattedDate = c.createdAt.toISOString();
+      csv += `"${c.id}","${(c.name || '').replace(/"/g, '""')}","${(c.email || '').replace(/"/g, '""')}","${(c.phone || '').replace(/"/g, '""')}","${(c.company || '').replace(/"/g, '""')}","${c.status}","${(c.trafficSource || '').replace(/"/g, '""')}","${(c.utmCampaign || '').replace(/"/g, '""')}","${formattedDate}"\n`;
+    }
+
+    // Ghi audit log
+    await logActivity({
+      userId: req.user!.userId,
+      workspaceId: req.workspaceId!,
+      action: 'EXPORT_CRM',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+      details: { count: customers.length }
+    });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="customers.csv"');
+    res.send('\uFEFF' + csv);
+  } catch (error: any) {
+    console.error('[GET /customers/export/csv]', error);
+    res.status(500).json({ error: error.message || 'Lỗi xuất file' });
+  }
+});
+
 router.get('/meta/statuses', (_req: AuthRequest, res: Response): void => {
   res.json(STATUSES);
 });

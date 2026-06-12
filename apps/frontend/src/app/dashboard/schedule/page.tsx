@@ -29,6 +29,8 @@ type Schedule = {
   overlayWatermark?: string | null;
   overlayPosition?: string | null;
   overlayFontSize?: number | null;
+  assignedUserId?: number | null;
+  utmTagEnabled?: boolean;
 };
 
 type AbTestOption = { id: number; name: string };
@@ -41,6 +43,7 @@ const PLATFORM_OPTIONS = [
   { id: 'zalo', label: 'Zalo OA', desc: 'Đăng bài Official Account' },
   { id: 'youtube', label: 'YouTube', desc: 'Hướng dẫn mô tả / đăng tay (FT-CHAN-06)' },
   { id: 'community', label: 'Forum / Community', desc: 'Hướng dẫn đăng tay (FT-CHAN-07)' },
+  { id: 'wordpress', label: 'WordPress', desc: 'Đăng bài viết lên Blog WordPress' },
 ] as const;
 
 function parseChannelResults(raw: string | null | undefined): ChannelResult[] {
@@ -59,6 +62,7 @@ function statusBadge(status: string): string {
   if (status === 'FAILED') return 'text-red-600 font-semibold';
   if (status === 'SENDING') return 'badge-brand';
   if (status === 'PENDING') return 'badge-neutral';
+  if (status === 'DRAFT') return 'badge bg-purple-100 text-purple-800 border border-purple-200';
   return 'badge';
 }
 
@@ -84,7 +88,11 @@ export default function ScheduleBotPage() {
   const [overlayWatermark, setOverlayWatermark] = useState('');
   const [overlayPosition, setOverlayPosition] = useState('bottom-right');
   const [overlayFontSize, setOverlayFontSize] = useState('32');
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'week' | 'kanban'>('list');
+  const [filterPlatform, setFilterPlatform] = useState('all');
+  const [workspaceUsers, setWorkspaceUsers] = useState<any[]>([]);
+  const [assignedUserId, setAssignedUserId] = useState('');
+  const [utmTagEnabled, setUtmTagEnabled] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sendingId, setSendingId] = useState<number | null>(null);
@@ -129,6 +137,7 @@ export default function ScheduleBotPage() {
       PUBLISHED: t('Đã gửi'),
       PARTIAL: t('Một phần'),
       FAILED: t('Lỗi'),
+      DRAFT: t('Nháp / Ý tưởng'),
     };
     return map[status] || status;
   };
@@ -152,16 +161,20 @@ export default function ScheduleBotPage() {
 
   const load = async () => {
     try {
-      const [list, ch, testsData, templatesData] = await Promise.all([
+      const [list, ch, testsData, templatesData, currentWs] = await Promise.all([
         apiJson<Schedule[]>('/schedules'),
         apiJson<ChannelStatus>('/schedules/channels-status'),
         apiJson<AbTestOption[]>('/abtests/running').catch(() => []),
         apiJson<any[]>('/templates').catch(() => []),
+        apiJson<any>('/workspaces/current').catch(() => null),
       ]);
       setItems(list);
       setChannels(ch);
       setAbTests(testsData);
       setTemplates(templatesData);
+      if (currentWs && currentWs.members) {
+        setWorkspaceUsers(currentWs.members);
+      }
       setError('');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : t('Không tải được dữ liệu'));
@@ -197,10 +210,12 @@ export default function ScheduleBotPage() {
     setOverlayWatermark('');
     setOverlayPosition('bottom-right');
     setOverlayFontSize('32');
+    setAssignedUserId('');
+    setUtmTagEnabled(false);
   };
 
   const startEdit = (item: Schedule) => {
-    if (!['PENDING', 'FAILED'].includes(item.status)) return;
+    if (!['PENDING', 'FAILED', 'DRAFT'].includes(item.status)) return;
     setEditingId(item.id);
     setTitle(item.title);
     setContent(item.content);
@@ -226,6 +241,8 @@ export default function ScheduleBotPage() {
     setOverlayWatermark(item.overlayWatermark || '');
     setOverlayPosition(item.overlayPosition || 'bottom-right');
     setOverlayFontSize(item.overlayFontSize ? String(item.overlayFontSize) : '32');
+    setAssignedUserId(item.assignedUserId ? String(item.assignedUserId) : '');
+    setUtmTagEnabled(!!item.utmTagEnabled);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -255,7 +272,11 @@ export default function ScheduleBotPage() {
       return;
     }
 
-    const disconnected = platforms.filter((p) => channels && !channels[p]?.connected);
+    const disconnected = platforms.filter((p) => {
+      // Manual/third-party channels (youtube, community, wordpress) are always allowed to schedule
+      const alwaysAllow = p === 'youtube' || p === 'community' || p === 'wordpress';
+      return !alwaysAllow && channels && !channels[p]?.connected;
+    });
     if (disconnected.length > 0) {
       setError(`${t('Chưa kết nối:')} ${disconnected.join(', ')} — ${t('vào Cài đặt trước khi hẹn giờ.')}`);
       return;
@@ -280,6 +301,8 @@ export default function ScheduleBotPage() {
         overlayWatermark: overlayWatermark.trim() || undefined,
         overlayPosition: overlayPosition || undefined,
         overlayFontSize: overlayFontSize ? parseInt(overlayFontSize, 10) : undefined,
+        assignedUserId: assignedUserId ? parseInt(assignedUserId, 10) : null,
+        utmTagEnabled,
       };
 
       if (!imageFile && imagePreview) {
@@ -319,6 +342,8 @@ export default function ScheduleBotPage() {
         if (payload.overlayWatermark) fd.append('overlayWatermark', payload.overlayWatermark);
         if (payload.overlayPosition) fd.append('overlayPosition', payload.overlayPosition);
         if (payload.overlayFontSize) fd.append('overlayFontSize', String(payload.overlayFontSize));
+        if (payload.assignedUserId) fd.append('assignedUserId', String(payload.assignedUserId));
+        fd.append('utmTagEnabled', payload.utmTagEnabled ? 'true' : 'false');
         fd.append('image', imageFile);
 
         const res = await apiFetch('/schedules', { method: 'POST', body: fd });
@@ -398,11 +423,16 @@ export default function ScheduleBotPage() {
     }
   };
 
+  const filteredItems = items.filter((item) => {
+    if (filterPlatform === 'all') return true;
+    return item.platforms.toLowerCase().includes(filterPlatform.toLowerCase());
+  });
+
   return (
     <div className="page-container">
       <PageHeader
         title={t('Bot hẹn giờ')}
-        description={t('FR-02 — Hẹn giờ, lặp ngày/tuần, gắn A/B test khi publish (tự chọn biến thể + track click).')}
+        description={t('Hẹn giờ, lặp ngày/tuần, gắn A/B test khi publish (tự chọn biến thể + track click).')}
         actions={
           <Link href="/dashboard/automation" className="btn-secondary text-sm">
             {t('→ Bot Automation')}
@@ -410,28 +440,24 @@ export default function ScheduleBotPage() {
         }
       />
 
-      <div className="alert-info text-sm">
-        <strong>Deploy:</strong> {t('User tắt máy vẫn gửi được khi backend chạy trên server 24/7. Local chỉ gửi khi')}{' '}
-        <code className="text-xs bg-white/60 px-1 rounded">npm run dev</code> {t('đang bật.')}
-      </div>
-
       {channels && (
         <div className="flex flex-wrap gap-2">
           {PLATFORM_OPTIONS.map((p) => {
             const c = channels[p.id];
-            const isManual = p.id === 'youtube' || p.id === 'community';
+            const isManual = p.id === 'youtube' || p.id === 'community' || p.id === 'wordpress';
+            const connected = isManual ? true : c?.connected;
             return (
               <span
                 key={p.id}
                 className={`text-xs font-medium px-2.5 py-1 rounded-full ${
                   isManual
-                    ? 'bg-blue-50 text-blue-700'
-                    : c?.connected
+                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                    : connected
                       ? 'bg-emerald-50 text-emerald-700'
                       : 'bg-slate-100 text-slate-500'
                 }`}
               >
-                {t(p.label)}: {isManual ? t('Đăng tay') : c?.connected ? t('Đã kết nối') : t('Chưa kết nối')}
+                {t(p.label)}: {isManual ? t('Đăng tự động/Đăng tay') : connected ? t('Đã kết nối') : t('Chưa kết nối')}
               </span>
             );
           })}
@@ -470,7 +496,7 @@ export default function ScheduleBotPage() {
                       }
                       setSuccess(t('Đã import bài viết mẫu thành công.'));
                     }
-                    e.target.value = ""; // Reset
+                    e.target.value = ''; // Reset
                   }}
                 >
                   <option value="">-- {t('Chọn bài viết mẫu')} --</option>
@@ -504,6 +530,39 @@ export default function ScheduleBotPage() {
             onChange={(e) => setUrlTarget(e.target.value)}
             placeholder={t('URL đích (tùy chọn)')}
           />
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">
+                {t('Người phụ trách')}
+              </label>
+              <select
+                className="input w-full text-sm bg-white"
+                value={assignedUserId}
+                onChange={(e) => setAssignedUserId(e.target.value)}
+              >
+                <option value="">-- {t('Chọn thành viên')} --</option>
+                {workspaceUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email} ({u.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 pt-6">
+              <input
+                type="checkbox"
+                id="utmTagEnabled"
+                checked={utmTagEnabled}
+                onChange={(e) => setUtmTagEnabled(e.target.checked)}
+                className="w-4 h-4 accent-brand border-slate-300 rounded cursor-pointer"
+              />
+              <label htmlFor="utmTagEnabled" className="text-xs text-slate-600 font-semibold cursor-pointer select-none">
+                {t('Tự động gắn mã theo dõi UTM Link (utm_source, utm_medium, utm_campaign)')}
+              </label>
+            </div>
+          </div>
         </section>
 
         <section className="space-y-4">
@@ -537,7 +596,7 @@ export default function ScheduleBotPage() {
               <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                 ✨ {t('Cấu hình đóng dấu ảnh (Watermark / Text Overlay)')}
               </h4>
-              
+
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1">
@@ -726,7 +785,7 @@ export default function ScheduleBotPage() {
             ))}
           </select>
           <p className="text-xs text-slate-500">
-            {t('Khi gửi: chọn ngẫu nhiên mẫu A hoặc B, ghi impression; link đích được bọc track click (FR-08).')}
+            {t('Khi gửi: chọn ngẫu nhiên mẫu A hoặc B, ghi impression; link đích được bọc track click.')}
           </p>
           {abTests.length === 0 && (
             <Link href="/dashboard/abtests" className="text-xs text-brand font-semibold">
@@ -741,7 +800,8 @@ export default function ScheduleBotPage() {
             {PLATFORM_OPTIONS.map((p) => {
               const on = platforms.includes(p.id);
               const connected = channels?.[p.id]?.connected;
-              const isManual = p.id === 'youtube' || p.id === 'community';
+              const isManual = p.id === 'youtube' || p.id === 'community' || p.id === 'wordpress';
+              const isOk = isManual ? true : connected;
               return (
                 <button
                   key={p.id}
@@ -754,7 +814,7 @@ export default function ScheduleBotPage() {
                   <span className={`text-sm font-bold ${on ? 'text-brand' : 'text-slate-800'}`}>{t(p.label)}</span>
                   <p className="text-xs text-slate-500 mt-1">{t(p.desc)}</p>
                   {isManual ? (
-                    <p className="text-xs text-blue-600 mt-1">{t('Đăng tay')}</p>
+                    <p className="text-xs text-blue-600 mt-1">{t('Đăng tự động/Đăng tay')}</p>
                   ) : !connected ? (
                     <p className="text-xs text-amber-600 mt-1">{t('Chưa kết nối')}</p>
                   ) : (
@@ -800,37 +860,91 @@ export default function ScheduleBotPage() {
         </div>
       </form>
 
-      {/* Mode Switch Tabs */}
-      <div className="flex gap-2 border-b border-slate-200 pb-3 mb-6">
-        <button
-          type="button"
-          onClick={() => setViewMode('list')}
-          className={`px-4 py-2 font-semibold text-sm rounded-lg transition-all ${
-            viewMode === 'list' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          {t('Danh sách lịch đã tạo')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('calendar')}
-          className={`px-4 py-2 font-semibold text-sm rounded-lg transition-all ${
-            viewMode === 'calendar' ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          {t('Lịch biểu tháng')}
-        </button>
+      {/* Mode Switch Tabs and Filters */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-3 mb-6">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'list', label: t('Danh sách') },
+            { id: 'calendar', label: t('Tháng') },
+            { id: 'week', label: t('Tuần') },
+            { id: 'kanban', label: t('Bảng Kanban') },
+          ].map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => setViewMode(mode.id as any)}
+              className={`px-4 py-2 font-semibold text-sm rounded-lg transition-all ${
+                viewMode === mode.id ? 'bg-brand text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filter Dropdown */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500 font-semibold">{t('Lọc kênh:')}</span>
+          <select
+            className="input py-1.5 px-3 text-xs bg-slate-50 border-slate-200 focus:border-brand font-semibold cursor-pointer"
+            value={filterPlatform}
+            onChange={(e) => setFilterPlatform(e.target.value)}
+          >
+            <option value="all">-- {t('Tất cả kênh')} --</option>
+            {PLATFORM_OPTIONS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {t(p.label)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {viewMode === 'calendar' ? (
+      {viewMode === 'calendar' && (
         <CalendarView
-          items={items}
+          items={filteredItems}
           startEdit={startEdit}
           sendNow={sendNow}
           remove={remove}
           onUpdateScheduleTime={handleUpdateScheduleTime}
         />
-      ) : (
+      )}
+
+      {viewMode === 'week' && (
+        <WeekView
+          items={filteredItems}
+          startEdit={startEdit}
+          sendNow={sendNow}
+          remove={remove}
+          onUpdateScheduleTime={handleUpdateScheduleTime}
+        />
+      )}
+
+      {viewMode === 'kanban' && (
+        <KanbanView
+          items={filteredItems}
+          startEdit={startEdit}
+          sendNow={sendNow}
+          remove={remove}
+          onUpdateStatus={async (id, newStatus) => {
+            try {
+              setError('');
+              setSuccess('');
+              await apiJson(`/schedules/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus }),
+              });
+              setSuccess(t('Cập nhật trạng thái thành công.'));
+              await load();
+            } catch (err: any) {
+              setError(err.message || t('Lỗi cập nhật trạng thái'));
+            }
+          }}
+        />
+      )}
+
+      {viewMode === 'list' && (
         <div className="table-wrap">
           <h3 className="text-lg font-bold text-slate-900 p-4 border-b">{t('Lịch đã tạo')}</h3>
           <table className="table-modern">
@@ -840,31 +954,40 @@ export default function ScheduleBotPage() {
                 <th>{t('Kênh')}</th>
                 <th>{t('Giờ gửi')}</th>
                 <th>{t('Lặp')}</th>
+                <th>{t('Người quản lý')}</th>
                 <th>{t('Trạng thái')}</th>
                 <th>{t('Chi tiết kênh')}</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {items.length === 0 && (
+              {filteredItems.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-500">
-                    {t('Chưa có lịch. Tạo ở form trên hoặc dùng「Gửi thử」sau khi lưu.')}
+                  <td colSpan={8} className="p-8 text-center text-slate-500">
+                    {t('Chưa có lịch đăng bài phù hợp.')}
                   </td>
                 </tr>
               )}
-              {items.map((i) => {
+              {filteredItems.map((i) => {
                 const chResults = parseChannelResults(i.channelResults);
+                const assignee = workspaceUsers.find((u) => u.id === i.assignedUserId);
                 return (
                   <tr key={i.id}>
                     <td className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <span>{i.title}</span>
-                        {(i.overlayText || i.overlayWatermark) && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100" title={`${i.overlayText || ''} ${i.overlayWatermark || ''}`}>
-                            ✨ Overlay
-                          </span>
-                        )}
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span>{i.title}</span>
+                          {(i.overlayText || i.overlayWatermark) && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100" title={`${i.overlayText || ''} ${i.overlayWatermark || ''}`}>
+                              ✨ Overlay
+                            </span>
+                          )}
+                          {i.utmTagEnabled && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-teal-50 text-teal-700 border border-teal-100">
+                              🔗 UTM
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="text-sm">{platformLabel(i.platforms)}</td>
@@ -880,6 +1003,9 @@ export default function ScheduleBotPage() {
                             ? `Cron: ${i.cronExpression || ''}`
                             : '—'}
                       {i.abTestId ? ` · A/B #${i.abTestId}` : ''}
+                    </td>
+                    <td className="text-sm font-semibold text-slate-700">
+                      {assignee ? assignee.name || assignee.email.split('@')[0] : '—'}
                     </td>
                     <td>
                       <span className={statusBadge(i.status)}>{statusLabel(i.status)}</span>
@@ -902,7 +1028,9 @@ export default function ScheduleBotPage() {
                         </div>
                       ) : (
                         i.errorMessage ? (
-                          <span className="text-red-600 font-medium">{i.errorMessage}</span>
+                          <span className="text-red-600 font-medium text-xs block max-w-[250px] overflow-hidden truncate" title={i.errorMessage}>
+                            {i.errorMessage}
+                          </span>
                         ) : '—'
                       )}
                     </td>
@@ -981,7 +1109,7 @@ function CalendarView({
 
   const days: { day: number; isCurrentMonth: boolean; date: Date }[] = [];
   const prevMonthDays = new Date(year, month, 0).getDate();
-  
+
   for (let i = firstDayOfMonth - 1; i >= 0; i--) {
     days.push({ day: prevMonthDays - i, isCurrentMonth: false, date: new Date(year, month - 1, prevMonthDays - i) });
   }
@@ -1096,7 +1224,7 @@ function CalendarView({
                   if (s.status === 'PUBLISHED') badgeColor = 'bg-green-50 text-green-700 border-green-200 border';
                   if (s.status === 'FAILED') badgeColor = 'bg-red-50 text-red-700 border-red-200 border';
                   if (s.status === 'DRAFT') badgeColor = 'bg-purple-50 text-purple-700 border-purple-200 border';
-                  
+
                   const isDraggable = ['PENDING', 'FAILED', 'DRAFT'].includes(s.status);
 
                   return (
@@ -1130,6 +1258,307 @@ function CalendarView({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function WeekView({
+  items,
+  startEdit,
+  sendNow,
+  remove,
+  onUpdateScheduleTime
+}: {
+  items: Schedule[];
+  startEdit: (i: Schedule) => void;
+  sendNow: (id: number) => void;
+  remove: (id: number) => void;
+  onUpdateScheduleTime: (id: number, newTime: string) => Promise<void>;
+}) {
+  const { t, locale } = useLocale();
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const getStartOfWeek = (d: Date) => {
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(d.getFullYear(), d.getMonth(), diff);
+  };
+
+  const startOfWeek = getStartOfWeek(currentDate);
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(startOfWeek);
+    day.setDate(startOfWeek.getDate() + i);
+    days.push(day);
+  }
+
+  const prevWeek = () => {
+    const next = new Date(currentDate);
+    next.setDate(currentDate.getDate() - 7);
+    setCurrentDate(next);
+  };
+  const nextWeek = () => {
+    const next = new Date(currentDate);
+    next.setDate(currentDate.getDate() + 7);
+    setCurrentDate(next);
+  };
+
+  const formatDateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const schedulesByDay: Record<string, Schedule[]> = {};
+  items.forEach(item => {
+    const d = new Date(item.scheduledAt);
+    const key = formatDateKey(d);
+    if (!schedulesByDay[key]) schedulesByDay[key] = [];
+    schedulesByDay[key].push(item);
+  });
+
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    e.dataTransfer.setData('text/plain', String(id));
+  };
+
+  const handleDrop = (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    const id = Number(e.dataTransfer.getData('text/plain'));
+    if (isNaN(id)) return;
+
+    const originalSchedule = items.find(item => item.id === id);
+    if (!originalSchedule) return;
+
+    const originalTime = new Date(originalSchedule.scheduledAt);
+    const newDate = new Date(targetDate);
+    newDate.setHours(originalTime.getHours());
+    newDate.setMinutes(originalTime.getMinutes());
+    newDate.setSeconds(0);
+    newDate.setMilliseconds(0);
+
+    void onUpdateScheduleTime(id, newDate.toISOString());
+  };
+
+  const getWeekRangeLabel = () => {
+    const start = days[0];
+    const end = days[6];
+    return locale === 'vi'
+      ? `Tuần: ${start.getDate()}/${start.getMonth() + 1} - ${end.getDate()}/${end.getMonth() + 1} (${start.getFullYear()})`
+      : `Week: ${start.getMonth() + 1}/${start.getDate()} - ${end.getMonth() + 1}/${end.getDate()} (${start.getFullYear()})`;
+  };
+
+  const DAY_LABELS_VI = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
+  const DAY_LABELS_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayLabels = locale === 'vi' ? DAY_LABELS_VI : DAY_LABELS_EN;
+
+  return (
+    <div className="card p-4 space-y-4">
+      <div className="flex justify-between items-center pb-2 border-b">
+        <h4 className="font-bold text-slate-800 text-lg">
+          {getWeekRangeLabel()}
+        </h4>
+        <div className="flex gap-2">
+          <button type="button" onClick={prevWeek} className="btn-secondary py-1 px-3 text-xs">&larr; {t('Tuần trước')}</button>
+          <button type="button" onClick={nextWeek} className="btn-secondary py-1 px-3 text-xs">{t('Tuần sau')} &rarr;</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 bg-slate-100 rounded-lg p-0.5 min-h-[300px]">
+        {days.map((d, idx) => {
+          const key = formatDateKey(d);
+          const daySchedules = schedulesByDay[key] || [];
+          const isToday = formatDateKey(new Date()) === key;
+
+          return (
+            <div
+              key={idx}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => handleDrop(e, d)}
+              className={`bg-white p-2 rounded min-h-[250px] flex flex-col justify-between transition-colors border ${
+                isToday ? 'border-brand ring-1 ring-brand/20' : 'border-slate-100'
+              } hover:bg-orange-500/5`}
+            >
+              <div className="pb-1 border-b mb-2 flex flex-col items-center">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{dayLabels[idx]}</span>
+                <span className={`text-sm font-bold mt-0.5 w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-brand text-white' : 'text-slate-800'}`}>
+                  {d.getDate()}
+                </span>
+              </div>
+
+              <div className="flex-1 space-y-1.5 overflow-y-auto max-h-[180px] custom-scrollbar pr-0.5">
+                {daySchedules.map(s => {
+                  let badgeColor = 'bg-slate-100 text-slate-700';
+                  if (s.status === 'PUBLISHED') badgeColor = 'bg-green-50 text-green-700 border-green-200 border';
+                  if (s.status === 'FAILED') badgeColor = 'bg-red-50 text-red-700 border-red-200 border';
+                  if (s.status === 'DRAFT') badgeColor = 'bg-purple-50 text-purple-700 border-purple-200 border';
+
+                  const isDraggable = ['PENDING', 'FAILED', 'DRAFT'].includes(s.status);
+
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => isDraggable && startEdit(s)}
+                      draggable={isDraggable}
+                      onDragStart={(e) => isDraggable && handleDragStart(e, s.id)}
+                      className={`text-[10px] p-1.5 rounded font-medium cursor-pointer transition-all hover:scale-[1.02] ${badgeColor} flex justify-between items-center group ${isDraggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                      title={`${s.title} (${new Date(s.scheduledAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`}
+                    >
+                      <span className="truncate flex-1">
+                        {new Date(s.scheduledAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {s.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remove(s.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 ml-1 text-red-500 hover:text-red-700 font-bold px-0.5 text-xs transition-opacity"
+                      >
+                        X
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function KanbanView({
+  items,
+  startEdit,
+  sendNow,
+  remove,
+  onUpdateStatus
+}: {
+  items: Schedule[];
+  startEdit: (i: Schedule) => void;
+  sendNow: (id: number) => void;
+  remove: (id: number) => void;
+  onUpdateStatus: (id: number, newStatus: string) => Promise<void>;
+}) {
+  const { t } = useLocale();
+
+  const columns = [
+    { id: 'DRAFT', title: t('Ý tưởng / Nháp'), color: 'border-t-purple-500 bg-purple-500/5' },
+    { id: 'PENDING', title: t('Hẹn giờ / Phê duyệt'), color: 'border-t-blue-500 bg-blue-500/5' },
+    { id: 'FAILED', title: t('Gửi lỗi / Thất bại'), color: 'border-t-red-500 bg-red-500/5' },
+    { id: 'PUBLISHED', title: t('Đã đăng thành công'), color: 'border-t-green-500 bg-green-500/5' },
+  ];
+
+  const getSchedulesForColumn = (colId: string) => {
+    return items.filter(item => {
+      if (colId === 'PUBLISHED') return item.status === 'PUBLISHED' || item.status === 'PARTIAL';
+      return item.status === colId;
+    });
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    e.dataTransfer.setData('text/plain', String(id));
+  };
+
+  const handleDrop = (e: React.DragEvent, colId: string) => {
+    e.preventDefault();
+    const id = Number(e.dataTransfer.getData('text/plain'));
+    if (isNaN(id)) return;
+    void onUpdateStatus(id, colId);
+  };
+
+  return (
+    <div className="grid md:grid-cols-4 gap-4">
+      {columns.map(col => {
+        const colSchedules = getSchedulesForColumn(col.id);
+        return (
+          <div
+            key={col.id}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => handleDrop(e, col.id)}
+            className={`rounded-xl border-t-4 border border-slate-200 p-3 flex flex-col min-h-[500px] ${col.color}`}
+          >
+            <div className="flex justify-between items-center mb-3 pb-1 border-b">
+              <span className="text-sm font-bold text-slate-800">{col.title}</span>
+              <span className="text-xs bg-slate-200/80 text-slate-700 font-semibold px-2 py-0.5 rounded-full">
+                {colSchedules.length}
+              </span>
+            </div>
+
+            <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[460px] custom-scrollbar pr-0.5">
+              {colSchedules.length === 0 && (
+                <div className="text-center py-8 text-xs text-slate-400 italic">
+                  {t('Trống')}
+                </div>
+              )}
+              {colSchedules.map(s => {
+                const isDraggable = ['PENDING', 'FAILED', 'DRAFT'].includes(s.status);
+                return (
+                  <div
+                    key={s.id}
+                    draggable={isDraggable}
+                    onDragStart={(e) => isDraggable && handleDragStart(e, s.id)}
+                    onClick={() => isDraggable && startEdit(s)}
+                    className={`card bg-white p-3 rounded-lg border border-slate-200/80 shadow-sm space-y-2 hover:shadow transition-all group ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
+                  >
+                    {s.imageUrl && (
+                      <img src={s.imageUrl} alt="" className="max-h-24 w-full object-cover rounded" />
+                    )}
+                    <div>
+                      <h5 className="text-xs font-bold text-slate-800 line-clamp-1">{s.title}</h5>
+                      <p className="text-[10px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">{s.content}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[9px] pt-1.5 border-t border-slate-100 text-slate-400">
+                      <span className="font-semibold text-brand-dark">{s.platforms.toUpperCase()}</span>
+                      <span>
+                        {new Date(s.scheduledAt).toLocaleDateString([], { month: '2-digit', day: '2-digit' })}{' '}
+                        {new Date(s.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-2">
+                        {isDraggable && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEdit(s);
+                            }}
+                            className="text-[9px] text-slate-500 hover:text-slate-800 font-semibold"
+                          >
+                            {t('Sửa')}
+                          </button>
+                        )}
+                        {(s.status === 'PENDING' || s.status === 'FAILED' || s.status === 'DRAFT') && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              sendNow(s.id);
+                            }}
+                            className="text-[9px] text-brand font-bold"
+                          >
+                            {t('Gửi ngay')}
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remove(s.id);
+                        }}
+                        className="text-[9px] text-red-500 font-semibold hover:text-red-700"
+                      >
+                        {t('Xóa')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

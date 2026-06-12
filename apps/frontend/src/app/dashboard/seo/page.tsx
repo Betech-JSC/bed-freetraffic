@@ -30,6 +30,7 @@ export default function SeoPage() {
   const [audits, setAudits] = useState<Audit[]>([]);
   const [history, setHistory] = useState<Audit[]>([]);
   const [url, setUrl] = useState('');
+  const [targetKeyword, setTargetKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [usePageSpeed, setUsePageSpeed] = useState(false);
   const [error, setError] = useState('');
@@ -59,15 +60,38 @@ export default function SeoPage() {
       await apiJson(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: target }),
+        body: JSON.stringify({ url: target, targetKeyword: targetKeyword.trim() || undefined }),
       });
       setUrl('');
+      setTargetKeyword('');
       load();
       loadHistory(target);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t('Lỗi audit'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteAudit = async (id: number) => {
+    if (!confirm(t('Bạn có chắc chắn muốn xóa kết quả audit này không?'))) return;
+    try {
+      await apiJson(`/seo/audits/${id}`, { method: 'DELETE' });
+      load();
+      setHistory([]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('Lỗi khi xóa kết quả audit'));
+    }
+  };
+
+  const deleteAllAudits = async () => {
+    if (!confirm(t('Bạn có chắc chắn muốn xóa TẤT CẢ kết quả audit không? Hành động này không thể hoàn tác.'))) return;
+    try {
+      await apiJson('/seo/audits', { method: 'DELETE' });
+      load();
+      setHistory([]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t('Lỗi khi xóa tất cả kết quả audit'));
     }
   };
 
@@ -98,7 +122,7 @@ export default function SeoPage() {
     <div className="space-y-8 page-container">
       <PageHeader
         title={t('SEO Audit (On-Page)')}
-        description={t('FR-03 — Quét tối ưu cấu trúc HTML, heading, meta description, alt hình ảnh và trải nghiệm di động của trang đích.')}
+        description={t('Quét tối ưu cấu trúc HTML, heading, meta description, alt hình ảnh và trải nghiệm di động của trang đích.')}
       />
 
       {/* Quick Help Onboarding Banner */}
@@ -116,12 +140,19 @@ export default function SeoPage() {
       <form onSubmit={runAudit} className="card p-6 flex flex-col gap-4 shadow-sm">
         <div className="flex gap-3 flex-wrap w-full">
           <input
-            className="input flex-1 min-w-[240px]"
+            className="input flex-[2] min-w-[240px]"
             type="url"
             placeholder={t('Ví dụ: https://website-cua-ban.com/landing-page')}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             required
+          />
+          <input
+            className="input flex-1 min-w-[180px]"
+            type="text"
+            placeholder={t('Từ khóa mục tiêu (tùy chọn)')}
+            value={targetKeyword}
+            onChange={(e) => setTargetKeyword(e.target.value)}
           />
           <button type="submit" className="btn-primary px-6" disabled={loading}>
             {loading ? t('Đang phân tích...') : t('Chạy SEO Audit')}
@@ -166,7 +197,21 @@ export default function SeoPage() {
 
       {/* Audits List */}
       <div className="space-y-6">
-        <h3 className="text-lg font-bold text-slate-800">{t('Lịch sử Audit gần đây')}</h3>
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-bold text-slate-800">{t('Lịch sử Audit gần đây')}</h3>
+          {audits.length > 0 && (
+            <button
+              type="button"
+              className="text-xs font-bold text-red-600 hover:text-red-800 flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100/70 border border-red-200/50 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+              onClick={deleteAllAudits}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              {t('Xóa tất cả')}
+            </button>
+          )}
+        </div>
         {audits.length === 0 && (
           <div className="card p-8 text-center text-slate-400 text-sm">
             {t('Chưa có trang nào được audit. Hãy chạy quét bằng khung phía trên.')}
@@ -175,6 +220,7 @@ export default function SeoPage() {
         {audits.map((a) => {
           const criticalCount = a.issues.filter(i => i.severity === 'CRITICAL').length;
           const warningCount = a.issues.filter(i => i.severity === 'WARNING').length;
+          const isPageSpeedFallback = a.issues.some(i => i.message.includes('Google PageSpeed Insights: Không thể kết nối'));
 
           return (
             <div key={a.id} className="card p-6 shadow-sm border border-slate-100 hover:border-slate-200 transition-all space-y-6">
@@ -190,25 +236,75 @@ export default function SeoPage() {
                   <button type="button" className="text-xs font-bold text-brand hover:underline" onClick={() => loadHistory(a.url)}>
                     {t('Xem lịch sử URL')}
                   </button>
+                  <button 
+                    type="button" 
+                    className="text-xs font-bold text-red-500 hover:text-red-750 flex items-center gap-1 transition-colors cursor-pointer" 
+                    onClick={() => deleteAudit(a.id)}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    {t('Xóa')}
+                  </button>
                   <div className={`text-2xl font-black px-3 py-1 border rounded-lg shadow-sm ${getScoreColor(a.score)}`}>
                     {a.score} <span className="text-xs font-semibold text-slate-500">/ 100</span>
                   </div>
                 </div>
               </div>
 
+              {/* Amber Fallback Banner if PageSpeed failed */}
+              {isPageSpeedFallback && (
+                <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-4 flex items-start gap-3 shadow-xs animate-[fadeIn_0.2s_ease-out]">
+                  <span className="text-lg shrink-0 mt-0.5">⚠️</span>
+                  <div className="text-xs text-amber-850 leading-relaxed font-medium">
+                    <p className="font-extrabold text-amber-900">{t('Google PageSpeed Insights tạm thời quá tải hoặc lỗi kết nối (Lỗi 429).')}</p>
+                    <p className="mt-1 text-amber-800/90">{t('Hệ thống đã tự động kích hoạt chế độ dự phòng: Phân tích cấu trúc HTML On-Page tại chỗ để đưa ra điểm số thực tiễn nhất cho website của bạn.')}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Sub-scores grid */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-slate-50 border rounded-xl p-3 text-center">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{t('Điểm Kỹ Thuật')}</div>
-                  <div className="text-lg font-black text-slate-700 mt-1">{a.technicalScore}</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-sky-50/20 border border-sky-100/60 rounded-2xl p-4 flex flex-col justify-between hover:bg-sky-50/40 transition-colors shadow-xs">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] font-extrabold text-sky-600 uppercase tracking-wider">{t('Điểm Kỹ Thuật')}</span>
+                    <span className="w-2 h-2 rounded-full bg-sky-400 shrink-0 mt-1" />
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-2xl font-black text-slate-800">{a.technicalScore}</span>
+                    <span className="text-[10px] font-bold text-slate-400">/100</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-3">
+                    <div className="bg-sky-500 h-full rounded-full transition-all duration-500" style={{ width: `${a.technicalScore}%` }} />
+                  </div>
                 </div>
-                <div className="bg-slate-50 border rounded-xl p-3 text-center">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{t('Tối ưu Nội dung')}</div>
-                  <div className="text-lg font-black text-slate-700 mt-1">{a.contentScore}</div>
+
+                <div className="bg-orange-50/20 border border-orange-100/60 rounded-2xl p-4 flex flex-col justify-between hover:bg-orange-50/40 transition-colors shadow-xs">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] font-extrabold text-orange-600 uppercase tracking-wider">{t('Tối ưu Nội dung')}</span>
+                    <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0 mt-1" />
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-2xl font-black text-slate-800">{a.contentScore}</span>
+                    <span className="text-[10px] font-bold text-slate-400">/100</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-3">
+                    <div className="bg-orange-500 h-full rounded-full transition-all duration-500" style={{ width: `${a.contentScore}%` }} />
+                  </div>
                 </div>
-                <div className="bg-slate-50 border rounded-xl p-3 text-center">
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{t('Trải nghiệm UX')}</div>
-                  <div className="text-lg font-black text-slate-700 mt-1">{a.uxScore}</div>
+
+                <div className="bg-emerald-50/20 border border-emerald-100/60 rounded-2xl p-4 flex flex-col justify-between hover:bg-emerald-50/40 transition-colors shadow-xs">
+                  <div className="flex justify-between items-start">
+                    <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">{t('Trải nghiệm UX')}</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 mt-1" />
+                  </div>
+                  <div className="flex items-baseline gap-1 mt-2">
+                    <span className="text-2xl font-black text-slate-800">{a.uxScore}</span>
+                    <span className="text-[10px] font-bold text-slate-400">/100</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-3">
+                    <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${a.uxScore}%` }} />
+                  </div>
                 </div>
               </div>
 

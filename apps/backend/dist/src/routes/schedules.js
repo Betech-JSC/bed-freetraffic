@@ -100,7 +100,7 @@ router.get('/', async (req, res) => {
 async function createSchedule(req, res) {
     try {
         const body = req.body ?? {};
-        const { title, content, platforms, targetConnectionsJson, urlTarget, recipients, scheduledAt, repeatRule, repeatUntil, abTestId, cronExpression, overlayText, overlayWatermark, overlayPosition, overlayFontSize, autopilot, } = body;
+        const { title, content, platforms, targetConnectionsJson, urlTarget, recipients, scheduledAt, repeatRule, repeatUntil, abTestId, cronExpression, overlayText, overlayWatermark, overlayPosition, overlayFontSize, autopilot, assignedUserId, utmTagEnabled, } = body;
         if (!title?.trim() || !content?.trim() || !platforms || (!scheduledAt && !autopilot)) {
             res.status(400).json({ error: 'Tiêu đề, nội dung, kênh gửi và thời gian là bắt buộc' });
             return;
@@ -211,6 +211,8 @@ async function createSchedule(req, res) {
                 overlayWatermark: overlayWatermark ? String(overlayWatermark).trim() : null,
                 overlayPosition: overlayPosition ? String(overlayPosition).trim() : 'bottom-right',
                 overlayFontSize: overlayFontSize ? parseInt(String(overlayFontSize), 10) : 32,
+                assignedUserId: assignedUserId ? parseInt(String(assignedUserId), 10) : null,
+                utmTagEnabled: !!utmTagEnabled,
                 status: body.status === 'DRAFT' ? 'DRAFT' : 'PENDING',
                 workspaceId: req.workspaceId,
             },
@@ -333,6 +335,12 @@ router.patch('/:id', auth_1.requireWrite, async (req, res) => {
         data.overlayPosition = body.overlayPosition ? String(body.overlayPosition).trim() : 'bottom-right';
     if (body.overlayFontSize !== undefined) {
         data.overlayFontSize = body.overlayFontSize ? parseInt(String(body.overlayFontSize), 10) : 32;
+    }
+    if (body.assignedUserId !== undefined) {
+        data.assignedUserId = body.assignedUserId ? parseInt(String(body.assignedUserId), 10) : null;
+    }
+    if (body.utmTagEnabled !== undefined) {
+        data.utmTagEnabled = !!body.utmTagEnabled;
     }
     if (body.scheduledAt != null) {
         const scheduledDate = new Date(body.scheduledAt);

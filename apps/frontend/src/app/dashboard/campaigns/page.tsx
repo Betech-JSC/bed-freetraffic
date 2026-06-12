@@ -22,16 +22,29 @@ export default function CampaignsPage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Bulk Import States
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importGroupId, setImportGroupId] = useState('');
+  const [groups, setGroups] = useState<any[]>([]);
+  const [importTab, setImportTab] = useState<'text' | 'file'>('text');
+
   const fetchData = async () => {
     setFetchError('');
     try {
-      const [kwData, chData] = await Promise.all([apiJson<any[]>('/keywords'), apiJson<any[]>('/channels')]);
+      const [kwData, chData, gpData] = await Promise.all([
+        apiJson<any[]>('/keywords'),
+        apiJson<any[]>('/channels'),
+        apiJson<any[]>('/keywords/groups').catch(() => []),
+      ]);
       setKeywords(kwData);
       setChannels(chData);
+      setGroups(gpData);
     } catch (e: unknown) {
       setFetchError(e instanceof Error ? e.message : t('Không tải được dữ liệu'));
       setKeywords([]);
       setChannels([]);
+      setGroups([]);
     } finally {
       setLoading(false);
     }
@@ -60,6 +73,78 @@ export default function CampaignsPage() {
     }
   };
 
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const parsedKeywords: { keyword: string; searchVolume?: number; url?: string }[] = [];
+      const lines = importText.split('\n');
+      
+      for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
+        const parts = line.split(',');
+        const keyword = parts[0]?.trim();
+        if (!keyword) continue;
+
+        const searchVolume = parts[1] ? parseInt(parts[1].trim()) : undefined;
+        const url = parts[2] ? parts[2].trim() : undefined;
+
+        parsedKeywords.push({
+          keyword,
+          searchVolume: isNaN(searchVolume as any) ? undefined : searchVolume,
+          url,
+        });
+      }
+
+      if (parsedKeywords.length === 0) {
+        alert(t('Không tìm thấy từ khóa hợp lệ để import'));
+        setIsSubmitting(false);
+        return;
+      }
+
+      await apiJson('/keywords/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keywords: parsedKeywords,
+          groupId: importGroupId ? parseInt(importGroupId) : undefined,
+        }),
+      });
+
+      setIsImportModalOpen(false);
+      setImportText('');
+      setImportGroupId('');
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert(t('Import từ khóa thất bại'));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+      const lines = text.split('\n');
+      let parsed = '';
+      for (const line of lines) {
+        if (line.trim()) {
+          parsed += line.trim() + '\n';
+        }
+      }
+      setImportText(parsed);
+      setImportTab('text');
+    };
+    reader.readAsText(file);
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm(t('Xóa từ khóa này khỏi hệ thống?'))) return;
     try {
@@ -80,9 +165,14 @@ export default function CampaignsPage() {
         title={t('Campaigns & Từ khóa')}
         description={t('Theo dõi thứ hạng SEO và gắn từ khóa với nguồn traffic.')}
         actions={
-          <button type="button" onClick={() => setIsModalOpen(true)} className="btn-primary">
-            {t('Thêm từ khóa')}
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setIsImportModalOpen(true)} className="btn-secondary">
+              {t('Import từ khóa')}
+            </button>
+            <button type="button" onClick={() => setIsModalOpen(true)} className="btn-primary">
+              {t('Thêm từ khóa')}
+            </button>
+          </div>
         }
       />
 
@@ -120,9 +210,14 @@ export default function CampaignsPage() {
                 <tr>
                   <td colSpan={6} className="py-16 text-center">
                     <p className="text-slate-500 font-medium">{t('Chưa có từ khóa')}</p>
-                    <button type="button" onClick={() => setIsModalOpen(true)} className="btn-primary mt-4">
-                      {t('Thêm từ khóa đầu tiên')}
-                    </button>
+                    <div className="flex justify-center gap-3 mt-4">
+                      <button type="button" onClick={() => setIsImportModalOpen(true)} className="btn-secondary">
+                        {t('Import từ khóa')}
+                      </button>
+                      <button type="button" onClick={() => setIsModalOpen(true)} className="btn-primary">
+                        {t('Thêm từ khóa')}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -231,6 +326,87 @@ export default function CampaignsPage() {
                 </button>
                 <button type="submit" disabled={isSubmitting} className="btn-primary flex-1">
                   {isSubmitting ? t('Đang lưu...') : t('Lưu')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isImportModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsImportModalOpen(false)}>
+          <div className="modal-panel max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">{t('Import Từ khóa Hàng loạt')}</h2>
+
+            <div className="flex border-b border-slate-200 mb-4">
+              <button
+                type="button"
+                className={`py-2 px-4 font-semibold text-sm ${importTab === 'text' ? 'border-b-2 border-brand text-brand' : 'text-slate-500'}`}
+                onClick={() => setImportTab('text')}
+              >
+                {t('Dán văn bản')}
+              </button>
+              <button
+                type="button"
+                className={`py-2 px-4 font-semibold text-sm ${importTab === 'file' ? 'border-b-2 border-brand text-brand' : 'text-slate-500'}`}
+                onClick={() => setImportTab('file')}
+              >
+                {t('Tải tệp CSV')}
+              </button>
+            </div>
+
+            <form onSubmit={handleImportSubmit} className="space-y-4">
+              {importTab === 'text' ? (
+                <div>
+                  <label className="label">{t('Danh sách từ khóa')}</label>
+                  <textarea
+                    required
+                    className="input min-h-[150px] font-mono text-sm"
+                    placeholder="từ khóa 1, volume, url&#10;từ khóa 2, volume&#10;từ khóa 3"
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    {t('Định dạng: từ_khóa, volume, url (mỗi từ khóa trên một dòng. Volume & URL tùy chọn).')}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="label">{t('Chọn tệp CSV')}</label>
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    className="input"
+                    onChange={handleCsvFile}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    {t('Chọn tệp CSV hoặc TXT chứa danh sách từ khóa tương tự định dạng trên.')}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="label">{t('Nhóm từ khóa (tùy chọn)')}</label>
+                <select
+                  className="input"
+                  value={importGroupId}
+                  onChange={(e) => setImportGroupId(e.target.value)}
+                >
+                  <option value="">{t('— Không chọn nhóm —')}</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g._count?.keywords || 0} KWs)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsImportModalOpen(false)} className="btn-secondary flex-1">
+                  {t('Hủy')}
+                </button>
+                <button type="submit" disabled={isSubmitting} className="btn-primary flex-1">
+                  {isSubmitting ? t('Đang import...') : t('Bắt đầu Import')}
                 </button>
               </div>
             </form>

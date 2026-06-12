@@ -192,7 +192,7 @@ export default function LoginPage() {
               </div>
 
               {/* Social OAuth Buttons */}
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
                 <button 
                   type="button" 
                   className="flex items-center justify-center flex-col gap-1 py-2.5 rounded-xl bg-[#ea4335]/5 hover:bg-[#ea4335]/10 border border-[#ea4335]/15 text-[#ea4335] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
@@ -200,14 +200,6 @@ export default function LoginPage() {
                 >
                   <span className="text-base">🔴</span>
                   <span>Google</span>
-                </button>
-                <button 
-                  type="button" 
-                  className="flex items-center justify-center flex-col gap-1 py-2.5 rounded-xl bg-[#1877f2]/5 hover:bg-[#1877f2]/10 border border-[#1877f2]/15 text-[#1877f2] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                  onClick={() => handleSocialLogin('facebook')}
-                >
-                  <span className="text-base">📘</span>
-                  <span>Facebook</span>
                 </button>
                 <button 
                   type="button" 

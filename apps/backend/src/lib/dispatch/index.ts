@@ -6,6 +6,7 @@ import { dispatchZalo } from './zalo';
 import { dispatchTelegram } from './telegram';
 import { dispatchReddit } from './reddit';
 import { dispatchTiktok } from './tiktok';
+import { dispatchWordPress } from './wordpress';
 import type { ChannelResult, DispatchPayload, DispatchPlatform, DispatchResult } from './types';
 
 export type { ChannelResult, DispatchPayload, DispatchPlatform, DispatchResult };
@@ -24,6 +25,7 @@ export async function dispatchToPlatform(
   if (p === 'telegram') return dispatchTelegram(payload);
   if (p === 'reddit') return dispatchReddit(payload);
   if (p === 'tiktok') return dispatchTiktok(payload);
+  if (p === 'wordpress') return dispatchWordPress(payload);
   return { success: false, message: `Kênh "${platform}" chưa hỗ trợ` };
 }
 

@@ -49,6 +49,7 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const form_data_1 = __importDefault(require("form-data"));
 const ai_1 = require("../lib/ai");
+const markdown_1 = require("../lib/markdown");
 const uploadDir = path_1.default.join(__dirname, '../../uploads');
 if (!fs_1.default.existsSync(uploadDir)) {
     fs_1.default.mkdirSync(uploadDir, { recursive: true });
@@ -120,6 +121,105 @@ router.get('/blog/posts/:slug', async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: error.message || 'Lỗi hệ thống' });
+    }
+});
+// Serve published blog post as rendered HTML (Public)
+router.get('/blog/posts/:slug/html', async (req, res) => {
+    try {
+        const slug = req.params.slug;
+        const post = await prisma_1.default.blogPost.findFirst({
+            where: { slug, published: true },
+        });
+        if (!post) {
+            res.status(404).send('<h1>404 - Không tìm thấy bài viết hoặc bài viết chưa xuất bản</h1>');
+            return;
+        }
+        let workspaceName = 'Trang chủ';
+        if (post.workspaceId) {
+            const ws = await prisma_1.default.workspace.findUnique({ where: { id: post.workspaceId } });
+            if (ws)
+                workspaceName = ws.name;
+        }
+        // Find the landing page slug belonging to the same workspace to construct correct backlinks
+        let landingSlug = 'home';
+        let brandConfig = null;
+        let theme = 'ocean-breeze';
+        if (post.workspaceId) {
+            const lp = await prisma_1.default.landingPage.findFirst({
+                where: { workspaceId: post.workspaceId },
+                select: { slug: true, layoutJson: true }
+            });
+            if (lp) {
+                landingSlug = lp.slug;
+                try {
+                    if (lp.layoutJson) {
+                        const layout = JSON.parse(lp.layoutJson);
+                        if (layout.theme)
+                            theme = layout.theme;
+                        if (layout.brandConfig)
+                            brandConfig = layout.brandConfig;
+                    }
+                }
+                catch (e) { }
+            }
+        }
+        const htmlContent = post.htmlContent || (0, markdown_1.markdownToHtml)(post.content || '');
+        const bodyHtml = `
+      <div class="max-w-4xl mx-auto px-6 py-12">
+        <nav class="mb-8">
+          <a href="/api/public/pages/${landingSlug}/html" class="text-[#f25c22] font-black text-sm hover:underline">← Quay lại Trang chủ</a>
+        </nav>
+        <header class="mb-12 border-b border-slate-100 pb-8">
+          <h1 class="text-3xl md:text-4xl font-extrabold text-slate-900 leading-tight mb-4">${post.title}</h1>
+          <div class="flex items-center gap-4 text-xs font-bold text-slate-400">
+            <span>Tác giả: <strong class="text-slate-600">${post.authorName || 'Admin'}</strong></span>
+            <span>•</span>
+            <span>Đăng ngày: ${post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('vi-VN') : new Date(post.createdAt).toLocaleDateString('vi-VN')}</span>
+          </div>
+          ${post.tags ? `
+            <div class="flex gap-2 flex-wrap mt-4">
+              ${post.tags.split(',').map(tag => `<span class="bg-[#fff4ef] text-[#f25c22] px-2.5 py-1 rounded-lg text-[10px] font-extrabold border border-[#ffd8c7]">#${tag.trim()}</span>`).join('')}
+            </div>
+          ` : ''}
+        </header>
+        <article class="prose prose-slate max-w-none text-slate-700 leading-relaxed text-sm md:text-base space-y-6">
+          ${htmlContent}
+        </article>
+      </div>
+    `;
+        let finalHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${post.title}</title>
+          <meta name="description" content="${post.summary || ''}">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            h2 { font-size: 1.5rem; font-weight: 850; color: #0f172a; margin-top: 2rem; margin-bottom: 1rem; }
+            h3 { font-size: 1.25rem; font-weight: 800; color: #1e293b; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+            p { margin-top: 0; margin-bottom: 1.25rem; }
+            strong { color: #0f172a; font-weight: 700; }
+            ul, ol { margin-top: 0; margin-bottom: 1.25rem; padding-left: 1.25rem; }
+            li { margin-bottom: 0.5rem; }
+          </style>
+        </head>
+        <body>
+          ${bodyHtml}
+        </body>
+      </html>
+    `;
+        try {
+            finalHtml = injectNavbarAndFooter(finalHtml, landingSlug, workspaceName, 'blog', theme, brandConfig);
+        }
+        catch (e) {
+            // Ignore
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(finalHtml);
+    }
+    catch (error) {
+        res.status(500).send('<h1>Lỗi hệ thống khi tải bài viết</h1>');
     }
 });
 // Retrieve published landing page by slug (public)
@@ -217,6 +317,8 @@ router.post('/forms/submit', rateLimiter_1.publicSpamLimiter, async (req, res) =
             res.status(400).json({ error: 'Địa chỉ Email là bắt buộc để lưu thông tin liên hệ.' });
             return;
         }
+        const trafficSourceVal = req.body.trafficSource || data.trafficSource || data.utm_source || data.utmSource || null;
+        const utmCampaignVal = req.body.utmCampaign || data.utmCampaign || data.utm_campaign || data.utmCampaign || null;
         // Upsert Customer (CRM)
         let customer = await prisma_1.default.customer.findUnique({
             where: { email: email.toLowerCase() },
@@ -229,6 +331,8 @@ router.post('/forms/submit', rateLimiter_1.publicSpamLimiter, async (req, res) =
                     phone: phone || customer.phone,
                     company: company || customer.company,
                     workspaceId: form.workspaceId || customer.workspaceId,
+                    trafficSource: trafficSourceVal || customer.trafficSource,
+                    utmCampaign: utmCampaignVal || customer.utmCampaign,
                 },
             });
         }
@@ -241,6 +345,8 @@ router.post('/forms/submit', rateLimiter_1.publicSpamLimiter, async (req, res) =
                     company: company || null,
                     status: 'NEW',
                     workspaceId: form.workspaceId,
+                    trafficSource: trafficSourceVal,
+                    utmCampaign: utmCampaignVal,
                 },
             });
         }
@@ -471,11 +577,15 @@ router.get('/pages/:slug/html', async (req, res) => {
             }
         }
         let theme = 'ocean-breeze';
+        let brandConfig = null;
         try {
             if (page.layoutJson) {
                 const layout = JSON.parse(page.layoutJson);
                 if (layout.theme) {
                     theme = layout.theme;
+                }
+                if (layout.brandConfig) {
+                    brandConfig = layout.brandConfig;
                 }
             }
         }
@@ -488,7 +598,7 @@ router.get('/pages/:slug/html', async (req, res) => {
             if (ws)
                 workspaceName = ws.name;
         }
-        html = injectNavbarAndFooter(html, slug, workspaceName, 'home', theme);
+        html = injectNavbarAndFooter(html, slug, workspaceName, 'home', theme, brandConfig);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.send(html);
     }
@@ -638,7 +748,7 @@ router.get('/cskh/chat/sync', async (req, res) => {
 // Public Checkout Endpoint (VietQR / Stripe)
 const handleCheckout = async (req, res) => {
     try {
-        const { workspaceId, customerEmail, customerName, customerPhone, productId, paymentMethod, returnUrl, cancelUrl } = req.body;
+        const { workspaceId, customerEmail, customerName, customerPhone, productId, paymentMethod, returnUrl, cancelUrl, trafficSource, utmCampaign } = req.body;
         if (!workspaceId || !customerEmail || !productId || !paymentMethod) {
             res.status(400).json({ error: 'workspaceId, customerEmail, productId và paymentMethod là bắt buộc.' });
             return;
@@ -661,6 +771,8 @@ const handleCheckout = async (req, res) => {
                 data: {
                     name: customerName || customer.name,
                     phone: customerPhone || customer.phone,
+                    trafficSource: trafficSource || customer.trafficSource,
+                    utmCampaign: utmCampaign || customer.utmCampaign,
                 },
             });
         }
@@ -672,6 +784,8 @@ const handleCheckout = async (req, res) => {
                     phone: customerPhone || null,
                     status: 'NEW',
                     workspaceId: parseInt(String(workspaceId), 10),
+                    trafficSource: trafficSource || null,
+                    utmCampaign: utmCampaign || null,
                 },
             });
         }
@@ -852,20 +966,31 @@ const getDynamicFallbackProducts = (title, theme) => {
         { id: 'fallback-3', idNum: 9903, name: `${cleanTitle} Đặc Biệt`, description: 'Sản phẩm độc quyền phiên bản giới hạn đặc biệt.', price: 350000, currency: 'VND' }
     ];
 };
-function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'ocean-breeze') {
+function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'ocean-breeze', brandConfig = null) {
     let headInject = '';
-    if (!html.includes('tailwindcss') && !html.includes('cdn.tailwindcss.com')) {
+    if (!html.includes('cdn.tailwindcss.com')) {
         headInject += `<script src="https://cdn.tailwindcss.com"></script>\n`;
     }
-    if (!html.includes('fonts.googleapis.com')) {
-        headInject += `
+    const fontName = brandConfig?.fontFamily || 'Plus Jakarta Sans';
+    const formattedFont = fontName.replace(/\s+/g, '+');
+    headInject += `
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=${formattedFont}:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
 <style>
-  body { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; }
+  body, button, input, select, textarea { font-family: '${fontName}', system-ui, -apple-system, sans-serif !important; }
+  
+  /* Scroll entrance animation */
+  .animate-scroll-up {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .animate-scroll-up.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
 </style>\n`;
-    }
     const isDark = html.includes('bg-gray-950') || html.includes('bg-slate-950') || html.includes('bg-gray-900') || html.includes('background-color: #0f172a') || html.includes('background-color: #030712') || html.includes('background-color: #0b0f19') || html.includes('background-color: #111827');
     let activeColorClass = 'text-[#f25c22]';
     let btnColorClass = 'bg-[#f25c22] hover:bg-[#d94d1a]';
@@ -886,33 +1011,93 @@ function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'oc
     const loginClass = isDark
         ? 'text-slate-400 hover:text-slate-100'
         : 'text-slate-600 hover:text-slate-900';
+    const brandTitleText = brandConfig?.brandTitle || workspaceName;
+    const brandLogoHtml = brandConfig?.logoUrl
+        ? `<img src="${brandConfig.logoUrl}" alt="${brandTitleText}" class="h-8 md:h-10 max-w-[200px] object-contain transition" />`
+        : `<span class="text-xl font-black tracking-tight ${activeColorClass}">${brandTitleText}</span>`;
+    const logoLinkHtml = `
+    <a href="/api/public/pages/${slug}/html" class="flex items-center gap-2 hover:opacity-90 transition">
+      ${brandLogoHtml}
+    </a>
+  `;
     const navbarHtml = `
 <header class="sticky top-0 z-50 w-full ${navClass} transition-all duration-300">
-  <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-    <a href="/api/public/pages/${slug}/html" class="text-xl font-black tracking-tight ${activeColorClass} hover:opacity-90 transition">${workspaceName}</a>
+  <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center gap-4">
+    ${logoLinkHtml}
+    
+    <!-- Desktop navigation menu -->
     <nav class="hidden md:flex gap-6 items-center text-sm font-bold">
       <a href="/api/public/pages/${slug}/html" class="transition ${activeTab === 'home' ? activeColorClass : linkClass}">Trang chủ</a>
+      <a href="/api/public/pages/${slug}/html/blog" class="transition ${activeTab === 'blog' ? activeColorClass : linkClass}">Blog</a>
       <a href="/api/public/pages/${slug}/html/products" class="transition ${activeTab === 'products' ? activeColorClass : linkClass}">Sản phẩm</a>
       <a href="/api/public/pages/${slug}/html/about" class="transition ${activeTab === 'about' ? activeColorClass : linkClass}">Giới thiệu</a>
     </nav>
-    <div class="flex gap-3 items-center" id="nav-auth-section">
-      <a href="/api/public/pages/${slug}/html/login" class="text-xs ${loginClass} px-3 py-1.5 font-bold transition">Đăng nhập</a>
-      <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+    
+    <div class="flex gap-3 items-center">
+      <!-- Desktop Auth links (hidden on mobile) -->
+      <div class="hidden md:flex gap-3 items-center" id="nav-auth-section-desktop">
+        <a href="/api/public/pages/${slug}/html/login" class="text-xs ${loginClass} px-3 py-1.5 font-bold transition">Đăng nhập</a>
+        <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+      </div>
+      
+      <!-- Mobile Menu Button (Hamburger) -->
+      <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg transition hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none" aria-label="Toggle Menu">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path id="hamburger-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+          <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+  
+  <!-- Mobile Navigation Panel (Dropdown/Drawer) -->
+  <div id="mobile-nav-panel" class="hidden md:hidden border-t border-slate-200/20 dark:border-slate-800/60 py-4 px-6 flex flex-col gap-4 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md transition-all duration-300">
+    <nav class="flex flex-col gap-3 text-sm font-bold">
+      <a href="/api/public/pages/${slug}/html" class="py-2 transition ${activeTab === 'home' ? activeColorClass : linkClass}">Trang chủ</a>
+      <a href="/api/public/pages/${slug}/html/blog" class="py-2 transition ${activeTab === 'blog' ? activeColorClass : linkClass}">Blog</a>
+      <a href="/api/public/pages/${slug}/html/products" class="py-2 transition ${activeTab === 'products' ? activeColorClass : linkClass}">Sản phẩm</a>
+      <a href="/api/public/pages/${slug}/html/about" class="py-2 transition ${activeTab === 'about' ? activeColorClass : linkClass}">Giới thiệu</a>
+    </nav>
+    <div class="h-[1px] bg-slate-200/20 dark:bg-slate-800/60 my-1"></div>
+    <div class="flex flex-col gap-3" id="nav-auth-section-mobile">
+      <a href="/api/public/pages/${slug}/html/login" class="text-center text-xs ${loginClass} py-2 font-bold transition">Đăng nhập</a>
+      <a href="/api/public/pages/${slug}/html/register" class="text-center text-xs ${btnColorClass} text-white py-2.5 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
     </div>
   </div>
 </header>
 <script>
   (function() {
+    const btn = document.getElementById('mobile-menu-btn');
+    const panel = document.getElementById('mobile-nav-panel');
+    const hamburger = document.getElementById('hamburger-icon');
+    const closeIcon = document.getElementById('close-icon');
+    
+    if (btn && panel) {
+      btn.addEventListener('click', function() {
+        panel.classList.toggle('hidden');
+        if (hamburger && closeIcon) {
+          hamburger.classList.toggle('hidden');
+          closeIcon.classList.toggle('hidden');
+        }
+      });
+    }
+    
+    // Auth sync
     const name = localStorage.getItem('customerName');
-    const authSec = document.getElementById('nav-auth-section');
-    if (authSec) {
+    const authSecDesktop = document.getElementById('nav-auth-section-desktop');
+    const authSecMobile = document.getElementById('nav-auth-section-mobile');
+    
+    function updateAuthUI(container) {
+      if (!container) return;
       if (name) {
-        authSec.innerHTML = \`
-          <span class="text-xs font-semibold ${isDark ? 'text-slate-400' : 'text-slate-600'}">Xin chào, <strong class="${activeColorClass}">\${name}</strong></span>
-          <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-350' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-3 py-1.5 rounded-lg font-bold transition ml-2">Đăng xuất</button>
+        container.innerHTML = \`
+          <span class="text-xs font-semibold \${container.id.includes('mobile') ? 'py-2' : ''} ${isDark ? 'text-slate-400' : 'text-slate-600'}">Xin chào, <strong class="${activeColorClass}">\${name}</strong></span>
+          <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-350' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-3 py-1.5 rounded-lg font-bold transition \${container.id.includes('mobile') ? 'w-full py-2.5 mt-2' : 'ml-2'}">Đăng xuất</button>
         \`;
       }
     }
+    updateAuthUI(authSecDesktop);
+    updateAuthUI(authSecMobile);
   })();
 </script>
 `;
@@ -938,9 +1123,51 @@ function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'oc
     else {
         resultHtml = navbarHtml + resultHtml;
     }
+    const scrollScript = `
+<script>
+  (function() {
+    function initScrollAnimations() {
+      const sections = document.querySelectorAll('section');
+      sections.forEach(sec => {
+        if (!sec.classList.contains('animate-scroll-up')) {
+          sec.classList.add('animate-scroll-up');
+        }
+      });
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, {
+        threshold: 0.05,
+        rootMargin: '0px 0px -30px 0px'
+      });
+
+      sections.forEach(sec => {
+        observer.observe(sec);
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initScrollAnimations);
+    } else {
+      initScrollAnimations();
+    }
+  })();
+</script>
+`;
+    if (resultHtml.includes('</body>')) {
+        resultHtml = resultHtml.replace('</body>', `${scrollScript}\n</body>`);
+    }
+    else {
+        resultHtml = resultHtml + '\n' + scrollScript;
+    }
     return resultHtml;
 }
-function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 'ocean-breeze') {
+function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 'ocean-breeze', brandConfig = null) {
     let activeColorClass = 'text-[#f25c22]';
     let btnColorClass = 'bg-[#f25c22] hover:bg-[#d94d1a]';
     let hoverTextClass = 'hover:text-[#f25c22]';
@@ -954,33 +1181,85 @@ function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 
         btnColorClass = 'bg-[#f05123] hover:bg-[#d94416]';
         hoverTextClass = 'hover:text-[#f05123]';
     }
+    const brandTitleText = brandConfig?.brandTitle || workspaceName;
+    const brandLogoHtml = brandConfig?.logoUrl
+        ? `<img src="${brandConfig.logoUrl}" alt="${brandTitleText}" class="h-8 md:h-10 max-w-[200px] object-contain transition" />`
+        : `<span class="text-xl font-black tracking-tight ${activeColorClass}">${brandTitleText}</span>`;
+    const logoLinkHtml = `
+    <a href="/api/public/pages/${slug}/html" class="flex items-center gap-2 hover:opacity-90 transition">
+      ${brandLogoHtml}
+    </a>
+  `;
+    const fontName = brandConfig?.fontFamily || 'Plus Jakarta Sans';
+    const formattedFont = fontName.replace(/\s+/g, '+');
     return `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} - ${workspaceName}</title>
+  <title>${title} - ${brandTitleText}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=${formattedFont}:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif; background-color: #f8fafc; color: #0f172a; scroll-behavior: smooth; }
+    body, button, input, select, textarea { font-family: '${fontName}', system-ui, -apple-system, sans-serif !important; background-color: #f8fafc; color: #0f172a; scroll-behavior: smooth; }
+    
+    /* Scroll entrance animation */
+    .animate-scroll-up {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .animate-scroll-up.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col justify-between">
   <div>
     <header class="sticky top-0 z-50 w-full backdrop-blur-md bg-white/80 border-b border-slate-100 text-slate-800 transition-all duration-300">
-      <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-        <a href="/api/public/pages/${slug}/html" class="text-xl font-black tracking-tight ${activeColorClass} hover:opacity-90 transition">${workspaceName}</a>
+      <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center gap-4">
+        ${logoLinkHtml}
+        
+        <!-- Desktop navigation menu -->
         <nav class="hidden md:flex gap-6 items-center text-sm font-bold">
           <a href="/api/public/pages/${slug}/html" class="transition ${hoverTextClass} ${activeTab === 'home' ? activeColorClass : 'text-slate-600'}">Trang chủ</a>
+          <a href="/api/public/pages/${slug}/html/blog" class="transition ${hoverTextClass} ${activeTab === 'blog' ? activeColorClass : 'text-slate-600'}">Blog</a>
           <a href="/api/public/pages/${slug}/html/products" class="transition ${hoverTextClass} ${activeTab === 'products' ? activeColorClass : 'text-slate-600'}">Sản phẩm</a>
           <a href="/api/public/pages/${slug}/html/about" class="transition ${hoverTextClass} ${activeTab === 'about' ? activeColorClass : 'text-slate-600'}">Giới thiệu</a>
         </nav>
-        <div class="flex gap-3 items-center" id="nav-auth-section">
-          <a href="/api/public/pages/${slug}/html/login" class="text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 font-bold transition">Đăng nhập</a>
-          <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+        
+        <div class="flex gap-3 items-center">
+          <!-- Desktop Auth links (hidden on mobile) -->
+          <div class="hidden md:flex gap-3 items-center" id="nav-auth-section-desktop">
+            <a href="/api/public/pages/${slug}/html/login" class="text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 font-bold transition">Đăng nhập</a>
+            <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+          </div>
+          
+          <!-- Mobile Menu Button (Hamburger) -->
+          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg transition hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none" aria-label="Toggle Menu">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path id="hamburger-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Mobile Navigation Panel (Dropdown/Drawer) -->
+      <div id="mobile-nav-panel" class="hidden md:hidden border-t border-slate-200/20 py-4 px-6 flex flex-col gap-4 bg-white/95 backdrop-blur-md transition-all duration-300">
+        <nav class="flex flex-col gap-3 text-sm font-bold">
+          <a href="/api/public/pages/${slug}/html" class="py-2 transition ${hoverTextClass} ${activeTab === 'home' ? activeColorClass : 'text-slate-600'}">Trang chủ</a>
+          <a href="/api/public/pages/${slug}/html/blog" class="py-2 transition ${hoverTextClass} ${activeTab === 'blog' ? activeColorClass : 'text-slate-600'}">Blog</a>
+          <a href="/api/public/pages/${slug}/html/products" class="py-2 transition ${hoverTextClass} ${activeTab === 'products' ? activeColorClass : 'text-slate-600'}">Sản phẩm</a>
+          <a href="/api/public/pages/${slug}/html/about" class="py-2 transition ${hoverTextClass} ${activeTab === 'about' ? activeColorClass : 'text-slate-600'}">Giới thiệu</a>
+        </nav>
+        <div class="h-[1px] bg-slate-200/20 my-1"></div>
+        <div class="flex flex-col gap-3" id="nav-auth-section-mobile">
+          <a href="/api/public/pages/${slug}/html/login" class="text-center text-xs text-slate-600 hover:text-slate-900 py-2 font-bold transition">Đăng nhập</a>
+          <a href="/api/public/pages/${slug}/html/register" class="text-center text-xs ${btnColorClass} text-white py-2.5 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
         </div>
       </div>
     </header>
@@ -992,22 +1271,76 @@ function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 
 
   <footer class="py-10 px-6 bg-slate-900 text-slate-400 text-center border-t border-slate-800">
     <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-      <h4 class="text-white font-bold text-base">${workspaceName}</h4>
-      <p class="text-xs">© ${new Date().getFullYear()} ${workspaceName}. Bảo lưu mọi quyền.</p>
+      <h4 class="text-white font-bold text-base">${brandTitleText}</h4>
+      <p class="text-xs">© ${new Date().getFullYear()} ${brandTitleText}. Bảo lưu mọi quyền.</p>
     </div>
   </footer>
 
   <script>
     (function() {
+      const btn = document.getElementById('mobile-menu-btn');
+      const panel = document.getElementById('mobile-nav-panel');
+      const hamburger = document.getElementById('hamburger-icon');
+      const closeIcon = document.getElementById('close-icon');
+      
+      if (btn && panel) {
+        btn.addEventListener('click', function() {
+          panel.classList.toggle('hidden');
+          if (hamburger && closeIcon) {
+            hamburger.classList.toggle('hidden');
+            closeIcon.classList.toggle('hidden');
+          }
+        });
+      }
+      
+      // Auth sync
       const name = localStorage.getItem('customerName');
-      const authSec = document.getElementById('nav-auth-section');
-      if (authSec) {
+      const authSecDesktop = document.getElementById('nav-auth-section-desktop');
+      const authSecMobile = document.getElementById('nav-auth-section-mobile');
+      
+      function updateAuthUI(container) {
+        if (!container) return;
         if (name) {
-          authSec.innerHTML = \`
-            <span class="text-xs font-semibold text-slate-600">Xin chào, <strong class="${activeColorClass}">\${name}</strong></span>
-            <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition ml-2">Đăng xuất</button>
+          container.innerHTML = \`
+            <span class="text-xs font-semibold \\\${container.id.includes('mobile') ? 'py-2' : ''} text-slate-600">Xin chào, <strong class="${activeColorClass}">\\\${name}</strong></span>
+            <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition \\\${container.id.includes('mobile') ? 'w-full py-2.5 mt-2' : 'ml-2'}">Đăng xuất</button>
           \`;
         }
+      }
+      updateAuthUI(authSecDesktop);
+      updateAuthUI(authSecMobile);
+    })();
+
+    (function() {
+      function initScrollAnimations() {
+        const sections = document.querySelectorAll('section');
+        sections.forEach(sec => {
+          if (!sec.classList.contains('animate-scroll-up')) {
+            sec.classList.add('animate-scroll-up');
+          }
+        });
+
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, {
+          threshold: 0.05,
+          rootMargin: '0px 0px -30px 0px'
+        });
+
+        sections.forEach(sec => {
+          observer.observe(sec);
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initScrollAnimations);
+      } else {
+        initScrollAnimations();
       }
     })();
   </script>
@@ -1116,11 +1449,15 @@ router.get('/pages/:slug/html/products', async (req, res) => {
                 workspaceName = ws.name;
         }
         let theme = 'ocean-breeze';
+        let brandConfig = null;
         try {
             if (page.layoutJson) {
                 const layout = JSON.parse(page.layoutJson);
                 if (layout.theme) {
                     theme = layout.theme;
+                }
+                if (layout.brandConfig) {
+                    brandConfig = layout.brandConfig;
                 }
             }
         }
@@ -1212,7 +1549,7 @@ router.get('/pages/:slug/html/products', async (req, res) => {
       </div>
     `;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(renderPage(slug, workspaceName, 'Sản phẩm', contentHtml, 'products', theme));
+        res.send(renderPage(slug, workspaceName, 'Sản phẩm', contentHtml, 'products', theme, brandConfig));
     }
     catch (error) {
         res.status(500).send('<h1>Lỗi hệ thống</h1>');
@@ -1231,11 +1568,15 @@ router.get('/pages/:slug/html/products/:id', async (req, res) => {
             return;
         }
         let theme = 'ocean-breeze';
+        let brandConfig = null;
         try {
             if (page.layoutJson) {
                 const layout = JSON.parse(page.layoutJson);
                 if (layout.theme) {
                     theme = layout.theme;
+                }
+                if (layout.brandConfig) {
+                    brandConfig = layout.brandConfig;
                 }
             }
         }
@@ -1429,7 +1770,7 @@ router.get('/pages/:slug/html/products/:id', async (req, res) => {
       </script>
     `;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(renderPage(slug, workspaceName, product.name, contentHtml, 'products', theme));
+        res.send(renderPage(slug, workspaceName, product.name, contentHtml, 'products', theme, brandConfig));
     }
     catch (error) {
         res.status(500).send('<h1>Lỗi hệ thống</h1>');
@@ -1452,11 +1793,15 @@ router.get('/pages/:slug/html/about', async (req, res) => {
                 workspaceName = ws.name;
         }
         let theme = 'ocean-breeze';
+        let brandConfig = null;
         try {
             if (page.layoutJson) {
                 const layout = JSON.parse(page.layoutJson);
                 if (layout.theme) {
                     theme = layout.theme;
+                }
+                if (layout.brandConfig) {
+                    brandConfig = layout.brandConfig;
                 }
             }
         }
@@ -1497,7 +1842,119 @@ router.get('/pages/:slug/html/about', async (req, res) => {
       </div>
     `;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(renderPage(slug, workspaceName, 'Giới thiệu', contentHtml, 'about', theme));
+        res.send(renderPage(slug, workspaceName, 'Giới thiệu', contentHtml, 'about', theme, brandConfig));
+    }
+    catch (error) {
+        res.status(500).send('<h1>Lỗi hệ thống</h1>');
+    }
+});
+router.get('/pages/:slug/html/blog', async (req, res) => {
+    try {
+        const slug = req.params.slug;
+        const page = await prisma_1.default.landingPage.findFirst({
+            where: { slug }
+        });
+        if (!page) {
+            res.status(404).send('<h1>404 - Không tìm thấy trang</h1>');
+            return;
+        }
+        let workspaceName = 'Trang chủ';
+        if (page.workspaceId) {
+            const ws = await prisma_1.default.workspace.findUnique({ where: { id: page.workspaceId } });
+            if (ws)
+                workspaceName = ws.name;
+        }
+        let theme = 'ocean-breeze';
+        let brandConfig = null;
+        try {
+            if (page.layoutJson) {
+                const layout = JSON.parse(page.layoutJson);
+                if (layout.theme) {
+                    theme = layout.theme;
+                }
+                if (layout.brandConfig) {
+                    brandConfig = layout.brandConfig;
+                }
+            }
+        }
+        catch (e) {
+            // Ignore
+        }
+        let textAccent = 'text-[#f25c22]';
+        let textHoverAccent = 'hover:text-[#f25c22]';
+        let bgAccent = 'bg-[#f25c22]/10';
+        if (theme === 'saleticket-theme') {
+            textAccent = 'text-sky-600';
+            textHoverAccent = 'hover:text-sky-600';
+            bgAccent = 'bg-sky-600/10';
+        }
+        else if (theme === 'education-theme') {
+            textAccent = 'text-[#f05123]';
+            textHoverAccent = 'hover:text-[#f05123]';
+            bgAccent = 'bg-[#f05123]/10';
+        }
+        // Query published blog posts
+        const posts = await prisma_1.default.blogPost.findMany({
+            where: { workspaceId: page.workspaceId || 0, published: true },
+            orderBy: { publishedAt: 'desc' }
+        });
+        let postsHtml = '';
+        if (posts.length === 0) {
+            postsHtml = `
+        <div class="col-span-full text-center py-16 bg-white border border-slate-200/60 rounded-2xl p-8 flex flex-col items-center shadow-sm">
+          <h4 class="text-slate-800 font-bold mb-1 text-base">Chưa có bài viết nào</h4>
+          <p class="text-slate-500 text-xs">Hãy đón chờ những bài viết blog chất lượng cao chuẩn bị ra mắt.</p>
+        </div>
+      `;
+        }
+        else {
+            postsHtml = `
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto px-6">
+          ${posts.map(post => `
+            <div class="bg-white border border-slate-200/60 rounded-2xl overflow-hidden flex flex-col justify-between shadow-sm hover:shadow-md transition duration-300">
+              <div class="p-6 space-y-3 text-left">
+                <div class="flex justify-between items-center gap-2">
+                  <span class="bg-slate-50 text-slate-500 text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ring-1 ring-slate-100">
+                    Bài viết
+                  </span>
+                  <span class="text-[10px] text-slate-400 font-bold">${post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('vi-VN') : new Date(post.createdAt).toLocaleDateString('vi-VN')}</span>
+                </div>
+                <h3 class="font-extrabold text-slate-850 text-base line-clamp-2 ${textHoverAccent} transition cursor-pointer">
+                  <a href="/api/public/blog/posts/${post.slug}/html">${post.title}</a>
+                </h3>
+                <p class="text-slate-500 text-xs leading-relaxed line-clamp-3">
+                  ${post.summary || 'Không có mô tả tóm tắt.'}
+                </p>
+                ${post.tags ? `
+                  <div class="flex flex-wrap gap-1.5 pt-1">
+                    ${post.tags.split(',').map(tag => `<span class="bg-[#fff4ef] text-[#f25c22] text-[10px] px-2.5 py-0.5 rounded-lg border border-[#ffd8c7] font-extrabold">#${tag.trim()}</span>`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                <a href="/api/public/blog/posts/${post.slug}/html" class="text-xs font-bold ${textAccent} hover:underline flex items-center gap-1">
+                  Đọc tiếp →
+                </a>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+        }
+        const contentHtml = `
+      <div class="space-y-8">
+        <div class="text-center max-w-2xl mx-auto space-y-3">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full ${bgAccent} ${textAccent} text-3xl font-bold">📰</div>
+          <h2 class="text-3xl font-black text-slate-900 uppercase tracking-tight">Blog Tin Tức</h2>
+          <p class="text-slate-500 text-sm leading-relaxed">
+            Nơi chia sẻ các bài viết phân tích, cẩm nang và tin tức hữu ích giúp thúc đẩy tăng trưởng và lưu lượng truy cập tự nhiên.
+          </p>
+        </div>
+        ${postsHtml}
+      </div>
+    `;
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(renderPage(slug, workspaceName, 'Blog Tin Tức', contentHtml, 'blog', theme, brandConfig));
     }
     catch (error) {
         res.status(500).send('<h1>Lỗi hệ thống</h1>');
@@ -1520,11 +1977,15 @@ router.get('/pages/:slug/html/login', async (req, res) => {
                 workspaceName = ws.name;
         }
         let theme = 'ocean-breeze';
+        let brandConfig = null;
         try {
             if (page.layoutJson) {
                 const layout = JSON.parse(page.layoutJson);
                 if (layout.theme) {
                     theme = layout.theme;
+                }
+                if (layout.brandConfig) {
+                    brandConfig = layout.brandConfig;
                 }
             }
         }
@@ -1603,7 +2064,7 @@ router.get('/pages/:slug/html/login', async (req, res) => {
       </script>
     `;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(renderPage(slug, workspaceName, 'Đăng nhập', contentHtml, 'auth', theme));
+        res.send(renderPage(slug, workspaceName, 'Đăng nhập', contentHtml, 'auth', theme, brandConfig));
     }
     catch (error) {
         res.status(500).send('<h1>Lỗi hệ thống</h1>');
@@ -1626,11 +2087,15 @@ router.get('/pages/:slug/html/register', async (req, res) => {
                 workspaceName = ws.name;
         }
         let theme = 'ocean-breeze';
+        let brandConfig = null;
         try {
             if (page.layoutJson) {
                 const layout = JSON.parse(page.layoutJson);
                 if (layout.theme) {
                     theme = layout.theme;
+                }
+                if (layout.brandConfig) {
+                    brandConfig = layout.brandConfig;
                 }
             }
         }
@@ -1724,7 +2189,7 @@ router.get('/pages/:slug/html/register', async (req, res) => {
       </script>
     `;
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.send(renderPage(slug, workspaceName, 'Đăng ký', contentHtml, 'auth', theme));
+        res.send(renderPage(slug, workspaceName, 'Đăng ký', contentHtml, 'auth', theme, brandConfig));
     }
     catch (error) {
         res.status(500).send('<h1>Lỗi hệ thống</h1>');

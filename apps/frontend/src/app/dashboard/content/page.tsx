@@ -36,6 +36,11 @@ export default function ContentEditorPage() {
   const [customImagePrompt, setCustomImagePrompt] = useState('');
   const [imageGenerating, setImageGenerating] = useState(false);
 
+  // Phase 3 states
+  const [aiContentType, setAiContentType] = useState<'legacy' | 'blog' | 'facebook' | 'video_script'>('facebook');
+  const [aiResult, setAiResult] = useState<any>(null);
+  const [activeVariationTab, setActiveVariationTab] = useState<'short' | 'curious' | 'cta'>('short');
+
   const handleGenerateCustomImage = async () => {
     if (!customImagePrompt.trim()) return;
 
@@ -108,6 +113,9 @@ export default function ContentEditorPage() {
     setAiInfoTip('');
     setCustomImagePrompt('');
     setImageGenerating(false);
+    setAiContentType('facebook');
+    setAiResult(null);
+    setActiveVariationTab('short');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -213,24 +221,25 @@ export default function ContentEditorPage() {
     setGenerating(true);
     setError('');
     setAiInfoTip('');
+    setAiResult(null);
     try {
-      const data = await apiJson<{
-        title: string;
-        content: string;
-        imageUrl: string | null;
-        isDemo: boolean;
-      }>('/templates/generate-ai', {
+      const data = await apiJson<any>('/templates/generate-ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           urlTarget: aiUrl.trim(),
           aiPrompt: aiPrompt.trim(),
           generateImage: false,
+          contentType: aiContentType === 'legacy' ? undefined : aiContentType,
         }),
       });
 
-      setTitle(data.title);
-      setContent(data.content);
+      // Save the structured result
+      setAiResult(data);
+
+      // Populate default fields
+      setTitle(data.title || '');
+      setContent(data.content || '');
       if (data.imageUrl) {
         setImagePreview(data.imageUrl);
         setImageFile(null);
@@ -239,7 +248,7 @@ export default function ContentEditorPage() {
       if (data.isDemo) {
         setAiInfoTip(t('Đang chạy ở chế độ Demo (chưa cấu hình OpenAI API Key). Thêm OPENAI_API_KEY ở file .env để chạy thực tế.'));
       } else {
-        setAiInfoTip(t('AI đã tạo bài viết và hình ảnh thành công dựa trên phân tích URL đích.'));
+        setAiInfoTip(t('AI đã phân tích website và đề xuất nội dung thành công. Xem bảng kết quả bên dưới để áp dụng bản nháp!'));
       }
       setShowAiPanel(false);
     } catch (err: unknown) {
@@ -456,6 +465,20 @@ export default function ContentEditorPage() {
                         onChange={(e) => setAiUrl(e.target.value)}
                       />
                     </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-500 uppercase mb-1">{t('Loại nội dung AI cần viết *')}</label>
+                      <select
+                        className="input text-xs w-full py-1.5 bg-white font-semibold"
+                        value={aiContentType}
+                        onChange={(e) => setAiContentType(e.target.value as any)}
+                      >
+                        <option value="facebook">{t('Caption Facebook (3 biến thể)')}</option>
+                        <option value="blog">{t('Bài viết Blog chuẩn SEO (HTML)')}</option>
+                        <option value="video_script">{t('Kịch bản Video ngắn')}</option>
+                        <option value="legacy">{t('Mặc định (Bài đăng mạng xã hội)')}</option>
+                      </select>
+                    </div>
                     
                     <div>
                       <label className="block font-bold text-slate-500 uppercase mb-1">{t('Yêu cầu/Định hướng viết bài (tùy chọn)')}</label>
@@ -474,6 +497,120 @@ export default function ContentEditorPage() {
                       onClick={handleGenerateAi}
                     >
                       {generating ? t('Đang phân tích và viết bài...') : t('Viết bài bằng AI ngay')}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {aiResult && (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center justify-between">
+                  <span>✨ {t('Kết quả sinh nội dung AI')}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAiResult(null)}
+                    className="text-[10px] text-red-500 font-bold hover:underline"
+                  >
+                    {t('Xóa kết quả')}
+                  </button>
+                </h4>
+
+                {/* If Facebook Variations */}
+                {aiResult.variations && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t('Chọn một trong 3 biến thể Facebook dưới đây:')}</p>
+                    <div className="flex border-b border-slate-200">
+                      {(['short', 'curious', 'cta'] as const).map((tab) => {
+                        const labels = { short: t('Ngắn gọn'), curious: t('Gây tò mò'), cta: t('Kêu gọi hành động') };
+                        return (
+                          <button
+                            key={tab}
+                            type="button"
+                            className={`py-1.5 px-3 font-bold text-[11px] ${
+                              activeVariationTab === tab ? 'border-b-2 border-brand text-brand' : 'text-slate-500'
+                            }`}
+                            onClick={() => setActiveVariationTab(tab)}
+                          >
+                            {labels[tab]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="bg-white border rounded-lg p-3 text-xs min-h-[80px] whitespace-pre-wrap leading-relaxed">
+                      {aiResult.variations[activeVariationTab]}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContent(aiResult.variations[activeVariationTab]);
+                        if (aiResult.title) setTitle(aiResult.title);
+                        setSuccess(t('Đã áp dụng biến thể vào khung soạn thảo!'));
+                      }}
+                      className="btn-primary w-full py-1.5 text-xs font-bold"
+                    >
+                      {t('Áp dụng biến thể này')}
+                    </button>
+                  </div>
+                )}
+
+                {/* If Video Script */}
+                {aiResult.script && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t('Kịch bản video ngắn phân mảnh:')}</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="bg-white border rounded-lg p-2.5">
+                        <span className="font-extrabold text-brand uppercase text-[9px] tracking-wide block mb-1">🎬 Hook (3s):</span>
+                        <p className="italic text-slate-700">{aiResult.script.hook}</p>
+                      </div>
+                      <div className="bg-white border rounded-lg p-2.5">
+                        <span className="font-extrabold text-brand uppercase text-[9px] tracking-wide block mb-1">📝 Body (45s):</span>
+                        <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{aiResult.script.body}</p>
+                      </div>
+                      <div className="bg-white border rounded-lg p-2.5">
+                        <span className="font-extrabold text-brand uppercase text-[9px] tracking-wide block mb-1">📣 CTA (12s):</span>
+                        <p className="italic text-slate-700">{aiResult.script.cta}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const fullScript = `[HOOK (3s)]\n${aiResult.script.hook}\n\n[BODY (45s)]\n${aiResult.script.body}\n\n[CTA (12s)]\n${aiResult.script.cta}`;
+                        setContent(fullScript);
+                        if (aiResult.title) setTitle(aiResult.title);
+                        setSuccess(t('Đã áp dụng kịch bản video vào khung soạn thảo!'));
+                      }}
+                      className="btn-primary w-full py-1.5 text-xs font-bold"
+                    >
+                      {t('Áp dụng kịch bản này')}
+                    </button>
+                  </div>
+                )}
+
+                {/* If Blog SEO */}
+                {aiResult.slug && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t('Bài Blog chuẩn SEO:')}</p>
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500">Slug:</span>
+                        <code className="bg-white border px-1.5 py-0.5 rounded text-[10px] text-slate-700 font-semibold ml-2 break-all">{aiResult.slug}</code>
+                      </div>
+                      <div className="bg-white border rounded-lg p-2.5">
+                        <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-wide block mb-1">Meta Description:</span>
+                        <p className="text-slate-700 leading-normal">{aiResult.metaDescription}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContent(aiResult.content);
+                        if (aiResult.title) setTitle(aiResult.title);
+                        setSuccess(t('Đã áp dụng nội dung HTML Blog vào khung soạn thảo!'));
+                      }}
+                      className="btn-primary w-full py-1.5 text-xs font-bold"
+                    >
+                      {t('Áp dụng nội dung Blog')}
                     </button>
                   </div>
                 )}

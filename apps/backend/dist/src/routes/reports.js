@@ -235,4 +235,140 @@ router.post('/ai-analyze', async (req, res) => {
         res.status(500).json({ error: 'Lỗi máy chủ khi phân tích AI' });
     }
 });
+router.get('/traffic-sources', async (req, res) => {
+    const days = parseInt(req.query.days || '30');
+    const cacheKey = `ws:${req.workspaceId}:report:traffic-sources:${days}`;
+    try {
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.json(cached);
+            return;
+        }
+        const since = new Date();
+        since.setDate(since.getDate() - days);
+        const snapshots = await prisma_1.default.analyticsSnapshot.findMany({
+            where: {
+                workspaceId: req.workspaceId,
+                date: { gte: since },
+            },
+        });
+        const sourceMap = new Map();
+        const landingMap = new Map();
+        let totalAllSessions = 0;
+        for (const s of snapshots) {
+            if (s.channelType === 'all') {
+                totalAllSessions += s.sessions;
+                continue;
+            }
+            if (!s.channelType)
+                continue;
+            if (s.channelType.startsWith('source:')) {
+                const src = s.channelType.slice(7);
+                const cur = sourceMap.get(src) || { sessions: 0, users: 0, pageviews: 0 };
+                cur.sessions += s.sessions;
+                cur.users += s.users;
+                cur.pageviews += s.pageviews;
+                sourceMap.set(src, cur);
+            }
+            else if (s.channelType.startsWith('landing:')) {
+                const path = s.channelType.slice(8);
+                const cur = landingMap.get(path) || { sessions: 0, users: 0, pageviews: 0 };
+                cur.sessions += s.sessions;
+                cur.users += s.users;
+                cur.pageviews += s.pageviews;
+                landingMap.set(path, cur);
+            }
+        }
+        let sources = Array.from(sourceMap.entries()).map(([source, data]) => ({
+            source,
+            ...data,
+        }));
+        let landingPages = Array.from(landingMap.entries()).map(([path, data]) => ({
+            path,
+            ...data,
+        }));
+        // Sort landing pages and sources by sessions descending
+        sources.sort((a, b) => b.sessions - a.sessions);
+        landingPages.sort((a, b) => b.sessions - a.sessions);
+        const result = { sources, landingPages };
+        await cache_1.cache.set(cacheKey, result, 60); // Cache for 60 seconds
+        res.json(result);
+    }
+    catch (error) {
+        console.error('[GET /reports/traffic-sources]', error);
+        res.status(500).json({ error: 'Lỗi máy chủ khi tải nguồn truy cập' });
+    }
+});
+router.get('/content-roi', async (req, res) => {
+    const cacheKey = `ws:${req.workspaceId}:report:content-roi`;
+    try {
+        const cached = await cache_1.cache.get(cacheKey);
+        if (cached) {
+            res.json(cached);
+            return;
+        }
+        const schedules = await prisma_1.default.contentSchedule.findMany({
+            where: {
+                workspaceId: req.workspaceId,
+                status: 'SUCCESS',
+            },
+            orderBy: { publishedAt: 'desc' },
+        });
+        const rows = [];
+        for (const s of schedules) {
+            // Get clicks from snapshots
+            const campaignType = `campaign:post-${s.id}`;
+            const snapshots = await prisma_1.default.analyticsSnapshot.findMany({
+                where: {
+                    workspaceId: req.workspaceId,
+                    channelType: campaignType,
+                },
+            });
+            const clicks = snapshots.reduce((sum, snap) => sum + snap.sessions, 0);
+            // Get leads from CRM
+            const leads = await prisma_1.default.customer.count({
+                where: {
+                    workspaceId: req.workspaceId,
+                    utmCampaign: `post-${s.id}`,
+                },
+            });
+            // Get orders and revenue
+            const orders = await prisma_1.default.order.findMany({
+                where: {
+                    workspaceId: req.workspaceId,
+                    customer: {
+                        utmCampaign: `post-${s.id}`,
+                    },
+                },
+                select: {
+                    totalAmount: true,
+                },
+            });
+            const ordersCount = orders.length;
+            const revenue = orders.reduce((sum, ord) => sum + ord.totalAmount, 0);
+            // Conversion rate = (leads / clicks) * 100
+            const conversionRate = clicks > 0 ? parseFloat(((leads / clicks) * 100).toFixed(1)) : 0;
+            rows.push({
+                id: s.id,
+                title: s.title,
+                platforms: s.platforms,
+                publishedAt: s.publishedAt || s.scheduledAt,
+                clicks,
+                leads,
+                orders: ordersCount,
+                revenue,
+                conversionRate,
+            });
+        }
+        // Sort by revenue descending, then clicks descending
+        rows.sort((a, b) => b.revenue - a.revenue || b.clicks - a.clicks);
+        const result = { rows };
+        await cache_1.cache.set(cacheKey, result, 60); // Cache for 60 seconds
+        res.json(result);
+    }
+    catch (error) {
+        console.error('[GET /reports/content-roi]', error);
+        res.status(500).json({ error: 'Lỗi máy chủ khi tải báo cáo Content ROI' });
+    }
+});
 exports.default = router;

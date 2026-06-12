@@ -71,13 +71,29 @@ async function executeContentSchedule(item) {
             const conn = await prisma_1.default.socialConnection.findUnique({ where: { id: target.connectionId } });
             pageName = conn?.pageName || undefined;
         }
+        let targetUrlTarget = resolved.urlTarget || undefined;
+        if (row.utmTagEnabled && targetUrlTarget) {
+            try {
+                const u = new URL(targetUrlTarget);
+                if (!u.searchParams.has('utm_source')) {
+                    u.searchParams.set('utm_source', target.platform);
+                    u.searchParams.set('utm_medium', target.platform === 'email' ? 'email' : 'social');
+                    u.searchParams.set('utm_campaign', `post-${row.id}`);
+                    targetUrlTarget = u.toString();
+                }
+            }
+            catch {
+                const separator = targetUrlTarget.includes('?') ? '&' : '?';
+                targetUrlTarget = `${targetUrlTarget}${separator}utm_source=${target.platform}&utm_medium=${target.platform === 'email' ? 'email' : 'social'}&utm_campaign=post-${row.id}`;
+            }
+        }
         let result;
         try {
             result = await (0, dispatch_1.dispatchToPlatform)(target.platform, {
                 title: resolved.title,
                 content: resolved.content,
                 imageUrl: finalImageUrl,
-                urlTarget: resolved.urlTarget || undefined,
+                urlTarget: targetUrlTarget,
                 emailRecipients: target.platform === 'email' ? row.recipients?.trim() || undefined : undefined,
                 workspaceId: row.workspaceId || undefined,
                 connectionId: target.connectionId > 0 ? target.connectionId : undefined,
@@ -94,23 +110,61 @@ async function executeContentSchedule(item) {
         });
     }
     const { status, errorMessage } = (0, dispatch_1.summarizeChannelResults)(channelResults);
-    await prisma_1.default.contentSchedule.update({
-        where: { id: item.id },
-        data: {
-            status,
-            publishedAt: channelResults.some((r) => r.success) ? new Date() : null,
-            errorMessage,
-            channelResults: JSON.stringify(channelResults),
-        },
-    });
+    let finalStatus = status;
+    if (status === 'FAILED') {
+        finalStatus = await handleFailedScheduleRetry(item.id, errorMessage || 'Unknown error', channelResults);
+    }
+    else {
+        await prisma_1.default.contentSchedule.update({
+            where: { id: item.id },
+            data: {
+                status,
+                publishedAt: channelResults.some((r) => r.success) ? new Date() : null,
+                errorMessage,
+                channelResults: JSON.stringify(channelResults),
+            },
+        });
+    }
     await (0, scheduleRecurrence_1.scheduleNextOccurrence)({
         id: row.id,
         scheduledAt: row.scheduledAt,
         repeatRule: row.repeatRule,
         repeatUntil: row.repeatUntil,
         cronExpression: row.cronExpression,
-    }, status);
-    return { status, channelResults, errorMessage };
+    }, finalStatus);
+    return { status: finalStatus, channelResults, errorMessage };
+}
+async function handleFailedScheduleRetry(id, errorMessage, channelResults) {
+    const row = await prisma_1.default.contentSchedule.findUnique({
+        where: { id },
+        select: { attemptCount: true }
+    });
+    const currentAttempts = row?.attemptCount || 1;
+    if (currentAttempts < 3) {
+        const delayMinutes = Math.pow(2, currentAttempts); // 2 mins, 4 mins
+        const nextRun = new Date(Date.now() + delayMinutes * 60 * 1000);
+        await prisma_1.default.contentSchedule.update({
+            where: { id },
+            data: {
+                status: 'PENDING',
+                scheduledAt: nextRun,
+                errorMessage: `[Thử lại ${currentAttempts}/3 thất bại: ${errorMessage}]. Sẽ thử lại sau ${delayMinutes} phút.`,
+                channelResults: channelResults ? JSON.stringify(channelResults) : undefined,
+            },
+        });
+        return 'PENDING';
+    }
+    else {
+        await prisma_1.default.contentSchedule.update({
+            where: { id },
+            data: {
+                status: 'FAILED',
+                errorMessage: `[Thử lại thất bại hoàn toàn sau 3 lần]: ${errorMessage}`,
+                channelResults: channelResults ? JSON.stringify(channelResults) : undefined,
+            },
+        });
+        return 'FAILED';
+    }
 }
 async function dispatchDueSchedules(limit = 10) {
     const due = await prisma_1.default.contentSchedule.findMany({
@@ -124,10 +178,7 @@ async function dispatchDueSchedules(limit = 10) {
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : 'Dispatch failed';
-            await prisma_1.default.contentSchedule.update({
-                where: { id: item.id },
-                data: { status: 'FAILED', errorMessage: msg },
-            });
+            await handleFailedScheduleRetry(item.id, msg);
         }
     }
     return due.length;

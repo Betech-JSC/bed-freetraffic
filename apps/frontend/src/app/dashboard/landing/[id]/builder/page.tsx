@@ -25,7 +25,7 @@ type LandingPage = {
 
 type PageBlock = {
   id: string;
-  type: 'hero' | 'features' | 'form' | 'pricing' | 'footer' | 'countdown' | 'testimonials' | 'faq';
+  type: 'hero' | 'features' | 'form' | 'pricing' | 'footer' | 'countdown' | 'testimonials' | 'faq' | 'logo_cloud';
   title: string;
   subtitle?: string;
   buttonText?: string;
@@ -191,6 +191,11 @@ export default function LandingPageBuilder() {
   const [aiTheme, setAiTheme] = useState<string>('ocean-breeze');
   const [useCase, setUseCase] = useState<string>('saas');
 
+  // Custom Branding & Typography states
+  const [brandTitle, setBrandTitle] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [fontFamily, setFontFamily] = useState('Plus Jakarta Sans');
+
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
@@ -235,6 +240,15 @@ export default function LandingPageBuilder() {
             parsedSeo = { ...parsedSeo, ...(parsed.seo || {}) };
             if (parsed.theme) parsedTheme = parsed.theme;
             if (parsed.useCase) parsedUseCase = parsed.useCase;
+            if (parsed.brandConfig) {
+              setBrandTitle(parsed.brandConfig.brandTitle || '');
+              setLogoUrl(parsed.brandConfig.logoUrl || '');
+              setFontFamily(parsed.brandConfig.fontFamily || 'Plus Jakarta Sans');
+            } else {
+              setBrandTitle('');
+              setLogoUrl('');
+              setFontFamily('Plus Jakarta Sans');
+            }
             if (parsed.popupConfig) {
               setPopupEnabled(parsed.popupConfig.enabled || false);
               setPopupExitIntent(parsed.popupConfig.exitIntent || false);
@@ -824,6 +838,18 @@ export default function LandingPageBuilder() {
       </div>
     </div>
   </section>`;
+      } else if (block.type === 'logo_cloud') {
+        html += `
+  <section class="py-16 px-6${isMobileHidden}" style="background-color: ${block.backgroundColor || '#ffffff'}; color: ${block.textColor || '#64748b'};">
+    <div class="max-w-6xl mx-auto space-y-8 text-center">
+      <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 opacity-80">${block.title}</h2>
+      <div class="flex flex-wrap justify-center items-center gap-12 md:gap-16 py-4">
+        ${(block.items || []).map(logo => `
+        <img src="${logo}" alt="Partner Logo" class="h-8 md:h-10 max-w-[140px] object-contain opacity-60 hover:opacity-95 transition-opacity duration-300 filter grayscale hover:grayscale-0" />
+        `).join('')}
+      </div>
+    </div>
+  </section>`;
       } else if (block.type === 'footer') {
         html += `
   <footer class="py-12 px-6 border-t border-gray-100${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f8fafc'}; color: ${block.textColor || '#4b5563'};">
@@ -1252,6 +1278,20 @@ export default function LandingPageBuilder() {
         ],
         backgroundColor: '#ffffff',
         textColor: '#1e293b',
+      };
+    } else if (type === 'logo_cloud') {
+      newBlock = {
+        id: `block-${Date.now()}`,
+        type: 'logo_cloud',
+        title: 'Đối Tác Tin Cậy Đồng Hành',
+        items: [
+          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=60',
+          'https://images.unsplash.com/photo-1618005198143-e528346436f1?w=150&auto=format&fit=crop&q=60',
+          'https://images.unsplash.com/photo-1618005158179-023f9ec367eb?w=150&auto=format&fit=crop&q=60',
+          'https://images.unsplash.com/photo-1618005128527-5d29d8a57960?w=150&auto=format&fit=crop&q=60'
+        ],
+        backgroundColor: '#ffffff',
+        textColor: '#64748b',
       };
     } else {
       newBlock = {
@@ -1812,6 +1852,56 @@ export default function LandingPageBuilder() {
                         </div>
                       )}
 
+                      {/* Logo Cloud block Settings */}
+                      {selectedBlock.type === 'logo_cloud' && (
+                        <div className="space-y-4">
+                          <label className="text-[11px] text-slate-555 font-semibold">Tiêu đề phụ của khối</label>
+                          <input
+                            type="text"
+                            value={selectedBlock.title}
+                            onChange={(e) => updateBlock({ ...selectedBlock, title: e.target.value })}
+                            className="w-full bg-white border border-slate-200 rounded px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                            placeholder="ĐỐI TÁC TIN DÙNG"
+                          />
+                          
+                          <label className="text-[11px] text-slate-550 font-bold block mt-2">Danh sách đường dẫn Logo đối tác</label>
+                          {(selectedBlock.items || []).map((logo, idx) => (
+                            <div key={idx} className="flex gap-2 items-center">
+                              <input
+                                type="text"
+                                value={logo}
+                                onChange={(e) => {
+                                  const newItems = [...(selectedBlock.items || [])];
+                                  newItems[idx] = e.target.value;
+                                  updateBlock({ ...selectedBlock, items: newItems });
+                                }}
+                                className="flex-1 bg-white border border-slate-200 rounded px-2 py-1.5 text-xs text-slate-850 focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newItems = (selectedBlock.items || []).filter((_, i) => i !== idx);
+                                  updateBlock({ ...selectedBlock, items: newItems });
+                                }}
+                                className="text-rose-500 hover:text-rose-600 text-xs font-bold shrink-0"
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newItems = [...(selectedBlock.items || []), 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=60'];
+                              updateBlock({ ...selectedBlock, items: newItems });
+                            }}
+                            className="w-full py-1 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-[10px] text-slate-700 rounded font-semibold transition"
+                          >
+                            + Thêm logo mới
+                          </button>
+                        </div>
+                      )}
+
                       {/* FAQ block Settings (Use Case 6) */}
                       {selectedBlock.type === 'faq' && (
                         <div className="space-y-4">
@@ -1916,6 +2006,9 @@ export default function LandingPageBuilder() {
                         </button>
                         <button onClick={() => addBlock('footer')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200">
                           Chân trang (Footer)
+                        </button>
+                        <button onClick={() => addBlock('logo_cloud')} className="bg-white border border-slate-200 hover:border-[#f25c22] rounded p-2 text-center text-xs text-slate-700 hover:text-slate-900 transition shadow-sm animate-in fade-in duration-200 col-span-2">
+                          🤝 Đối tác (Logo Cloud)
                         </button>
                       </div>
                     </div>
@@ -2120,6 +2213,48 @@ export default function LandingPageBuilder() {
                       <h5 className="text-slate-900 font-bold text-sm truncate">{seo.title || 'Tiêu đề trang khi chia sẻ'}</h5>
                       <p className="text-slate-655 text-xs line-clamp-2 leading-relaxed">{seo.description || 'Mô tả tóm tắt nội dung Landing Page khi gửi qua tin nhắn Zalo, Facebook...'}</p>
                     </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-200 pt-5 space-y-4 animate-in fade-in duration-200">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#f25c22]">Thương hiệu & Kiểu chữ</h4>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] text-slate-555 font-semibold">Tên thương hiệu (Header Title)</label>
+                    <input
+                      type="text"
+                      value={brandTitle}
+                      onChange={(e) => setBrandTitle(e.target.value)}
+                      placeholder="Ví dụ: Tôm Cá Cô Thảo"
+                      className="w-full bg-white border border-slate-250 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] text-slate-555 font-semibold">Đường dẫn Logo (Logo URL)</label>
+                    <input
+                      type="text"
+                      value={logoUrl}
+                      onChange={(e) => setLogoUrl(e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      className="w-full bg-white border border-slate-250 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] text-slate-555 font-semibold">Kiểu chữ (Font Family)</label>
+                    <select
+                      value={fontFamily}
+                      onChange={(e) => setFontFamily(e.target.value)}
+                      className="w-full bg-white border border-slate-250 rounded px-2.5 py-1.5 text-xs text-slate-855 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
+                    >
+                      <option value="Plus Jakarta Sans">Plus Jakarta Sans (Hiện đại)</option>
+                      <option value="Inter">Inter (Thanh lịch / SaaS)</option>
+                      <option value="Outfit">Outfit (Công nghệ / Sáng tạo)</option>
+                      <option value="Montserrat">Montserrat (Đậm nét / Thương mại)</option>
+                      <option value="Playfair Display">Playfair Display (Cổ điển / Nghệ thuật)</option>
+                      <option value="Roboto">Roboto (Truyền thống)</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -2452,12 +2587,16 @@ export default function LandingPageBuilder() {
             </div>
           ) : (
             <div
+              style={{ fontFamily: `'${fontFamily}', system-ui, -apple-system, sans-serif` }}
               className={`h-fit border border-slate-200 bg-white transition-all duration-300 overflow-hidden shadow-2xl rounded-2xl relative ${
                 device === 'desktop' ? 'w-full max-w-5xl' : 
                 device === 'tablet' ? 'w-[768px] border-x-4 border-slate-300' : 
                 'w-[375px] border-x-4 border-slate-300'
               }`}
             >
+              {fontFamily && (
+                <link href={`https://fonts.googleapis.com/css2?family=${fontFamily.replace(/\s+/g, '+')}:ital,wght@0,300..900;1,300..900&display=swap`} rel="stylesheet" />
+              )}
               {blocks.map((block, index) => {
                 const isMobileHidden = block.hiddenOnMobile;
                 
@@ -2587,9 +2726,21 @@ export default function LandingPageBuilder() {
                     {block.type === 'hero' && (
                       <>
                         {block.imageUrl && block.imageAlignment !== 'center' ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-                            <div className={`space-y-4 ${block.imageAlignment === 'left' ? 'md:order-2' : ''}`}>
-                              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">
+                          <div className={`grid gap-8 items-center ${
+                            device === 'mobile' ? 'grid-cols-1 text-center' :
+                            device === 'tablet' ? 'grid-cols-1 text-center' :
+                            'grid-cols-1 md:grid-cols-2 text-left'
+                          }`}>
+                            <div className={`space-y-4 ${
+                              device === 'mobile' ? '' :
+                              device === 'tablet' ? '' :
+                              block.imageAlignment === 'left' ? 'md:order-2' : ''
+                            }`}>
+                              <h1 className={`font-extrabold tracking-tight leading-tight ${
+                                device === 'mobile' ? 'text-xl' :
+                                device === 'tablet' ? 'text-2xl' :
+                                'text-2xl md:text-3xl'
+                              }`}>
                                 {renderEditableText(block, 'title', block.title, "block")}
                               </h1>
                               <p className="text-xs md:text-sm leading-relaxed opacity-90">
@@ -2599,7 +2750,11 @@ export default function LandingPageBuilder() {
                                 {renderEditableText(block, 'buttonText', block.buttonText || 'Bấm đăng ký', "")}
                               </button>
                             </div>
-                            <div className={`${block.imageAlignment === 'left' ? 'md:order-1' : ''} flex justify-center relative group/img`}>
+                            <div className={`${
+                              device === 'mobile' ? '' :
+                              device === 'tablet' ? '' :
+                              block.imageAlignment === 'left' ? 'md:order-1' : ''
+                            } flex justify-center relative group/img`}>
                               <img src={block.imageUrl} alt="preview" className="rounded-lg shadow-lg border border-slate-200 max-h-[220px] object-cover" />
                               <button
                                 type="button"
@@ -2618,7 +2773,11 @@ export default function LandingPageBuilder() {
                           </div>
                         ) : (
                           <div className="text-center space-y-4">
-                            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight leading-tight">
+                            <h1 className={`font-extrabold tracking-tight leading-tight ${
+                              device === 'mobile' ? 'text-xl' :
+                              device === 'tablet' ? 'text-2xl' :
+                              'text-2xl md:text-3xl'
+                            }`}>
                               {renderEditableText(block, 'title', block.title, "block")}
                             </h1>
                             <p className="text-xs md:text-sm max-w-xl mx-auto leading-relaxed opacity-90">
@@ -2655,7 +2814,11 @@ export default function LandingPageBuilder() {
                         <h2 className="text-md md:text-lg font-bold text-center">
                           {renderEditableText(block, 'title', block.title, "block")}
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className={`grid gap-4 ${
+                          device === 'mobile' ? 'grid-cols-1' :
+                          device === 'tablet' ? 'grid-cols-1' :
+                          'grid-cols-1 md:grid-cols-2'
+                        }`}>
                           {(block.items || []).map((item, idx) => (
                             <div
                               key={idx}
@@ -2792,7 +2955,11 @@ export default function LandingPageBuilder() {
                                 {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                               </p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                            <div className={`grid gap-4 text-left ${
+                              device === 'mobile' ? 'grid-cols-1' :
+                              device === 'tablet' ? 'grid-cols-2' :
+                              'grid-cols-1 md:grid-cols-3'
+                            }`}>
                               {displayProducts.map((p, index) => {
                                 const img = getProductImage(p.name, index);
                                 const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
@@ -2837,7 +3004,11 @@ export default function LandingPageBuilder() {
                                 {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                               </p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                            <div className={`grid gap-4 text-left ${
+                              device === 'mobile' ? 'grid-cols-1' :
+                              device === 'tablet' ? 'grid-cols-2' :
+                              'grid-cols-1 md:grid-cols-3'
+                            }`}>
                               {displayProducts.map((p, index) => {
                                 const img = getProductImage(p.name, index);
                                 const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
@@ -2882,7 +3053,11 @@ export default function LandingPageBuilder() {
                                 {renderEditableText(block, 'subtitle', block.subtitle || '', "block")}
                               </p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                            <div className={`grid gap-4 text-left ${
+                              device === 'mobile' ? 'grid-cols-1' :
+                              device === 'tablet' ? 'grid-cols-2' :
+                              'grid-cols-1 md:grid-cols-3'
+                            }`}>
                               {displayProducts.map((p, index) => {
                                 const img = getProductImage(p.name, index);
                                 const pPrice = typeof p.price === 'number' ? p.price.toLocaleString('vi-VN') : p.price;
@@ -2977,7 +3152,11 @@ export default function LandingPageBuilder() {
                         <h2 className="text-md md:text-lg font-bold text-center">
                           {renderEditableText(block, 'title', block.title, "block")}
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className={`grid gap-4 ${
+                          device === 'mobile' ? 'grid-cols-1' :
+                          device === 'tablet' ? 'grid-cols-2' :
+                          'grid-cols-1 md:grid-cols-3'
+                        }`}>
                           {(block.reviews || []).map((r, idx) => (
                             <div
                               key={idx}
@@ -3044,8 +3223,32 @@ export default function LandingPageBuilder() {
                       </div>
                     )}
 
+                    {block.type === 'logo_cloud' && (
+                      <div className="space-y-6 text-center">
+                        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          {renderEditableText(block, 'title', block.title, "block")}
+                        </h2>
+                        <div className={`flex flex-wrap justify-center items-center py-2 ${
+                          device === 'mobile' ? 'gap-4' :
+                          device === 'tablet' ? 'gap-6' :
+                          'gap-8'
+                        }`}>
+                          {(block.items || []).map((logo, idx) => (
+                            <img
+                              key={idx}
+                              src={logo}
+                              alt="Partner Logo"
+                              className="h-8 max-w-[120px] object-contain opacity-60 hover:opacity-90 transition duration-200"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {block.type === 'footer' && (
-                      <div style={{ color: cardStyle.textSecondary }} className="flex justify-between items-center text-xs">
+                      <div style={{ color: cardStyle.textSecondary }} className={`flex items-center text-xs ${
+                        device === 'mobile' ? 'flex-col text-center gap-4' : 'flex-row justify-between'
+                      }`}>
                         <div>
                           <h4 style={{ color: block.textColor }} className="font-bold">
                             {renderEditableText(block, 'title', block.title, "block")}

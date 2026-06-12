@@ -314,7 +314,7 @@ export default function AutomationPage() {
     <div className="space-y-8 page-container">
       <PageHeader
         title="Automation Engine"
-        description={t('FR-08 — Cấu hình Bot tự động quét bài đăng kéo traffic định kỳ (Facebook, Zalo, Email, YouTube).')}
+        description={t('Cấu hình Bot tự động quét bài đăng kéo traffic định kỳ (Facebook, Zalo, Email, YouTube).')}
         actions={
           <button type="button" onClick={handleOpenCreate} className="btn-primary flex items-center gap-1">
             {t('Tạo chiến dịch')}

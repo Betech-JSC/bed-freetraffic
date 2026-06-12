@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runPageSpeedAudit = runPageSpeedAudit;
-async function runPageSpeedAudit(targetUrl) {
+const seoAuditService_1 = require("./seoAuditService");
+async function runPageSpeedAudit(targetUrl, targetKeyword) {
     const apiKey = process.env.PAGESPEED_API_KEY;
     // Query Performance, SEO, and Best Practices categories
     let url = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(targetUrl)}&category=performance&category=seo&category=best-practices`;
@@ -68,20 +69,42 @@ async function runPageSpeedAudit(targetUrl) {
     }
     catch (error) {
         console.error('PageSpeed Insights Audit failed:', error);
-        // Return a default/failed result if PageSpeed fails
-        return {
-            score: 50,
-            technicalScore: 50,
-            contentScore: 50,
-            uxScore: 50,
-            issues: [
-                {
-                    category: 'technical',
-                    severity: 'CRITICAL',
-                    message: `Lighthouse/PageSpeed Audit thất bại: ${error.message || error}`,
-                    suggestion: 'Kiểm tra xem URL có bị chặn bot của Google hay không.',
-                },
-            ],
-        };
+        try {
+            // Fallback to local SEO Audit so the user gets real On-Page scores instead of a flat 50
+            const localResult = await (0, seoAuditService_1.runSeoAudit)(targetUrl, targetKeyword);
+            return {
+                score: localResult.score,
+                technicalScore: localResult.technicalScore,
+                contentScore: localResult.contentScore,
+                uxScore: localResult.uxScore,
+                issues: [
+                    {
+                        category: 'technical',
+                        severity: 'WARNING',
+                        message: 'Google PageSpeed Insights: Không thể kết nối với dịch vụ đo tốc độ tải trang (HTTP 429 / Rate Limit hoặc Timeout).',
+                        suggestion: 'Hệ thống đã tự động tính điểm dựa trên cấu trúc HTML (On-Page SEO) thực tế của website. Bạn có thể thử lại sau ít phút.',
+                    },
+                    ...localResult.issues,
+                ],
+            };
+        }
+        catch (fallbackError) {
+            console.error('Fallback SEO Audit also failed:', fallbackError);
+            // Return a default/failed result if both PageSpeed and local audit fail (e.g., website offline)
+            return {
+                score: 50,
+                technicalScore: 50,
+                contentScore: 50,
+                uxScore: 50,
+                issues: [
+                    {
+                        category: 'technical',
+                        severity: 'CRITICAL',
+                        message: `Lighthouse/PageSpeed Audit thất bại: ${error.message || error}`,
+                        suggestion: 'Kiểm tra xem URL có bị chặn bot của Google hay không.',
+                    },
+                ],
+            };
+        }
     }
 }

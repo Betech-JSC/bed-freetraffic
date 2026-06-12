@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { apiJson } from '@/lib/api';
+import { apiFetch, apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useLocale } from '@/context/LocaleContext';
 
@@ -32,6 +32,8 @@ type CustomerRow = {
   lastContactAt: string | null;
   notes: { content: string; createdAt: string }[];
   _count: { emailLogs: number; notes: number };
+  trafficSource?: string | null;
+  utmCampaign?: string | null;
 };
 
 type CustomerNote = { id: number; content: string; createdAt: string };
@@ -373,6 +375,30 @@ export default function CustomersPage() {
     }
   };
 
+  const exportCsv = async () => {
+    setActionError('');
+    setSuccess('');
+    try {
+      const res = await apiFetch('/customers/export/csv');
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Lỗi xuất file');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'customers.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setSuccess('Xuất file CSV thành công');
+    } catch (e: any) {
+      setActionError(e.message || 'Lỗi xuất file CSV');
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -520,6 +546,9 @@ export default function CustomersPage() {
         description={t('customerDesc')}
         actions={
           <div className="flex gap-2">
+            <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={exportCsv}>
+              📤 Xuất CSV
+            </button>
             <button type="button" className="btn-secondary flex items-center gap-1.5" onClick={() => setShowImport(true)}>
               📥 Import Khách Hàng
             </button>
@@ -690,7 +719,21 @@ export default function CustomersPage() {
                               {STATUS_LABELS[c.status] || c.status}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-500 truncate mt-0.5">{c.email}</p>
+                          <div className="flex justify-between items-center gap-1.5 mt-0.5">
+                            <p className="text-xs text-slate-500 truncate">{c.email}</p>
+                            <div className="flex gap-1 shrink-0">
+                              {c.trafficSource && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100" title={`Nguồn: ${c.trafficSource}`}>
+                                  {c.trafficSource}
+                                </span>
+                              )}
+                              {c.utmCampaign && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-teal-50 text-teal-700 border border-teal-100" title={`Chiến dịch: ${c.utmCampaign}`}>
+                                  {c.utmCampaign}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                           {c.notes[0] && (
                             <p className="text-[10px] text-slate-400 truncate mt-2 bg-slate-50 p-1 border rounded" title={c.notes[0].content}>
                               {c.notes[0].content}
@@ -793,6 +836,33 @@ export default function CustomersPage() {
                     <div>
                       <span className="font-bold text-slate-400 uppercase tracking-wide">Công ty:</span>
                       <p className="text-slate-800 font-medium mt-0.5">{detail.company || '—'}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-xs pt-2 border-t border-slate-100 text-slate-600">
+                    <div>
+                      <span className="font-bold text-slate-400 uppercase tracking-wide">Nguồn Traffic:</span>
+                      <p className="mt-0.5">
+                        {detail.trafficSource ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                            {detail.trafficSource}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">—</span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-400 uppercase tracking-wide">Chiến dịch UTM (Campaign):</span>
+                      <p className="mt-0.5">
+                        {detail.utmCampaign ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-100">
+                            {detail.utmCampaign}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">—</span>
+                        )}
+                      </p>
                     </div>
                   </div>
 

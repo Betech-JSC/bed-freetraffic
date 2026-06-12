@@ -5,6 +5,12 @@ import { apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useLocale } from '@/context/LocaleContext';
 
+const SparklesIcon = () => (
+  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.286L13 21l-2.286-6.857L5 12l5.714-2.286L13 3z" />
+  </svg>
+);
+
 type BlogPost = {
   id: number;
   slug: string;
@@ -24,6 +30,14 @@ export default function BlogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // AI Writer states
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiUrl, setAiUrl] = useState('');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+  const [optimizeLoading, setOptimizeLoading] = useState(false);
 
   // Form states for creation / editing
   const [isEditing, setIsEditing] = useState(false);
@@ -266,6 +280,98 @@ export default function BlogPage() {
     }
   };
 
+  const handleAiGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiUrl.trim()) {
+      setAiError(t('URL đích là bắt buộc'));
+      return;
+    }
+    setAiLoading(true);
+    setAiError('');
+    try {
+      const res = await apiJson<{
+        title: string;
+        content: string;
+        slug?: string;
+        metaDescription?: string;
+        isDemo: boolean;
+      }>('/templates/generate-ai', {
+        method: 'POST',
+        body: JSON.stringify({
+          urlTarget: aiUrl.trim(),
+          aiPrompt: aiPrompt.trim() || undefined,
+          contentType: 'blog',
+          generateImage: false,
+        }),
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        title: res.title || prev.title,
+        slug: res.slug || prev.slug,
+        summary: res.metaDescription || prev.summary,
+        content: res.content || prev.content,
+      }));
+      
+      if (focusKeyword.trim() === '' && res.title) {
+        const guessedKw = aiPrompt.trim() || res.title.split(' ').slice(0, 2).join(' ');
+        setFocusKeyword(guessedKw);
+      }
+      
+      setShowAiModal(false);
+      setAiUrl('');
+      setAiPrompt('');
+    } catch (err: any) {
+      setAiError(err.message || t('Lỗi tạo bài viết bằng AI'));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleOptimizeSeo = async () => {
+    if (!focusKeyword.trim()) {
+      setError(t('Vui lòng điền Từ khóa chính để hệ thống phân tích tối ưu.'));
+      return;
+    }
+    setOptimizeLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await apiJson<{
+        title: string;
+        slug: string;
+        metaDescription: string;
+        content: string;
+        isDemo: boolean;
+      }>('/templates/optimize-seo', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: form.title,
+          slug: form.slug,
+          metaDescription: form.summary,
+          content: form.content,
+          focusKeyword: focusKeyword.trim()
+        }),
+      });
+
+      setForm({
+        title: res.title,
+        slug: res.slug,
+        summary: res.metaDescription,
+        content: res.content,
+        authorName: form.authorName,
+        tags: form.tags,
+        published: form.published,
+      });
+
+      setSuccess(t('Tự động tối ưu SEO bằng AI thành công! Điểm SEO đã được cập nhật.'));
+    } catch (err: any) {
+      setError(err.message || t('Lỗi tối ưu SEO bằng AI'));
+    } finally {
+      setOptimizeLoading(false);
+    }
+  };
+
   // Automatically suggest a slug based on title
   useEffect(() => {
     if (!selectedPostId && form.title) {
@@ -310,9 +416,21 @@ export default function BlogPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Editor Form */}
           <form onSubmit={handleSave} className="lg:col-span-2 card p-6 space-y-6">
-            <h3 className="text-lg font-bold text-slate-800 border-b border-slate-100 pb-3">
-              {selectedPostId ? 'Chỉnh sửa bài viết' : 'Viết bài mới'}
-            </h3>
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-slate-800">
+                {selectedPostId ? t('Chỉnh sửa bài viết') : t('Viết bài mới')}
+              </h3>
+              {!selectedPostId && (
+                <button
+                  type="button"
+                  onClick={() => { setShowAiModal(true); setAiError(''); }}
+                  className="text-xs font-bold text-white px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#f25c22] to-[#ff7a45] hover:from-[#d94d1a] hover:to-[#f25c22] shadow-[0_4px_12px_rgba(242, 92, 34, 0.25)] transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  <SparklesIcon />
+                  {t('Viết bằng AI 🤖')}
+                </button>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-1">
@@ -422,16 +540,32 @@ export default function BlogPage() {
               📊 Trợ lý SEO On-page Real-time
             </h3>
 
-            {/* Focus Keyword Input */}
-            <div className="space-y-1">
+            {/* Focus Keyword Input & Auto-Optimize */}
+            <div className="space-y-1.5">
               <label className="label text-xs font-bold text-slate-500 uppercase tracking-wider">Từ khóa chính (Focus Keyword)</label>
-              <input
-                type="text"
-                value={focusKeyword}
-                onChange={(e) => setFocusKeyword(e.target.value)}
-                placeholder="Nhập từ khóa chính để kiểm tra..."
-                className="input text-xs"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={focusKeyword}
+                  onChange={(e) => setFocusKeyword(e.target.value)}
+                  placeholder="Nhập từ khóa chính để kiểm tra..."
+                  className="input text-xs flex-1"
+                  disabled={optimizeLoading}
+                />
+                <button
+                  type="button"
+                  onClick={handleOptimizeSeo}
+                  className="px-3.5 py-2 text-white text-[11px] font-bold rounded-xl bg-gradient-to-r from-[#f25c22] to-[#ff7a45] hover:from-[#d94d1a] hover:to-[#f25c22] shadow-[0_4px_10px_rgba(242,92,34,0.15)] active:scale-95 transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                  disabled={optimizeLoading || !focusKeyword.trim()}
+                  title={t('Tự động tối ưu hóa nội dung chuẩn SEO dựa trên từ khóa chính')}
+                >
+                  {optimizeLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>🪄 {t('Tối ưu SEO')}</>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Score Gauge */}
@@ -529,7 +663,7 @@ export default function BlogPage() {
                       {post.published ? 'Gỡ' : 'Đăng'}
                     </button>
                     <a
-                      href={`/api/public/blog/posts/${post.slug}`}
+                      href={`/api/public/blog/posts/${post.slug}/html`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-[10px] font-bold uppercase border border-slate-200 hover:bg-slate-50 text-slate-500 px-2.5 py-1 rounded transition-all"
@@ -557,6 +691,94 @@ export default function BlogPage() {
               </div>
             ))
           )}
+        </div>
+      )}
+      {/* AI Writer Modal */}
+      {showAiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-all animate-fade-in">
+          <div className="bg-white rounded-3xl w-full max-w-lg flex flex-col shadow-2xl border border-slate-100 overflow-hidden transform transition-all scale-100">
+            {/* Header */}
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-orange-50/50 to-amber-50/50 flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-[#f25c22] to-[#ff7a45] shadow-sm">
+                  <SparklesIcon />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-sm">{t('Viết bài mới bằng AI')}</h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">{t('Tự động cào dữ liệu và soạn thảo nội dung chuẩn SEO.')}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAiModal(false)}
+                className="w-7 h-7 rounded-full hover:bg-slate-100 transition-colors flex items-center justify-center text-slate-400 hover:text-slate-600 font-bold cursor-pointer text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleAiGenerate} className="p-6 space-y-4">
+              {aiError && (
+                <div className="rounded-xl bg-red-50 text-red-700 p-3 text-xs border border-red-100">
+                  {aiError}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="label text-xs font-bold text-slate-500">{t('URL đích (Website cần viết bài)')} <span className="text-red-500">*</span></label>
+                <input
+                  type="url"
+                  className="input text-xs"
+                  placeholder="Ví dụ: https://mywebsite.com/product"
+                  value={aiUrl}
+                  onChange={(e) => setAiUrl(e.target.value)}
+                  required
+                  disabled={aiLoading}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="label text-xs font-bold text-slate-500">{t('Ý tưởng / Yêu cầu bổ sung cho AI (Tùy chọn)')}</label>
+                <textarea
+                  className="input text-xs"
+                  placeholder="Ví dụ: Tập trung viết về thế mạnh X, phong cách viết vui tươi, chèn từ khóa SEO chính là 'tự động hóa marketing'..."
+                  rows={3}
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  disabled={aiLoading}
+                />
+              </div>
+
+              <div className="flex gap-2 justify-end pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAiModal(false)}
+                  className="btn-secondary text-xs px-4 py-2"
+                  disabled={aiLoading}
+                >
+                  {t('Hủy bỏ')}
+                </button>
+                <button
+                  type="submit"
+                  className="text-white text-xs font-bold px-4 py-2 rounded-xl bg-gradient-to-r from-[#f25c22] to-[#ff7a45] hover:from-[#d94d1a] hover:to-[#f25c22] shadow-[0_4px_12px_rgba(242, 92, 34, 0.25)] transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  disabled={aiLoading}
+                >
+                  {aiLoading ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      {t('AI đang viết bài...')}
+                    </>
+                  ) : (
+                    <>
+                      <SparklesIcon />
+                      {t('Tạo bài bằng AI 🤖')}
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

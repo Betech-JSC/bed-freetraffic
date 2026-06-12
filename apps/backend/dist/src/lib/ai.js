@@ -156,10 +156,12 @@ async function fetchWithRetry(url, init, retries = 2, delayMs = 1200) {
     for (let i = 0; i <= retries; i++) {
         try {
             const res = await fetch(url, init);
-            // Retry if service is temporarily overloaded (503)
-            if (res.status === 503 && i < retries) {
-                console.warn(`⚠️ [AI API 503] Model quá tải. Đang thử lại lần ${i + 1}/${retries} sau ${delayMs}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delayMs));
+            lastRes = res;
+            // Retry if service is temporarily overloaded (503) or rate limited (429)
+            if ((res.status === 503 || res.status === 429) && i < retries) {
+                const retryDelay = res.status === 429 ? delayMs * 2 : delayMs;
+                console.warn(`⚠️ [AI API ${res.status}] ${res.status === 429 ? 'Rate limited' : 'Model quá tải'}. Đang thử lại lần ${i + 1}/${retries} sau ${retryDelay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
                 continue;
             }
             return res;
@@ -173,5 +175,6 @@ async function fetchWithRetry(url, init, retries = 2, delayMs = 1200) {
             throw err;
         }
     }
+    // lastRes is guaranteed non-null here because the loop always assigns it or throws
     return lastRes;
 }

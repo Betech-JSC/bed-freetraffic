@@ -21,7 +21,7 @@ router.get('/audits', async (req, res) => {
     res.json(audits);
 });
 router.post('/audit', auth_1.requireWrite, async (req, res) => {
-    const { url } = req.body;
+    const { url, targetKeyword } = req.body;
     if (!url) {
         res.status(400).json({ error: 'URL là bắt buộc' });
         return;
@@ -38,7 +38,7 @@ router.post('/audit', auth_1.requireWrite, async (req, res) => {
         });
         return;
     }
-    const result = await (0, seoAuditService_1.runSeoAudit)(url);
+    const result = await (0, seoAuditService_1.runSeoAudit)(url, targetKeyword);
     const audit = await prisma_1.default.seoAudit.create({
         data: {
             url,
@@ -54,13 +54,13 @@ router.post('/audit', auth_1.requireWrite, async (req, res) => {
     res.status(201).json(audit);
 });
 router.post('/pagespeed', auth_1.requireWrite, async (req, res) => {
-    const { url } = req.body;
+    const { url, targetKeyword } = req.body;
     if (!url) {
         res.status(400).json({ error: 'URL là bắt buộc' });
         return;
     }
     try {
-        const result = await (0, pagespeedAuditService_1.runPageSpeedAudit)(url);
+        const result = await (0, pagespeedAuditService_1.runPageSpeedAudit)(url, targetKeyword);
         const audit = await prisma_1.default.seoAudit.create({
             data: {
                 url,
@@ -104,6 +104,36 @@ router.get('/audits/:id', async (req, res) => {
         return;
     }
     res.json(audit);
+});
+router.delete('/audits', auth_1.requireWrite, async (req, res) => {
+    try {
+        const { count } = await prisma_1.default.seoAudit.deleteMany({
+            where: { workspaceId: req.workspaceId },
+        });
+        res.json({ success: true, message: `Đã xóa thành công tất cả ${count} kết quả audit` });
+    }
+    catch (error) {
+        console.error('[DELETE /seo/audits]', error);
+        res.status(500).json({ error: error.message || 'Lỗi xóa tất cả kết quả audit' });
+    }
+});
+router.delete('/audits/:id', auth_1.requireWrite, async (req, res) => {
+    const id = parseInt(req.params.id);
+    try {
+        const audit = await prisma_1.default.seoAudit.findFirst({
+            where: { id, workspaceId: req.workspaceId },
+        });
+        if (!audit) {
+            res.status(404).json({ error: 'Không tìm thấy audit' });
+            return;
+        }
+        await prisma_1.default.seoAudit.delete({ where: { id } });
+        res.json({ success: true, message: 'Đã xóa kết quả audit thành công' });
+    }
+    catch (error) {
+        console.error('[DELETE /seo/audits/:id]', error);
+        res.status(500).json({ error: error.message || 'Lỗi xóa kết quả audit' });
+    }
 });
 router.post('/fix-issues', auth_1.requireWrite, async (req, res) => {
     const { title, description, keywords, issues } = req.body;

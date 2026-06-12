@@ -42,26 +42,7 @@ exports.executeAutomationTask = executeAutomationTask;
 const node_cron_1 = __importDefault(require("node-cron"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const automationTemplate_1 = require("../services/automationTemplate");
-function parsePlatforms(platformsStr) {
-    if (!platformsStr)
-        return ['facebook'];
-    const trimmed = platformsStr.trim();
-    if (trimmed.startsWith('[')) {
-        try {
-            const parsed = JSON.parse(trimmed);
-            if (Array.isArray(parsed)) {
-                return parsed.map((p) => String(p).trim().toLowerCase()).filter(Boolean);
-            }
-        }
-        catch (err) {
-            // ignore and fall through
-        }
-    }
-    return trimmed
-        .split(',')
-        .map((x) => x.trim().toLowerCase())
-        .filter(Boolean);
-}
+const dispatch_1 = require("../lib/dispatch");
 /** @deprecated Dùng lib/dispatch — giữ cho tương thích nội bộ */
 async function publishScheduledContent(opts) {
     const { dispatchToPlatform } = await Promise.resolve().then(() => __importStar(require('../lib/dispatch')));
@@ -93,7 +74,7 @@ async function executeAutomationTask(task) {
     }
     // Fallback to platforms string parsing
     if (targets.length === 0) {
-        const platformList = parsePlatforms(task.platforms);
+        const platformList = (0, dispatch_1.parsePlatforms)(task.platforms);
         for (const p of platformList) {
             targets.push({ connectionId: 0, platform: p });
         }
