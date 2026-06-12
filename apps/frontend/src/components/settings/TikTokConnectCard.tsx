@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiFetch, apiJson } from '@/lib/api';
 import { useLocale } from '@/context/LocaleContext';
+import { Toast } from '@/components/ui/Toast';
 
 type Props = {
   onConnectionChange: () => void;
@@ -318,14 +319,20 @@ export function TikTokConnectCard({ onConnectionChange }: Props) {
         </div>
 
         {success && (
-          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-sm text-emerald-800">
-            <span className="font-medium">{success}</span>
-          </div>
+          <Toast
+            message={success}
+            type="success"
+            onClose={() => setSuccess('')}
+            duration={4000}
+          />
         )}
         {error && (
-          <div className="mt-4 p-4 bg-rose-50 border border-rose-100 rounded-xl text-sm text-rose-800">
-            <span className="font-medium whitespace-pre-line">{error}</span>
-          </div>
+          <Toast
+            message={error}
+            type="error"
+            onClose={() => setError('')}
+            duration={5000}
+          />
         )}
       </div>
 
