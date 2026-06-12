@@ -1,25 +1,8 @@
 import cron from 'node-cron';
 import prisma from '../lib/prisma';
 import { resolveAutomationPost } from '../services/automationTemplate';
+import { parsePlatforms } from '../lib/dispatch';
 
-function parsePlatforms(platformsStr: string | null | undefined): string[] {
-  if (!platformsStr) return ['facebook'];
-  const trimmed = platformsStr.trim();
-  if (trimmed.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) {
-        return parsed.map((p: any) => String(p).trim().toLowerCase()).filter(Boolean);
-      }
-    } catch (err) {
-      // ignore and fall through
-    }
-  }
-  return trimmed
-    .split(',')
-    .map((x) => x.trim().toLowerCase())
-    .filter(Boolean);
-}
 
 /** @deprecated Dùng lib/dispatch — giữ cho tương thích nội bộ */
 export async function publishScheduledContent(opts: {
