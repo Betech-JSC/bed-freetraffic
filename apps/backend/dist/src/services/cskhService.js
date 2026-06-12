@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendTelegramAlert = sendTelegramAlert;
+exports.detectTakeoverIntent = detectTakeoverIntent;
 exports.chunkKnowledgeBase = chunkKnowledgeBase;
 exports.retrieveRelevantChunks = retrieveRelevantChunks;
 exports.parseToolCalls = parseToolCalls;
@@ -45,6 +46,42 @@ exports.handleVisitorMessage = handleVisitorMessage;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const ai_1 = require("../lib/ai");
 const smtp_1 = require("../lib/smtp");
+const socket_1 = require("../lib/socket");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+function getBase64ImageUrl(imageUrl) {
+    try {
+        if (imageUrl.startsWith('/uploads/')) {
+            const filePath = path_1.default.join(__dirname, '../..', imageUrl);
+            if (fs_1.default.existsSync(filePath)) {
+                const fileBuffer = fs_1.default.readFileSync(filePath);
+                const ext = path_1.default.extname(filePath).toLowerCase().replace('.', '');
+                const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`;
+                return `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+            }
+        }
+        else if (imageUrl.startsWith('data:')) {
+            return imageUrl;
+        }
+    }
+    catch (err) {
+        console.error('[Vision Helper] Error converting image to base64:', err);
+    }
+    return null;
+}
+function broadcastSocketMessage(workspaceId, sessionId, message) {
+    try {
+        const io = (0, socket_1.getIo)();
+        if (io) {
+            io.to(`session:${sessionId}`).emit('new_message', message);
+            io.to(`workspace:${workspaceId}`).emit('new_message', message);
+            console.log(`[Socket.io] Broadcasted message ${message.id} to session:${sessionId} and workspace:${workspaceId}`);
+        }
+    }
+    catch (err) {
+        console.error('[Socket.io] Error broadcasting message:', err);
+    }
+}
 async function sendTelegramAlert(workspaceId, text) {
     try {
         const conn = await prisma_1.default.socialConnection.findFirst({
@@ -554,7 +591,7 @@ Trả về duy nhất một đối tượng JSON hợp lệ không bao bọc b�
     }
     return { sentiment: 'NEUTRAL', score: 50, reason: 'Lỗi hệ thống' };
 }
-async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, userAgent) {
+async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, userAgent, imageUrl) {
     // 1. Get or create session
     let session;
     if (sessionId) {
@@ -572,13 +609,15 @@ async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, 
         });
     }
     // 2. Save visitor message
-    await prisma_1.default.chatMessage.create({
+    const visitorMsg = await prisma_1.default.chatMessage.create({
         data: {
             sessionId: session.id,
             sender: 'visitor',
             content: message,
+            imageUrl: imageUrl || null,
         }
     });
+    broadcastSocketMessage(workspaceId, session.id, visitorMsg);
     const ai = (0, ai_1.getAiConfig)('/chat/completions');
     // Check if visitor wants to talk to a human or expresses frustration
     let takeoverIntent = detectTakeoverIntent(message);
@@ -702,13 +741,14 @@ async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, 
         }
         // Save bot response
         const replyText = 'Dạ em đã ghi nhận yêu cầu của anh/chị và chuyển tiếp ngay đến chuyên viên tư vấn hỗ trợ trực tiếp. Chuyên viên sẽ phản hồi lại anh/chị ngay trong giây lát ạ!';
-        await prisma_1.default.chatMessage.create({
+        const botMsg = await prisma_1.default.chatMessage.create({
             data: {
                 sessionId: session.id,
                 sender: 'bot',
                 content: replyText,
             }
         });
+        broadcastSocketMessage(workspaceId, session.id, botMsg);
         return {
             sessionId: session.id,
             reply: replyText,
@@ -744,10 +784,25 @@ async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, 
                 take: 8,
             });
             history.reverse();
-            const messagesForAi = history.map(msg => ({
-                role: msg.sender === 'visitor' ? 'user' : 'assistant',
-                content: msg.content,
-            }));
+            const messagesForAi = history.map(msg => {
+                const role = msg.sender === 'visitor' ? 'user' : 'assistant';
+                if (msg.imageUrl && role === 'user') {
+                    const base64Url = getBase64ImageUrl(msg.imageUrl);
+                    if (base64Url) {
+                        return {
+                            role,
+                            content: [
+                                { type: 'text', text: msg.content || 'Hãy xem hình ảnh này.' },
+                                { type: 'image_url', image_url: { url: base64Url } }
+                            ]
+                        };
+                    }
+                }
+                return {
+                    role,
+                    content: msg.content,
+                };
+            });
             const defaultKb = `Be Traffic (Growth OS) là một nền tảng tối ưu hóa traffic và bán hàng tự động All-in-One.
 Các tính năng và dịch vụ chính:
 1. Đăng bài đa kênh tự động: Lên lịch và xuất bản bài đăng lên Facebook, Zalo, YouTube.
@@ -885,13 +940,14 @@ Nhiệm vụ của bạn:
         }
     }
     // Save bot response
-    await prisma_1.default.chatMessage.create({
+    const botMsg = await prisma_1.default.chatMessage.create({
         data: {
             sessionId: session.id,
             sender: 'bot',
             content: replyText,
         }
     });
+    broadcastSocketMessage(workspaceId, session.id, botMsg);
     // 4. Extract Email & Phone from message
     const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
     const phoneRegex = /(?:\+84|0)\d{9,10}/g;

@@ -38,8 +38,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const dotenv_1 = __importDefault(require("dotenv"));
+const dotenv_1 = __importDefault(require("dotenv")); // Reloader trigger comment
 const path_1 = __importDefault(require("path"));
+const http_1 = require("http");
+const socket_1 = require("./lib/socket");
 const auth_1 = __importDefault(require("./routes/auth"));
 const channel_1 = __importDefault(require("./routes/channel"));
 const keyword_1 = __importDefault(require("./routes/keyword"));
@@ -174,7 +176,9 @@ app.use('/api', errorHandler_1.notFoundHandler);
 app.use(errorHandler_1.errorHandler);
 const embeddings_1 = require("./lib/embeddings");
 const auditInit_1 = require("./lib/auditInit");
-app.listen(port, () => {
+const server = (0, http_1.createServer)(app);
+(0, socket_1.initSocket)(server);
+server.listen(port, () => {
     console.log(`Backend is running at http://localhost:${port}`);
     console.log(`✅ API ${apiMeta_1.API_VERSION} — Quét backlink: GET/POST /api/backlinks/scan`);
     // Khởi tạo Vector DB cho RAG (Neon)

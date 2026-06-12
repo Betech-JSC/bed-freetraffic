@@ -130,7 +130,7 @@ router.get('/:platform/callback', async (req, res) => {
             return;
         }
         let userProfile = null;
-        let oaProfile = null;
+        let oaProfiles = [];
         let isMock = code.startsWith('mock_');
         // === MOCK (SANDBOX) PROCESSING ===
         if (isMock) {
@@ -143,11 +143,11 @@ router.get('/:platform/callback', async (req, res) => {
                 avatar: ''
             };
             if (action === 'connect') {
-                oaProfile = {
+                oaProfiles.push({
                     pageId: `mock_${platform}_oa_id_${mockId}`,
                     pageName: `${platform.toUpperCase()} OA Demo ${mockId}`,
                     accessToken: `mock_access_token_${platform}_${mockId}`
-                };
+                });
             }
         }
         // === REAL OAUTH PROCESSING ===
@@ -182,11 +182,11 @@ router.get('/:platform/callback', async (req, res) => {
                 };
                 if (action === 'connect') {
                     // Lưu token Google OAuth để phục vụ đồng bộ GA4/GSC
-                    oaProfile = {
+                    oaProfiles.push({
                         pageId: profile.sub,
                         pageName: profile.email,
                         accessToken: tokens.access_token
-                    };
+                    });
                     // Lưu google credentials
                     const existing = await prisma_1.default.googleIntegration.findFirst({ where: { workspaceId } });
                     const googleData = {
@@ -229,13 +229,12 @@ router.get('/:platform/callback', async (req, res) => {
                     if (!pagesData.data || pagesData.data.length === 0) {
                         throw new Error('Bạn cần quản lý ít nhất 1 Fanpage Facebook để thực hiện kết nối');
                     }
-                    // Chọn page đầu tiên làm mặc định kết nối nhanh
-                    const defaultPage = pagesData.data[0];
-                    oaProfile = {
-                        pageId: defaultPage.id,
-                        pageName: defaultPage.name,
-                        accessToken: defaultPage.access_token
-                    };
+                    // Lấy toàn bộ các pages mà user đã cấp quyền
+                    oaProfiles = pagesData.data.map((page) => ({
+                        pageId: page.id,
+                        pageName: page.name,
+                        accessToken: page.access_token
+                    }));
                 }
             }
             // ZALO
@@ -269,11 +268,11 @@ router.get('/:platform/callback', async (req, res) => {
                     const oaData = await oaRes.json();
                     if (oaData.error)
                         throw new Error(oaData.message || 'Không lấy được thông tin OA');
-                    oaProfile = {
+                    oaProfiles.push({
                         pageId: oaData.data?.oa_id?.toString() || 'zalo_oa',
                         pageName: oaData.data?.name || 'Zalo OA',
                         accessToken: tokenData.access_token
-                    };
+                    });
                 }
                 else {
                     // Zalo user login
@@ -307,11 +306,11 @@ router.get('/:platform/callback', async (req, res) => {
                 if (tokenData.error || !tokenData.access_token) {
                     throw new Error(tokenData.message || 'Lỗi uỷ quyền TikTok Shop');
                 }
-                oaProfile = {
+                oaProfiles.push({
                     pageId: tokenData.shop_id || 'tiktok_shop_id',
                     pageName: tokenData.shop_name || 'TikTok Shop Store',
                     accessToken: JSON.stringify(tokenData)
-                };
+                });
             }
             // TIKTOK CREATOR
             else if (platform === 'tiktok') {
@@ -337,11 +336,11 @@ router.get('/:platform/callback', async (req, res) => {
                 });
                 const profileData = await profileRes.json();
                 const profile = profileData.data?.user || {};
-                oaProfile = {
+                oaProfiles.push({
                     pageId: profile.open_id || 'tiktok_creator_id',
                     pageName: profile.display_name || 'TikTok Creator',
                     accessToken: JSON.stringify(tokenData)
-                };
+                });
             }
         }
         // === HÀNH ĐỘNG 1: ĐĂNG NHẬP XÃ HỘI (LOGIN) ===
@@ -401,31 +400,33 @@ router.get('/:platform/callback', async (req, res) => {
                 }
             }
             // Facebook & Zalo OA connection
-            if (oaProfile) {
-                const existing = await prisma_1.default.socialConnection.findFirst({
-                    where: { platform, pageId: oaProfile.pageId, workspaceId }
-                });
-                if (existing) {
-                    await prisma_1.default.socialConnection.update({
-                        where: { id: existing.id },
-                        data: {
-                            accessToken: oaProfile.accessToken,
-                            pageName: oaProfile.pageName,
-                            status: 'CONNECTED'
-                        }
+            if (oaProfiles.length > 0) {
+                for (const oa of oaProfiles) {
+                    const existing = await prisma_1.default.socialConnection.findFirst({
+                        where: { platform, pageId: oa.pageId, workspaceId }
                     });
-                }
-                else {
-                    await prisma_1.default.socialConnection.create({
-                        data: {
-                            platform,
-                            workspaceId,
-                            accessToken: oaProfile.accessToken,
-                            pageName: oaProfile.pageName,
-                            pageId: oaProfile.pageId,
-                            status: 'CONNECTED'
-                        }
-                    });
+                    if (existing) {
+                        await prisma_1.default.socialConnection.update({
+                            where: { id: existing.id },
+                            data: {
+                                accessToken: oa.accessToken,
+                                pageName: oa.pageName,
+                                status: 'CONNECTED'
+                            }
+                        });
+                    }
+                    else {
+                        await prisma_1.default.socialConnection.create({
+                            data: {
+                                platform,
+                                workspaceId,
+                                accessToken: oa.accessToken,
+                                pageName: oa.pageName,
+                                pageId: oa.pageId,
+                                status: 'CONNECTED'
+                            }
+                        });
+                    }
                 }
             }
             res.redirect(`${frontendUrl}/oauth/callback?connect=success&platform=${platform}`);

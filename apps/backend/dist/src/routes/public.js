@@ -44,6 +44,38 @@ const node_1 = __importDefault(require("@payos/node"));
 const stripe_1 = __importDefault(require("stripe"));
 const cache_1 = require("../lib/cache");
 const rateLimiter_1 = require("../middleware/rateLimiter");
+const multer_1 = __importDefault(require("multer"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const form_data_1 = __importDefault(require("form-data"));
+const ai_1 = require("../lib/ai");
+const uploadDir = path_1.default.join(__dirname, '../../uploads');
+if (!fs_1.default.existsSync(uploadDir)) {
+    fs_1.default.mkdirSync(uploadDir, { recursive: true });
+}
+const storage = multer_1.default.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = path_1.default.extname(file.originalname).toLowerCase();
+        cb(null, `cskh-img-${uniqueSuffix}${ext}`);
+    }
+});
+const uploadImage = (0, multer_1.default)({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        }
+        else {
+            cb(new Error('Chỉ cho phép tải lên định dạng hình ảnh (JPEG, PNG, GIF, WEBP).'), false);
+        }
+    }
+});
 const router = (0, express_1.Router)();
 // Retrieve all published blog posts of a workspace (public)
 router.get('/blog/workspace/:workspaceId', async (req, res) => {
@@ -464,17 +496,114 @@ router.get('/pages/:slug/html', async (req, res) => {
         res.status(500).send('<h1>Lỗi hệ thống khi tải trang</h1>');
     }
 });
+// Public endpoint to upload images for chat widget
+router.post('/cskh/upload-image', (req, res) => {
+    uploadImage.single('image')(req, res, (err) => {
+        if (err) {
+            res.status(400).json({ error: err.message || 'Lỗi tải tệp tin.' });
+            return;
+        }
+        if (!req.file) {
+            res.status(400).json({ error: 'Không tìm thấy tệp tin được tải lên.' });
+            return;
+        }
+        const publicUrl = `/uploads/${req.file.filename}`;
+        res.json({ success: true, imageUrl: publicUrl });
+    });
+});
+const audioStorage = multer_1.default.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = path_1.default.extname(file.originalname).toLowerCase() || '.webm';
+        cb(null, `cskh-audio-${uniqueSuffix}${ext}`);
+    }
+});
+const uploadAudio = (0, multer_1.default)({
+    storage: audioStorage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedExtensions = ['.flac', '.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.ogg', '.wav', '.webm'];
+        const ext = path_1.default.extname(file.originalname).toLowerCase();
+        if (allowedExtensions.includes(ext) || file.mimetype.startsWith('audio/')) {
+            cb(null, true);
+        }
+        else {
+            cb(new Error('Chỉ chấp nhận các tệp tin âm thanh hợp lệ.'), false);
+        }
+    }
+});
+// Public endpoint to transcribe audio for voice chat (Whisper fallback)
+router.post('/cskh/transcribe', (req, res) => {
+    uploadAudio.single('audio')(req, res, async (err) => {
+        if (err) {
+            console.error('[STT Fallback] Multer error:', err);
+            res.status(400).json({ error: err.message || 'Lỗi tải tệp tin âm thanh.' });
+            return;
+        }
+        if (!req.file) {
+            res.status(400).json({ error: 'Không tìm thấy tệp tin âm thanh được tải lên.' });
+            return;
+        }
+        try {
+            const ai = (0, ai_1.getAiConfig)('/audio/transcriptions');
+            if (!ai.apiKey) {
+                res.status(400).json({ error: 'AI provider is not configured for transcription.' });
+                return;
+            }
+            const form = new form_data_1.default();
+            form.append('file', fs_1.default.createReadStream(req.file.path), {
+                filename: req.file.filename,
+                contentType: req.file.mimetype
+            });
+            form.append('model', 'whisper-1');
+            form.append('language', 'vi');
+            const headers = { ...ai.headers };
+            delete headers['Content-Type'];
+            Object.assign(headers, form.getHeaders());
+            const response = await fetch(ai.url, {
+                method: 'POST',
+                headers,
+                body: form
+            });
+            const cleanup = () => {
+                if (req.file && fs_1.default.existsSync(req.file.path)) {
+                    fs_1.default.unlinkSync(req.file.path);
+                }
+            };
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error('[STT Fallback] Whisper API response error:', errText);
+                cleanup();
+                res.status(response.status).json({ error: 'Không thể nhận diện giọng nói từ API.' });
+                return;
+            }
+            const result = await response.json();
+            cleanup();
+            res.json({ success: true, text: result.text || '' });
+        }
+        catch (error) {
+            console.error('[STT Fallback] Error in transcribe route:', error);
+            if (req.file && fs_1.default.existsSync(req.file.path)) {
+                fs_1.default.unlinkSync(req.file.path);
+            }
+            res.status(500).json({ error: error.message || 'Lỗi hệ thống khi nhận diện giọng nói.' });
+        }
+    });
+});
 // Public chat message processing
 router.post('/cskh/chat', rateLimiter_1.publicSpamLimiter, async (req, res) => {
     try {
-        const { workspaceId, sessionId, message } = req.body;
+        const { workspaceId, sessionId, message, imageUrl } = req.body;
         if (!workspaceId || !message) {
             res.status(400).json({ error: 'workspaceId và message là bắt buộc.' });
             return;
         }
         const ip = req.headers['x-forwarded-for'] || req.ip || '';
         const userAgent = req.headers['user-agent'] || '';
-        const result = await (0, cskhService_1.handleVisitorMessage)(parseInt(String(workspaceId), 10), sessionId, message, ip, userAgent);
+        const result = await (0, cskhService_1.handleVisitorMessage)(parseInt(String(workspaceId), 10), sessionId, message, ip, userAgent, imageUrl);
         res.json(result);
     }
     catch (error) {

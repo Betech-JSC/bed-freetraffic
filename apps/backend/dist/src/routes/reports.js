@@ -9,6 +9,7 @@ const reportPdf_1 = require("../services/reportPdf");
 const reportExcel_1 = require("../services/reportExcel");
 const auth_1 = require("../middleware/auth");
 const cache_1 = require("../lib/cache");
+const aiReportService_1 = require("../services/aiReportService");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
 router.get('/traffic', async (req, res) => {
@@ -202,6 +203,36 @@ router.get('/export/pdf', async (req, res) => {
     catch (err) {
         console.error('PDF export:', err);
         res.status(500).json({ error: 'Không tạo được PDF' });
+    }
+});
+router.post('/ai-analyze', async (req, res) => {
+    const workspaceId = req.workspaceId;
+    if (!workspaceId) {
+        res.status(400).json({ error: 'Workspace ID không hợp lệ' });
+        return;
+    }
+    const days = parseInt(req.body.days || '7');
+    if (![1, 7, 30, 90].includes(days)) {
+        res.status(400).json({ error: 'Khoảng thời gian chỉ chấp nhận 1, 7, 30 hoặc 90 ngày' });
+        return;
+    }
+    const cacheKey = `ws:${workspaceId}:ai-report:analysis:${days}`;
+    try {
+        const bypassCache = req.body.refresh === true;
+        if (!bypassCache) {
+            const cached = await cache_1.cache.get(cacheKey);
+            if (cached) {
+                res.json(cached);
+                return;
+            }
+        }
+        const result = await aiReportService_1.AiReportService.generateAnalysis(workspaceId, days);
+        await cache_1.cache.set(cacheKey, result, 43200); // Cache for 12 hours
+        res.json(result);
+    }
+    catch (error) {
+        console.error('[POST /reports/ai-analyze] error:', error);
+        res.status(500).json({ error: 'Lỗi máy chủ khi phân tích AI' });
     }
 });
 exports.default = router;

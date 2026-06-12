@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const auth_1 = require("../middleware/auth");
+const socket_1 = require("../lib/socket");
 const cache_1 = require("../lib/cache");
 const multer_1 = __importDefault(require("multer"));
 const axios_1 = __importDefault(require("axios"));
@@ -51,7 +52,7 @@ const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
-// Load CSKH Config
+// Load CSKH Config (Real-time Config)
 router.get('/config', auth_1.authenticate, async (req, res) => {
     const cacheKey = `ws:${req.workspaceId}:cskh-config`;
     try {
@@ -225,6 +226,16 @@ router.post('/sessions/:id/send-agent', auth_1.authenticate, auth_1.requireWrite
             where: { id: sessionId },
             data: { updatedAt: new Date() },
         });
+        try {
+            const io = (0, socket_1.getIo)();
+            if (io) {
+                io.to(`session:${sessionId}`).emit('new_message', message);
+                io.to(`workspace:${req.workspaceId}`).emit('new_message', message);
+            }
+        }
+        catch (socketErr) {
+            console.error('[Socket.io] Error broadcasting agent message:', socketErr);
+        }
         res.json({ success: true, message });
     }
     catch (error) {
