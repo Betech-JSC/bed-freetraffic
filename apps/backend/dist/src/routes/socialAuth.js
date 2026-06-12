@@ -226,11 +226,23 @@ router.get('/:platform/callback', async (req, res) => {
                     // Lấy Fanpages của user
                     const pagesRes = await fetch(`https://graph.facebook.com/${process.env.FB_GRAPH_VERSION || 'v21.0'}/me/accounts?access_token=${tokenData.access_token}`);
                     const pagesData = await pagesRes.json();
+                    console.log(`[FB OAuth Callback] Raw pagesData from Facebook API:`, JSON.stringify(pagesData, null, 2));
                     if (!pagesData.data || pagesData.data.length === 0) {
                         throw new Error('Bạn cần quản lý ít nhất 1 Fanpage Facebook để thực hiện kết nối');
                     }
-                    // Lấy toàn bộ các pages mà user đã cấp quyền
-                    oaProfiles = pagesData.data.map((page) => ({
+                    // Lọc các pages có access_token để lưu vào hệ thống
+                    const validPages = pagesData.data.filter((page) => {
+                        if (!page.access_token) {
+                            console.warn(`[FB OAuth Callback] Page skipped due to missing access_token: Name="${page.name}", ID="${page.id}"`);
+                            return false;
+                        }
+                        return true;
+                    });
+                    if (validPages.length === 0) {
+                        throw new Error('Không lấy được Access Token của bất kỳ Trang nào. Hãy chắc chắn bạn là Quản trị viên/Biên tập viên của các Trang đã chọn.');
+                    }
+                    // Lấy toàn bộ các pages hợp lệ
+                    oaProfiles = validPages.map((page) => ({
                         pageId: page.id,
                         pageName: page.name,
                         accessToken: page.access_token
