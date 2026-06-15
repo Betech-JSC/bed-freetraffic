@@ -67,7 +67,7 @@ export async function getEmbedding(text: string, allowFallback: boolean = true):
         headers: ai.headers,
         body: JSON.stringify({
           input: text,
-          model: 'text-embedding-3-small',
+          model: ai.model || 'text-embedding-3-small',
         }),
         signal: AbortSignal.timeout(10000),
       });
@@ -322,7 +322,112 @@ export async function retrieveRelevantChunksStructured(
     // Generate query embedding
     const queryVector = await getEmbedding(query, false);
     if (!queryVector) {
-      return [];
+      console.log(`[RAG-Vector-Structured] Embedding failed or not supported. Falling back to SQL + TF-IDF keyword search for workspace #${workspaceId}...`);
+      
+      const queryTerms = query
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?"']/g, ' ')
+        .split(/\s+/)
+        .map(t => t.trim())
+        .filter(t => t.length > 1);
+
+      if (queryTerms.length === 0) {
+        // If query is empty or too short, return the first topN chunks
+        const results = await prisma.$queryRawUnsafe<any[]>(
+          `SELECT "source", "sourceId", "content"
+           FROM "KnowledgeChunk"
+           WHERE "workspaceId" = $1
+           LIMIT $2`,
+          workspaceId,
+          topN
+        );
+        return results.map(r => ({
+          content: r.content,
+          source: r.source,
+          sourceId: r.sourceId
+        }));
+      }
+
+      // Query database for chunks that contain any of the query terms
+      const clauses = queryTerms.map((_, idx) => `"content" ILIKE $${idx + 2}`);
+      const sql = `
+        SELECT "source", "sourceId", "content"
+        FROM "KnowledgeChunk"
+        WHERE "workspaceId" = $1 AND (${clauses.join(' OR ')})
+      `;
+      const params = [workspaceId, ...queryTerms.map(t => `%${t}%`)];
+      const dbChunks = await prisma.$queryRawUnsafe<any[]>(sql, ...params);
+
+      // Score and rank the fetched chunks in memory
+      const scoredChunks = dbChunks.map(chunk => {
+        const contentLower = chunk.content.toLowerCase();
+        let score = 0;
+        let termMatches = 0;
+
+        for (const term of queryTerms) {
+          const occurrences = contentLower.split(term).length - 1;
+          if (occurrences > 0) {
+            score += Math.sqrt(occurrences);
+            termMatches++;
+          }
+        }
+
+        if (termMatches > 0) {
+          score *= (1 + (termMatches / queryTerms.length) * 0.5);
+        }
+
+        // Add extra weight for exact bigram or trigram matches
+        for (let i = 0; i < queryTerms.length - 1; i++) {
+          const bigram = `${queryTerms[i]} ${queryTerms[i+1]}`;
+          if (contentLower.includes(bigram)) {
+            score += 2.0;
+          }
+          if (i < queryTerms.length - 2) {
+            const trigram = `${queryTerms[i]} ${queryTerms[i+1]} ${queryTerms[i+2]}`;
+            if (contentLower.includes(trigram)) {
+              score += 3.5;
+            }
+          }
+        }
+
+        return {
+          chunk,
+          score
+        };
+      });
+
+      // Sort by score descending
+      scoredChunks.sort((a, b) => b.score - a.score);
+      
+      // Filter out zero scores, fall back to first N if nothing matched
+      const matched = scoredChunks.filter(sc => sc.score > 0).map(sc => sc.chunk);
+      
+      const finalChunks = matched.length > 0
+        ? matched.slice(0, topN)
+        : dbChunks.slice(0, topN);
+
+      // If we still have nothing, get any chunks from the workspace
+      if (finalChunks.length === 0) {
+        const anyChunks = await prisma.$queryRawUnsafe<any[]>(
+          `SELECT "source", "sourceId", "content"
+           FROM "KnowledgeChunk"
+           WHERE "workspaceId" = $1
+           LIMIT $2`,
+          workspaceId,
+          topN
+        );
+        return anyChunks.map(r => ({
+          content: r.content,
+          source: r.source,
+          sourceId: r.sourceId
+        }));
+      }
+
+      return finalChunks.map(r => ({
+        content: r.content,
+        source: r.source,
+        sourceId: r.sourceId
+      }));
     }
     const vectorString = `[${queryVector.join(',')}]`;
 

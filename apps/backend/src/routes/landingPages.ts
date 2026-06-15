@@ -306,13 +306,14 @@ router.post('/generate-ai', authenticate, async (req: AuthRequest, res: Response
         const kbText = config?.knowledgeBaseText || '';
         
         let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
-        if (relevantChunks.length === 0 && kbText) {
-          const { retrieveRelevantChunks } = await import('../services/cskhService');
-          relevantChunks = retrieveRelevantChunks(kbText, prompt, 5);
+        
+        let mergedChunks = [...relevantChunks];
+        if (kbText && !mergedChunks.some(c => c.includes('Hướng dẫn & Ghi chú nhanh') || c.includes('Hướng dẫn chung') || c.includes(kbText.slice(0, 30)))) {
+          mergedChunks.unshift(`[Nguồn: Hướng dẫn & Ghi chú nhanh]\n${kbText}`);
         }
         
-        if (relevantChunks.length > 0) {
-          ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ THIẾT KẾ NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${relevantChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+        if (mergedChunks.length > 0) {
+          ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ THIẾT KẾ NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${mergedChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
         }
       } catch (ragErr) {
         console.error('[AI Landing Page RAG] Lỗi tích hợp tri thức:', ragErr);
@@ -451,13 +452,14 @@ router.post('/generate-section-copy', authenticate, async (req: AuthRequest, res
         const kbText = config?.knowledgeBaseText || '';
         
         let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
-        if (relevantChunks.length === 0 && kbText) {
-          const { retrieveRelevantChunks } = await import('../services/cskhService');
-          relevantChunks = retrieveRelevantChunks(kbText, prompt, 5);
+        
+        let mergedChunks = [...relevantChunks];
+        if (kbText && !mergedChunks.some(c => c.includes('Hướng dẫn & Ghi chú nhanh') || c.includes('Hướng dẫn chung') || c.includes(kbText.slice(0, 30)))) {
+          mergedChunks.unshift(`[Nguồn: Hướng dẫn & Ghi chú nhanh]\n${kbText}`);
         }
         
-        if (relevantChunks.length > 0) {
-          ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ VIẾT NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${relevantChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+        if (mergedChunks.length > 0) {
+          ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ VIẾT NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${mergedChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
         }
       } catch (ragErr) {
         console.error('[AI Section Copy RAG] Lỗi tích hợp tri thức:', ragErr);
