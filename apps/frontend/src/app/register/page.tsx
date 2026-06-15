@@ -111,17 +111,17 @@ export default function RegisterPage() {
         </div>
 
         {/* Bottom Metrics row */}
-        <div className="relative z-10 flex gap-12 border-t border-white/10 pt-6 text-xs text-slate-400 font-bold uppercase tracking-wider">
+        <div className="relative z-10 flex gap-12 border-t border-white/20 pt-6 text-xs font-bold uppercase tracking-wider">
           <div>
-            <p className="opacity-50">Sẵn sàng</p>
+            <p className="text-orange-100">Sẵn sàng</p>
             <p className="text-white text-lg font-black mt-1">99.9%</p>
           </div>
           <div>
-            <p className="opacity-50">Người dùng</p>
+            <p className="text-orange-100">Người dùng</p>
             <p className="text-white text-lg font-black mt-1">10k+</p>
           </div>
           <div>
-            <p className="opacity-50">Quốc gia</p>
+            <p className="text-orange-100">Quốc gia</p>
             <p className="text-white text-lg font-black mt-1">24</p>
           </div>
         </div>
