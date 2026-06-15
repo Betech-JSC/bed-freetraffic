@@ -104,6 +104,7 @@ else {
     console.log('⚠️ Chưa cấu hình GSC_SITE_URL — Organic Search dùng dữ liệu mẫu');
 }
 const app = (0, express_1.default)();
+app.set('trust proxy', 1);
 const port = process.env.PORT || 4000;
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({

@@ -68,6 +68,7 @@ if (process.env.GSC_SITE_URL) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const port = process.env.PORT || 4000;
 
 app.use(cors());
