@@ -205,7 +205,7 @@ export async function syncSourceEmbeddings(sourceId: number): Promise<void> {
       data: { status: 'COMPLETED' }
     });
     
-    void invalidateWorkspaceCache(source.workspaceId, ['rag']).catch(err => {
+    void invalidateWorkspaceCache(source.workspaceId, ['rag', 'knowledge-sources']).catch(err => {
       console.error('[embeddings] Lỗi xóa RAG cache:', err);
     });
     
@@ -220,7 +220,7 @@ export async function syncSourceEmbeddings(sourceId: number): Promise<void> {
     try {
       const source = await prisma.knowledgeSource.findUnique({ where: { id: sourceId } });
       if (source) {
-        void invalidateWorkspaceCache(source.workspaceId, ['rag']).catch(() => {});
+        void invalidateWorkspaceCache(source.workspaceId, ['rag', 'knowledge-sources']).catch(() => {});
       }
     } catch (ignore) {}
   }
