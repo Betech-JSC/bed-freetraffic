@@ -190,6 +190,15 @@ export default function LandingPageBuilder() {
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiTheme, setAiTheme] = useState<string>('ocean-breeze');
   const [useCase, setUseCase] = useState<string>('saas');
+  const [aiUseKnowledgeBase, setAiUseKnowledgeBase] = useState(true);
+
+  // AI Copywriting Assistant States
+  const [showCopywritingModal, setShowCopywritingModal] = useState(false);
+  const [copywritingBlockId, setCopywritingBlockId] = useState<string | null>(null);
+  const [copywritingPrompt, setCopywritingPrompt] = useState('');
+  const [copywritingRAG, setCopywritingRAG] = useState(true);
+  const [copywritingGenerating, setCopywritingGenerating] = useState(false);
+  const [copywritingError, setCopywritingError] = useState('');
 
   // Custom Branding & Typography states
   const [brandTitle, setBrandTitle] = useState('');
@@ -1434,7 +1443,8 @@ export default function LandingPageBuilder() {
         body: JSON.stringify({ 
           prompt: aiPromptInput,
           theme: aiTheme,
-          useCase: useCase
+          useCase: useCase,
+          useKnowledgeBase: aiUseKnowledgeBase
         })
       });
       if (Array.isArray(aiBlocks) && aiBlocks.length > 0) {
@@ -1447,6 +1457,83 @@ export default function LandingPageBuilder() {
       setError(err.message || 'Lỗi khi gọi AI sinh trang.');
     } finally {
       setAiGenerating(false);
+    }
+  };
+
+  const handleGenerateCopywriting = async () => {
+    if (!copywritingBlockId) return;
+    if (!copywritingPrompt.trim()) {
+      setCopywritingError('Vui lòng nhập yêu cầu viết nội dung.');
+      return;
+    }
+    
+    const blockToEdit = blocks.find(b => b.id === copywritingBlockId);
+    if (!blockToEdit) return;
+
+    try {
+      setCopywritingGenerating(true);
+      setCopywritingError('');
+      
+      const res = await apiJson<{ title: string; content: string }>('/landing-pages/generate-section-copy', {
+        method: 'POST',
+        body: JSON.stringify({
+          prompt: copywritingPrompt,
+          sectionType: blockToEdit.type,
+          useKnowledgeBase: copywritingRAG
+        })
+      });
+
+      if (res && (res.title || res.content)) {
+        const updatedBlocks = blocks.map(b => {
+          if (b.id === copywritingBlockId) {
+            const updated = { ...b };
+            if (res.title) {
+              updated.title = res.title;
+            }
+            if (res.content) {
+              if (b.type === 'features') {
+                const lines = res.content
+                  .split(/\n|- |•|✓|\./)
+                  .map((s) => s.trim())
+                  .filter((s) => s.length > 2);
+                if (lines.length > 0) {
+                  updated.items = lines.slice(0, 6);
+                } else {
+                  updated.items = [res.content];
+                }
+              } else if (b.type === 'testimonials') {
+                if (updated.reviews && updated.reviews.length > 0) {
+                  const first = { ...updated.reviews[0], quote: res.content };
+                  updated.reviews = [first, ...updated.reviews.slice(1)];
+                } else {
+                  updated.reviews = [{ name: 'Khách hàng', role: 'Đối tác', rating: 5, quote: res.content }];
+                }
+              } else if (b.type === 'faq') {
+                if (updated.faqs && updated.faqs.length > 0) {
+                  const first = { ...updated.faqs[0], answer: res.content };
+                  updated.faqs = [first, ...updated.faqs.slice(1)];
+                } else {
+                  updated.faqs = [{ question: 'Câu hỏi?', answer: res.content }];
+                }
+              } else {
+                updated.subtitle = res.content;
+              }
+            }
+            return updated;
+          }
+          return b;
+        });
+
+        setBlocks(updatedBlocks);
+        setShowCopywritingModal(false);
+        setSuccess('Đã tạo nội dung AI viết hộ thành công.');
+      } else {
+        throw new Error('AI phản hồi không hợp lệ.');
+      }
+    } catch (err: any) {
+      setCopywritingError(err.message || 'Lỗi khi gọi trợ lý AI viết hộ.');
+    } finally {
+      setCopywritingGenerating(false);
     }
   };
 
@@ -1511,6 +1598,22 @@ export default function LandingPageBuilder() {
                     >
                       ← Quay lại Cấu trúc trang
                     </button>
+
+                    {(selectedBlock.type === 'hero' || selectedBlock.type === 'features' || selectedBlock.type === 'pricing' || selectedBlock.type === 'testimonials' || selectedBlock.type === 'faq') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCopywritingBlockId(selectedBlock.id);
+                          setCopywritingPrompt('');
+                          setCopywritingRAG(true);
+                          setCopywritingError('');
+                          setShowCopywritingModal(true);
+                        }}
+                        className="w-full py-2 bg-gradient-to-r from-amber-500 to-[#f25c22] hover:from-amber-600 hover:to-[#d94d1a] text-white text-xs font-bold rounded-lg transition shadow-md flex justify-center items-center gap-1.5 cursor-pointer animate-in fade-in duration-200"
+                      >
+                        🪄 AI Viết Hộ (Ground với RAG)
+                      </button>
+                    )}
                     
                     <div className="pt-2 space-y-4">
                       <div className="flex justify-between items-center border-b border-slate-100 pb-2">
@@ -2177,8 +2280,33 @@ export default function LandingPageBuilder() {
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[11px] text-slate-550 font-semibold">Share Image (og:image URL)</label>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[11px] text-slate-550 font-semibold">Share Image (og:image URL)</label>
+                    {page?.id && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await apiJson<{ success: boolean; ogImageUrl: string }>('/og-image/generate', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ type: 'landing', id: page.id }),
+                            });
+                            if (res.success) {
+                              setSeo(prev => ({ ...prev, ogImage: `http://localhost:4000${res.ogImageUrl}` }));
+                              setSuccess('Đã tạo ảnh chia sẻ OpenGraph thành công!');
+                            }
+                          } catch (err: any) {
+                            alert(err.message || 'Lỗi tạo ảnh OpenGraph');
+                          }
+                        }}
+                        className="text-[10px] text-[#f25c22] hover:text-[#d94d1a] font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        🪄 Sinh ảnh bìa AI
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="text"
                     value={seo.ogImage}
@@ -2186,6 +2314,15 @@ export default function LandingPageBuilder() {
                     placeholder="https://example.com/thumbnail.png"
                     className="w-full bg-white border border-slate-250 rounded px-2.5 py-1.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22]"
                   />
+                  {seo.ogImage && (
+                    <div className="relative aspect-[1.91/1] w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100 mt-1.5">
+                      <img
+                        src={seo.ogImage.startsWith('/') ? `http://localhost:4000${seo.ogImage}` : seo.ogImage}
+                        alt="OpenGraph Sharing Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -3302,6 +3439,69 @@ export default function LandingPageBuilder() {
           )}
         </div>
       </div>
+
+      {/* AI Copywriting Assistant Modal */}
+      {showCopywritingModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="relative w-full max-w-md p-6 bg-white border border-slate-200 rounded-2xl shadow-2xl text-left space-y-4 text-slate-800 animate-in fade-in zoom-in duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                🪄 Trợ lý AI Viết Hộ (Ground với RAG)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCopywritingModal(false)}
+                className="text-slate-400 hover:text-slate-650 font-bold text-lg cursor-pointer"
+              >
+                &times;
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-550 leading-normal">
+              AI sẽ truy vấn Tri thức doanh nghiệp (RAG) để viết tiêu đề và nội dung mô tả phù hợp nhất cho khối thiết kế này.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] text-slate-450 uppercase font-bold">Yêu cầu/Định hướng nội dung:</label>
+              <textarea
+                value={copywritingPrompt}
+                onChange={(e) => setCopywritingPrompt(e.target.value)}
+                placeholder="Ví dụ: Viết lại nội dung khối Banner giới thiệu chương trình cam kết hoàn tiền 100% của khóa học nếu không giao tiếp trôi chảy..."
+                rows={4}
+                className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs text-slate-850 focus:outline-none focus:border-[#f25c22] focus:ring-1 focus:ring-[#f25c22] resize-none"
+              />
+            </div>
+
+
+            {copywritingError && (
+              <p className="text-xs text-rose-500 font-medium">{copywritingError}</p>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                disabled={copywritingGenerating}
+                onClick={handleGenerateCopywriting}
+                className="flex-1 py-2 bg-[#f25c22] hover:bg-[#d94d1a] disabled:bg-slate-350 text-white text-xs font-bold rounded-lg transition shadow-md flex justify-center items-center gap-2 cursor-pointer"
+              >
+                {copywritingGenerating ? (
+                  <>
+                    <span className="animate-spin rounded-full h-3 w-3 border-2 border-white border-t-transparent"></span>
+                    Đang viết...
+                  </>
+                ) : '🪄 Bắt đầu viết'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCopywritingModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-650 hover:text-slate-800 text-xs font-semibold rounded-lg border border-slate-200 transition cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

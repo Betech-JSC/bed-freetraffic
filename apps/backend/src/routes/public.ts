@@ -12,6 +12,7 @@ import fs from 'fs';
 import FormData from 'form-data';
 import { getAiConfig } from '../lib/ai';
 import { markdownToHtml } from '../lib/markdown';
+import { checkAndApplyReferral } from './referrals';
 
 const uploadDir = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -44,6 +45,98 @@ const uploadImage = multer({
 
 
 const router = Router();
+
+// Redirect Short Link: GET /r/:code
+router.get('/r/:code', async (req: Request, res: Response): Promise<void> => {
+  const code = String(req.params.code || '');
+  if (!code) {
+    res.status(400).send('Mã rút gọn không hợp lệ');
+    return;
+  }
+  
+  try {
+    const link = await prisma.shortLink.findUnique({
+      where: { code }
+    });
+    
+    if (!link) {
+      res.status(404).send('Không tìm thấy liên kết hoặc liên kết đã bị xóa');
+      return;
+    }
+    
+    const rawReferrer = req.headers['referer'] || req.headers['referrer'];
+    const referrer = (Array.isArray(rawReferrer) ? rawReferrer[0] : rawReferrer) || null;
+    const rawUa = req.headers['user-agent'];
+    const userAgent = (Array.isArray(rawUa) ? rawUa[0] : rawUa) || null;
+    
+    // Parse device
+    const deviceType = parseDeviceType(userAgent || undefined);
+    
+    // Parse IP
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    const ipAddress = (Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor?.split(',')[0]) || req.ip || null;
+    
+    // Country mockup
+    const country = mockCountry(ipAddress || undefined);
+    
+    // Log click asynchronously
+    prisma.shortLinkClick.create({
+      data: {
+        shortLinkId: link.id,
+        referrer,
+        userAgent,
+        deviceType,
+        ipAddress,
+        country,
+      }
+    }).catch((err: any) => {
+      console.error('Failed to log shortlink click:', err);
+    });
+    
+    // Build target UTM URL
+    let targetUrl = link.originalUrl;
+    const utmParams: string[] = [];
+    if (link.utmSource) utmParams.push(`utm_source=${encodeURIComponent(link.utmSource)}`);
+    if (link.utmMedium) utmParams.push(`utm_medium=${encodeURIComponent(link.utmMedium)}`);
+    if (link.utmCampaign) utmParams.push(`utm_campaign=${encodeURIComponent(link.utmCampaign)}`);
+    
+    if (utmParams.length > 0) {
+      const separator = targetUrl.includes('?') ? '&' : '?';
+      targetUrl = targetUrl + separator + utmParams.join('&');
+    }
+    
+    // Perform redirect
+    res.redirect(302, targetUrl);
+  } catch (error: any) {
+    console.error('[GET /public/r/:code]', error);
+    res.status(500).send('Lỗi máy chủ khi chuyển hướng liên kết');
+  }
+});
+
+function parseDeviceType(ua?: string): string {
+  if (!ua) return 'desktop';
+  const uaLower = ua.toLowerCase();
+  if (uaLower.includes('tablet') || uaLower.includes('ipad') || (uaLower.includes('android') && !uaLower.includes('mobile'))) {
+    return 'tablet';
+  }
+  if (uaLower.includes('mobile') || uaLower.includes('iphone') || uaLower.includes('android') || uaLower.includes('phone')) {
+    return 'mobile';
+  }
+  return 'desktop';
+}
+
+function mockCountry(ip?: string): string {
+  if (!ip) return 'Vietnam';
+  if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+    return 'Vietnam';
+  }
+  const countries = ['Vietnam', 'United States', 'Singapore', 'Japan', 'United Kingdom', 'Germany'];
+  let hash = 0;
+  for (let i = 0; i < ip.length; i++) {
+    hash += ip.charCodeAt(i);
+  }
+  return countries[hash % countries.length];
+}
 
 // Retrieve all published blog posts of a workspace (public)
 router.get('/blog/workspace/:workspaceId', async (req: Request, res: Response): Promise<void> => {
@@ -327,6 +420,8 @@ router.post('/forms/submit', publicSpamLimiter, async (req: Request, res: Respon
       });
     }
 
+    await checkAndApplyReferral(customer.id, req);
+
     // Save Form Submission Log
     const submission = await prisma.formSubmission.create({
       data: {
@@ -600,7 +695,12 @@ router.get('/pages/:slug/html', async (req: Request, res: Response): Promise<voi
 router.post('/cskh/upload-image', (req: Request, res: Response): void => {
   uploadImage.single('image')(req, res, (err) => {
     if (err) {
-      res.status(400).json({ error: err.message || 'Lỗi tải tệp tin.' });
+      const isLimitSize = err.code === 'LIMIT_FILE_SIZE';
+      res.status(400).json({
+        error: isLimitSize
+          ? 'Kích thước tệp quá lớn. Vui lòng tải lên tệp dưới giới hạn cho phép.'
+          : (err.message || 'Lỗi tải tệp tin.')
+      });
       return;
     }
     if (!req.file) {
@@ -642,7 +742,12 @@ router.post('/cskh/transcribe', (req: Request, res: Response): void => {
   uploadAudio.single('audio')(req, res, async (err) => {
     if (err) {
       console.error('[STT Fallback] Multer error:', err);
-      res.status(400).json({ error: err.message || 'Lỗi tải tệp tin âm thanh.' });
+      const isLimitSize = err.code === 'LIMIT_FILE_SIZE';
+      res.status(400).json({
+        error: isLimitSize
+          ? 'Kích thước tệp quá lớn. Vui lòng tải lên tệp dưới giới hạn cho phép.'
+          : (err.message || 'Lỗi tải tệp tin âm thanh.')
+      });
       return;
     }
     if (!req.file) {
@@ -803,6 +908,8 @@ const handleCheckout = async (req: Request, res: Response): Promise<void> => {
         },
       });
     }
+
+    await checkAndApplyReferral(customer.id, req);
 
     // 3. Generate unique order number
     let orderNumber = '';
@@ -1437,6 +1544,8 @@ router.post('/auth/register', async (req: Request, res: Response): Promise<void>
         },
       });
     }
+
+    await checkAndApplyReferral(customer.id, req);
 
     res.json({
       success: true,
@@ -2343,6 +2452,8 @@ router.post('/tiktokshop/webhook', async (req: Request, res: Response): Promise<
       });
     }
 
+    await checkAndApplyReferral(customer.id, req);
+
     // 2. Create Order
     const existingOrder = await prisma.order.findUnique({
       where: { orderNumber: orderId }
@@ -2757,6 +2868,254 @@ router.get('/cskh/widget-config', async (req: Request, res: Response): Promise<v
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Lỗi lấy cấu hình widget' });
+  }
+});
+
+// Script delivery route for Lead Capture Popups: GET /api/public/popups/script/:workspaceId
+router.get('/popups/script/:workspaceId', async (req: Request, res: Response): Promise<void> => {
+  const workspaceId = parseInt(req.params.workspaceId as string);
+  if (isNaN(workspaceId)) {
+    res.status(400).send('/* Invalid Workspace ID */');
+    return;
+  }
+
+  try {
+    const activePopups = await prisma.popupWidget.findMany({
+      where: { workspaceId, isActive: true }
+    });
+
+    const host = process.env.NEXT_PUBLIC_API_URL 
+      ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '') 
+      : (typeof window !== 'undefined' ? window.location.origin.replace(':3000', ':4000') : 'http://localhost:4000');
+
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send(`
+(function() {
+  const workspaceId = ${workspaceId};
+  const activePopups = ${JSON.stringify(activePopups)};
+  const backendUrl = "${host}";
+  
+  if (!activePopups || activePopups.length === 0) return;
+  
+  const shownPopups = new Set();
+  
+  function createModal(popup) {
+    if (shownPopups.has(popup.id)) return;
+    shownPopups.add(popup.id);
+    
+    const fields = popup.formFields.split(',');
+    const hasName = fields.includes('name');
+    const hasPhone = fields.includes('phone');
+    
+    const modalId = 'growth-os-popup-' + popup.id;
+    if (document.getElementById(modalId)) return;
+    
+    const backdrop = document.createElement('div');
+    backdrop.id = modalId;
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:999999;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s ease;font-family:system-ui, -apple-system, sans-serif;';
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#fff;border-radius:24px;width:100%;max-width:440px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;transform:scale(0.95);transition:transform 0.3s ease;border:1px solid rgba(226,232,240,0.8);position:relative;margin:16px;';
+    
+    const banner = document.createElement('div');
+    banner.style.cssText = 'height:8px;background:' + (popup.themeColor || '#f25c22') + ';';
+    modal.appendChild(banner);
+    
+    const content = document.createElement('div');
+    content.style.cssText = 'padding:32px;';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&#x2715;';
+    closeBtn.style.cssText = 'position:absolute;top:16px;right:16px;background:none;border:none;font-size:16px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background 0.2s;';
+    closeBtn.onmouseover = () => closeBtn.style.background = '#f1f5f9';
+    closeBtn.onmouseout = () => closeBtn.style.background = 'none';
+    closeBtn.onclick = () => {
+      backdrop.style.opacity = '0';
+      modal.style.transform = 'scale(0.95)';
+      setTimeout(() => backdrop.remove(), 300);
+    };
+    modal.appendChild(closeBtn);
+    
+    const title = document.createElement('h3');
+    title.innerText = popup.title;
+    title.style.cssText = 'margin:0 0 8px 0;font-size:20px;font-weight:850;color:#1e293b;line-height:1.3;';
+    content.appendChild(title);
+    
+    const desc = document.createElement('p');
+    desc.innerText = popup.description;
+    desc.style.cssText = 'margin:0 0 24px 0;font-size:13px;color:#64748b;line-height:1.6;';
+    content.appendChild(desc);
+    
+    const form = document.createElement('form');
+    form.style.cssText = 'display:flex;flex-direction:column;gap:12px;';
+    
+    let nameInput;
+    if (hasName) {
+      nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'Họ và tên';
+      nameInput.required = true;
+      nameInput.style.cssText = 'padding:12px 16px;border-radius:12px;border:1px solid #cbd5e1;font-size:13px;outline:none;transition:border-color 0.2s;';
+      nameInput.onfocus = () => nameInput.style.borderColor = popup.themeColor;
+      nameInput.onblur = () => nameInput.style.borderColor = '#cbd5e1';
+      form.appendChild(nameInput);
+    }
+    
+    const emailInput = document.createElement('input');
+    emailInput.type = 'email';
+    emailInput.placeholder = 'Địa chỉ email';
+    emailInput.required = true;
+    emailInput.style.cssText = 'padding:12px 16px;border-radius:12px;border:1px solid #cbd5e1;font-size:13px;outline:none;transition:border-color 0.2s;';
+    emailInput.onfocus = () => emailInput.style.borderColor = popup.themeColor;
+    emailInput.onblur = () => emailInput.style.borderColor = '#cbd5e1';
+    form.appendChild(emailInput);
+    
+    let phoneInput;
+    if (hasPhone) {
+      phoneInput = document.createElement('input');
+      phoneInput.type = 'tel';
+      phoneInput.placeholder = 'Số điện thoại';
+      phoneInput.required = true;
+      phoneInput.style.cssText = 'padding:12px 16px;border-radius:12px;border:1px solid #cbd5e1;font-size:13px;outline:none;transition:border-color 0.2s;';
+      phoneInput.onfocus = () => phoneInput.style.borderColor = popup.themeColor;
+      phoneInput.onblur = () => phoneInput.style.borderColor = '#cbd5e1';
+      form.appendChild(phoneInput);
+    }
+    
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'submit';
+    submitBtn.innerText = popup.buttonText || 'Đăng ký';
+    submitBtn.style.cssText = 'padding:14px;border-radius:12px;border:none;background:' + (popup.themeColor || '#f25c22') + ';color:#fff;font-weight:700;font-size:14px;cursor:pointer;transition:brightness 0.2s;margin-top:8px;';
+    submitBtn.onmouseover = () => submitBtn.style.filter = 'brightness(0.9)';
+    submitBtn.onmouseout = () => submitBtn.style.filter = 'none';
+    form.appendChild(submitBtn);
+    
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Đang gửi...';
+      
+      const payload = {
+        workspaceId: workspaceId,
+        popupId: popup.id,
+        email: emailInput.value,
+        name: hasName ? nameInput.value : '',
+        phone: hasPhone ? phoneInput.value : '',
+      };
+      
+      fetch(backendUrl + '/api/public/popups/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        content.innerHTML = '<div style="text-align:center;padding:16px 0;"><div style="font-size:48px;margin-bottom:16px;">🎉</div><h3 style="margin:0 0 8px 0;font-size:20px;font-weight:800;color:#1e293b;">Cảm ơn bạn!</h3><p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">Đăng ký thông tin thành công.</p></div>';
+        setTimeout(() => {
+          backdrop.style.opacity = '0';
+          modal.style.transform = 'scale(0.95)';
+          setTimeout(() => backdrop.remove(), 300);
+        }, 3000);
+      })
+      .catch(err => {
+        console.error('Error submitting lead:', err);
+        submitBtn.disabled = false;
+        submitBtn.innerText = popup.buttonText || 'Đăng ký';
+        alert('Có lỗi xảy ra, vui lòng thử lại sau.');
+      });
+    };
+    
+    content.appendChild(form);
+    modal.appendChild(content);
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    
+    setTimeout(() => {
+      backdrop.style.opacity = '1';
+      modal.style.transform = 'scale(1)';
+    }, 50);
+  }
+  
+  activePopups.forEach(popup => {
+    if (popup.type === 'DELAY') {
+      setTimeout(() => createModal(popup), (popup.delaySeconds || 5) * 1000);
+    } else if (popup.type === 'SCROLL') {
+      const onScroll = () => {
+        const docEl = document.documentElement;
+        const scrollPercent = (docEl.scrollTop / (docEl.scrollHeight - docEl.clientHeight)) * 100;
+        if (scrollPercent >= (popup.scrollDepth || 50)) {
+          createModal(popup);
+          window.removeEventListener('scroll', onScroll);
+        }
+      };
+      window.addEventListener('scroll', onScroll);
+    } else if (popup.type === 'EXIT_INTENT') {
+      const onMouseOut = (e) => {
+        if (e.clientY < 15) {
+          createModal(popup);
+          document.removeEventListener('mouseout', onMouseOut);
+        }
+      };
+      document.addEventListener('mouseout', onMouseOut);
+    }
+  });
+})();
+    `);
+  } catch (error: any) {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send(`/* Error loading Popups: ${error.message} */`);
+  }
+});
+
+// Lead Submission endpoint for Popups: POST /api/public/popups/submit
+router.post('/popups/submit', async (req: Request, res: Response): Promise<void> => {
+  const { workspaceId, popupId, email, name, phone } = req.body;
+  if (!email || !workspaceId) {
+    res.status(400).json({ error: 'Email và Workspace ID là bắt buộc' });
+    return;
+  }
+  try {
+    const wsId = parseInt(workspaceId);
+    
+    // Find or create customer
+    let customer = await prisma.customer.findFirst({
+      where: { email: email.toLowerCase(), workspaceId: wsId }
+    });
+    
+    const popup = await prisma.popupWidget.findUnique({
+      where: { id: parseInt(popupId) }
+    });
+    
+    const sourceName = popup ? `Lead Popup: ${popup.name}` : 'Lead Capture Popup';
+    
+    if (customer) {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          name: name || customer.name,
+          phone: phone || customer.phone,
+          trafficSource: sourceName,
+        }
+      });
+    } else {
+      customer = await prisma.customer.create({
+        data: {
+          name: name || email.split('@')[0],
+          email: email.toLowerCase(),
+          phone: phone || null,
+          status: 'NEW',
+          workspaceId: wsId,
+          trafficSource: sourceName,
+        }
+      });
+    }
+
+    await checkAndApplyReferral(customer.id, req);
+    
+    res.json({ success: true, message: 'Đăng ký thành công!' });
+  } catch (error: any) {
+    console.error('[POST /public/popups/submit]', error);
+    res.status(500).json({ error: error.message || 'Lỗi máy chủ' });
   }
 });
 

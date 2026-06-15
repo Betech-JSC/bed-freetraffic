@@ -568,7 +568,7 @@ export default function AutomationPage() {
       {/* Modal - Create Campaign */}
       {showModal && (
         <div className="modal-overlay animate-fade-in" onClick={() => setShowModal(false)}>
-          <div className="modal-panel max-w-md space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-panel !max-w-2xl w-full max-h-[92vh] overflow-y-auto custom-scrollbar space-y-4" style={{ maxWidth: '720px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center pb-2 border-b">
               <h3 className="text-base font-black text-brand uppercase tracking-wider">
                 {editingTask ? t('Chỉnh sửa chiến dịch Bot') : t('Cấu hình Bot mới')}

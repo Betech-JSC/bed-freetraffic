@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useLocale } from '@/context/LocaleContext';
@@ -22,9 +23,10 @@ type BlogPost = {
   authorName: string;
   tags: string | null;
   createdAt: string;
+  ogImageUrl?: string | null;
 };
 
-export default function BlogPage() {
+function BlogPageContent() {
   const { t } = useLocale();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ export default function BlogPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [optimizeLoading, setOptimizeLoading] = useState(false);
+  const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
 
   // Form states for creation / editing
   const [isEditing, setIsEditing] = useState(false);
@@ -51,6 +54,7 @@ export default function BlogPage() {
     authorName: 'Admin',
     tags: '',
     published: false,
+    ogImageUrl: '',
   });
 
   const analyzeSeo = () => {
@@ -193,9 +197,30 @@ export default function BlogPage() {
     }
   }, []);
 
+  const searchParams = useSearchParams();
+
   useEffect(() => {
     loadPosts();
   }, [loadPosts]);
+
+  useEffect(() => {
+    const keyword = searchParams.get('keyword');
+    const title = searchParams.get('title');
+    if (keyword || title) {
+      setIsEditing(true);
+      setSelectedPostId(null);
+      setForm((prev) => ({
+        ...prev,
+        title: title || '',
+        slug: title ? title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-') : '',
+      }));
+      if (keyword) {
+        setFocusKeyword(keyword);
+        setAiPrompt(`Viết bài chuẩn SEO cho từ khóa: "${keyword}". Tiêu đề gợi ý: "${title || ''}"`);
+        setShowAiModal(true);
+      }
+    }
+  }, [searchParams]);
 
   const handleCreateNew = () => {
     setIsEditing(true);
@@ -208,7 +233,9 @@ export default function BlogPage() {
       authorName: 'Admin',
       tags: '',
       published: false,
+      ogImageUrl: '',
     });
+    setUseKnowledgeBase(true);
   };
 
   const handleEdit = (post: BlogPost) => {
@@ -222,6 +249,7 @@ export default function BlogPage() {
       authorName: post.authorName,
       tags: post.tags || '',
       published: post.published,
+      ogImageUrl: post.ogImageUrl || '',
     });
   };
 
@@ -302,6 +330,7 @@ export default function BlogPage() {
           aiPrompt: aiPrompt.trim() || undefined,
           contentType: 'blog',
           generateImage: false,
+          useKnowledgeBase,
         }),
       });
 
@@ -362,6 +391,7 @@ export default function BlogPage() {
         authorName: form.authorName,
         tags: form.tags,
         published: form.published,
+        ogImageUrl: form.ogImageUrl,
       });
 
       setSuccess(t('Tự động tối ưu SEO bằng AI thành công! Điểm SEO đã được cập nhật.'));
@@ -423,7 +453,7 @@ export default function BlogPage() {
               {!selectedPostId && (
                 <button
                   type="button"
-                  onClick={() => { setShowAiModal(true); setAiError(''); }}
+                  onClick={() => { setShowAiModal(true); setAiError(''); setUseKnowledgeBase(true); }}
                   className="text-xs font-bold text-white px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#f25c22] to-[#ff7a45] hover:from-[#d94d1a] hover:to-[#f25c22] shadow-[0_4px_12px_rgba(242, 92, 34, 0.25)] transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                 >
                   <SparklesIcon />
@@ -489,6 +519,57 @@ export default function BlogPage() {
                 className="input"
               />
             </div>
+
+            {selectedPostId && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Ảnh chia sẻ MXH (OpenGraph Image)</label>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        setError('');
+                        setSuccess('');
+                        const res = await apiJson<{ success: boolean; ogImageUrl: string }>('/og-image/generate', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ type: 'blog', id: selectedPostId }),
+                        });
+                        if (res.success) {
+                          setForm(f => ({ ...f, ogImageUrl: res.ogImageUrl }));
+                          setSuccess('Đã tạo ảnh chia sẻ OpenGraph thành công!');
+                          loadPosts();
+                        }
+                      } catch (err: any) {
+                        setError(err.message || 'Lỗi tạo ảnh OpenGraph');
+                      }
+                    }}
+                    className="py-1.5 px-3 bg-[#e85d26] hover:bg-[#d84d16] text-white rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center space-x-1 cursor-pointer"
+                  >
+                    <span>🪄 Sinh ảnh bìa AI</span>
+                  </button>
+                </div>
+
+                {form.ogImageUrl ? (
+                  <div className="space-y-2">
+                    <div className="relative aspect-[1.91/1] w-full rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
+                      <img
+                        src={`http://localhost:4000${form.ogImageUrl}`}
+                        alt="OpenGraph Sharing Preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono truncate">
+                      Xem trước: http://localhost:4000/api/og-image/public/blog/{selectedPostId}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-500">
+                    Chưa tạo ảnh OpenGraph cho bài viết này. Hãy click nút ở trên để tự động vẽ ảnh bìa bằng AI dựa trên tiêu đề.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1">
               <div className="flex justify-between items-center mb-1">
@@ -750,6 +831,7 @@ export default function BlogPage() {
                 />
               </div>
 
+
               <div className="flex gap-2 justify-end pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -782,5 +864,13 @@ export default function BlogPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BlogPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-450">Đang tải trang quản lý bài viết...</div>}>
+      <BlogPageContent />
+    </Suspense>
   );
 }

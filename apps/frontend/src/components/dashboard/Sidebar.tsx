@@ -29,6 +29,7 @@ export function Sidebar() {
       title: t('SEO & Tiếp thị Nội dung'),
       items: [
         { href: '/dashboard/seo', label: t('seoAudit') },
+        { href: '/dashboard/links', label: 'Smart Links' },
         { href: '/dashboard/backlinks', label: t('backlinks') },
         { href: '/dashboard/blog', label: 'Blog CMS' },
         { href: '/dashboard/landing', label: 'Landing Pages' },
@@ -41,6 +42,7 @@ export function Sidebar() {
       items: [
         { href: '/dashboard/customers', label: t('customers') },
         { href: '/dashboard/forms', label: 'Custom Forms' },
+        { href: '/dashboard/popups', label: 'Lead Popups' },
         { href: '/dashboard/email', label: t('emailCampaigns') },
         { href: '/dashboard/automation/workflows', label: 'Email Automation' },
         { href: '/dashboard/cskh/settings', label: 'CSKH & Chatbot AI' },
@@ -52,6 +54,7 @@ export function Sidebar() {
       title: t('Trí tuệ Nhân tạo & Cài đặt'),
       items: [
         { href: '/dashboard/copilot', label: t('copilot') },
+        { href: '/dashboard/cskh/knowledge', label: 'Tri thức RAG (AI)' },
         { href: '/dashboard/content', label: t('Soạn thảo nội dung') },
         { href: '/dashboard/analytics', label: t('Phân tích Bot') },
         { href: '/dashboard/settings', label: t('settings') },

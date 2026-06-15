@@ -67,8 +67,17 @@ export default function CopilotPage() {
   const [imageLoadingIndex, setImageLoadingIndex] = useState<number | null>(null);
   const [autoWatermark, setAutoWatermark] = useState(false);
   const [watermarkText, setWatermarkText] = useState('');
+  const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
 
-  const handleGenerateCardImage = async (index: number) => {
+  const handleCardChange = React.useCallback((index: number, field: keyof CopilotPlanItem, value: any) => {
+    setPlan(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  }, []);
+
+  const handleGenerateCardImage = React.useCallback(async (index: number) => {
     const item = plan[index];
     const promptText = (item.imagePrompt || '').trim() || item.title;
     if (!promptText.trim()) return;
@@ -94,7 +103,7 @@ export default function CopilotPage() {
     } finally {
       setImageLoadingIndex(null);
     }
-  };
+  }, [plan, handleCardChange]);
 
   // Helper to calculate datetime string for a card
   const calculateCardDate = (baseDateStr: string, dayIndex: number, suggestedTime: string): string => {
@@ -142,7 +151,14 @@ export default function CopilotPage() {
       const res = await apiJson<{ plan: CopilotPlanItem[]; isDemo: boolean }>('/templates/copilot-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: topic.trim(), industry: industry.trim(), tone, postCount, generateImage: aiGenImage })
+        body: JSON.stringify({
+          topic: topic.trim(),
+          industry: industry.trim(),
+          tone,
+          postCount,
+          generateImage: aiGenImage,
+          useKnowledgeBase
+        })
       });
 
       // Pre-fill initial schedule times
@@ -167,13 +183,7 @@ export default function CopilotPage() {
     }
   };
 
-  const handleCardChange = (index: number, field: keyof CopilotPlanItem, value: any) => {
-    setPlan(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  };
+
 
   const handleSaveTemplates = async () => {
     if (plan.length === 0) return;
@@ -460,6 +470,7 @@ export default function CopilotPage() {
                   Tự động tạo ảnh minh họa
                 </label>
               </div>
+
 
               <div className="space-y-2 py-2 bg-slate-50/60 px-3 rounded-xl border border-slate-200/50">
                 <div className="flex items-center gap-3">

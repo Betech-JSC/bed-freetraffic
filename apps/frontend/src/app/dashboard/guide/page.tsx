@@ -215,6 +215,69 @@ export default function GuidePage() {
           description: 'Cấu hình Alerts để kết nối bot Telegram/Webhook Slack. Mỗi khi có khách hàng đăng ký biểu mẫu mới hoặc đơn hàng được thanh toán thành công, hệ thống sẽ gửi tin nhắn thông báo tức thì kèm thông tin cơ bản của lead.'
         }
       ]
+    },
+    {
+      id: 'repurpose',
+      icon: '🔄',
+      title: 'AI Social Repurposer',
+      subtitle: 'Tự động xé nhỏ nội dung bài viết thành bài đăng đa kênh mạng xã hội',
+      steps: [
+        {
+          title: 'Bước 1: Lựa chọn nguồn nội dung đầu vào',
+          description: 'Truy cập trang AI Social Repurposer tại đường dẫn /dashboard/repurpose. Chọn nguồn cấp là một bài viết Blog có sẵn, nhập đường dẫn URL trang web bất kỳ, hoặc dán đoạn văn bản ý tưởng thô.',
+        },
+        {
+          title: 'Bước 2: Chọn các kênh truyền thông đích và kích hoạt AI',
+          description: 'Lựa chọn các nền tảng MXH muốn tạo bài đăng (Facebook, LinkedIn, Zalo, hoặc kịch bản video TikTok). Bấm nút "Xử lý & Sáng tạo bài đăng" để kích hoạt mô hình AI.',
+        },
+        {
+          title: 'Bước 3: Tinh chỉnh bản thảo và sao chép',
+          description: 'Kết quả tạo bài đăng theo từng kênh sẽ hiển thị trong các Tab tương ứng. Bạn có thể trực tiếp chỉnh sửa nội dung bản thảo ngay trên giao diện trước khi bấm "Sao chép" để sử dụng đăng bài.',
+          tip: 'Kịch bản TikTok được AI tối ưu đầy đủ thời lượng thoại, mô tả cảnh quay và lời kêu gọi tương tác (Hook/CTA).'
+        }
+      ]
+    },
+    {
+      id: 'referrals',
+      icon: '🔗',
+      title: 'Tiếp thị Lan truyền (Referral Loop)',
+      subtitle: 'Xây dựng phễu tiếp thị lan truyền bằng cách tặng điểm thưởng đổi quà tặng số',
+      steps: [
+        {
+          title: 'Bước 1: Thiết lập cơ chế điểm thưởng và sản phẩm số',
+          description: 'Cài đặt sản phẩm số làm quà tặng (Ebook, khóa học) tại phân hệ Store. Hệ thống tự động quy định mỗi sản phẩm đổi thưởng tiêu tốn 500 điểm. Mỗi lượt mời bạn bè đăng ký thành công qua link giới thiệu sẽ nhận ngay 100 điểm.',
+        },
+        {
+          title: 'Bước 2: Quảng bá liên kết giới thiệu độc quyền',
+          description: 'Khách hàng truy cập Cổng đổi thưởng công khai /public/portal, nhận mã OTP qua hòm thư để đăng nhập. Sau đó sao chép "Liên kết giới thiệu độc quyền" và chia sẻ cho bạn bè.',
+          tip: 'Khi bạn bè bấm vào liên kết, hệ thống sẽ tự động thả cookie ghi nhận lượt giới thiệu trong vòng 30 ngày.'
+        },
+        {
+          title: 'Bước 3: Tích lũy điểm và đổi quà tự động',
+          description: 'Khi người được giới thiệu đăng ký biểu mẫu/popup trên Landing Page, điểm thưởng lập tức được cộng vào tài khoản của người giới thiệu. Họ có thể đăng nhập cổng để đổi điểm lấy link tải tài liệu số trực tuyến.',
+        }
+      ]
+    },
+    {
+      id: 'widgets',
+      icon: '🧩',
+      title: 'Widgets Tương Tác & OG Image',
+      subtitle: 'Tạo mã nhúng trắc nghiệm, máy tính ROI và tự động vẽ ảnh chia sẻ OpenGraph',
+      steps: [
+        {
+          title: 'Bước 1: Thiết kế và sinh câu hỏi AI Quiz / Calculator',
+          description: 'Vào phân hệ Widgets, bấm tạo mới. Lựa chọn dạng Quiz hoặc Calculator. Nhập chủ đề trắc nghiệm và sử dụng tính năng "Biên soạn AI" để tự sinh 5 câu hỏi nhanh chóng.',
+        },
+        {
+          title: 'Bước 2: Sao chép mã nhúng đặt lên Website/Landing Page',
+          description: 'Bấm Lưu cấu hình. Hệ thống sẽ sinh ra một thẻ script nhúng tương tác. Dán thẻ script này vào bất kỳ vị trí nào trên Landing Page của bạn để hiển thị widget trắc nghiệm thu hút leads.',
+          tip: 'Khi người dùng điền thông tin và bấm nhận báo cáo ở bước cuối, leads cùng bảng trả lời sẽ tự động đồng bộ về CRM.'
+        },
+        {
+          title: 'Bước 3: Sinh ảnh chia sẻ OpenGraph tự động bằng AI',
+          description: 'Khi soạn thảo Blog hoặc Landing Page, trong mục SEO/Metadata, hãy bấm nút "Sinh ảnh bìa AI". Hệ thống sẽ tự động vẽ ảnh bìa PNG (1200x630px) chứa tiêu đề bài viết và logo thương hiệu hiển thị sắc nét khi chia sẻ lên mạng xã hội.',
+        }
+      ]
     }
   ];
 
@@ -410,6 +473,69 @@ export default function GuidePage() {
         {
           title: 'Step 3: Setup Smart Alerts',
           description: 'Connect a Telegram bot token or Slack webhook under Alerts. Whenever a user submits a form or pays an order, the system pushes instant mobile notifications with basic lead info.'
+        }
+      ]
+    },
+    {
+      id: 'repurpose',
+      icon: '🔄',
+      title: 'AI Social Repurposer',
+      subtitle: 'Automatically repurpose blog posts, URLs, or text into multi-channel social media posts',
+      steps: [
+        {
+          title: 'Step 1: Select Input Content Source',
+          description: 'Navigate to the AI Social Repurposer dashboard at /dashboard/repurpose. Choose your source type: select an existing Blog Post, enter a public URL, or paste a raw text draft.',
+        },
+        {
+          title: 'Step 2: Choose Target Platforms and Run AI',
+          description: 'Select the destination social networks (Facebook, LinkedIn, Zalo, or TikTok video script). Click "Process & Generate" to trigger the AI conversion engine.',
+        },
+        {
+          title: 'Step 3: Review, Edit, and Copy Output',
+          description: 'The generated posts will appear under their respective platform tabs. You can edit the text directly in the card container before copying it to your clipboard.',
+          tip: 'TikTok script formats are optimized with audio dialogs, screen layout prompts, and engaging Hooks/CTAs.'
+        }
+      ]
+    },
+    {
+      id: 'referrals',
+      icon: '🔗',
+      title: 'Viral Referral Loops',
+      subtitle: 'Build viral acquisition loops with point-based incentives and digital product redemptions',
+      steps: [
+        {
+          title: 'Step 1: Set Up Digital Rewards and Points Rules',
+          description: 'Add digital assets (Ebooks, guides) in the Store module. The system awards +100 points for every referred signup, and redemptions cost 500 points per digital product.',
+        },
+        {
+          title: 'Step 2: Distribute Unique Referral Links',
+          description: 'Customers login to the public Rewards Portal at /public/portal using secure Email OTP codes. They copy their unique referral link to share with peers.',
+          tip: 'When a friend clicks the link, the system drops a tracking cookie valid for 30 days.'
+        },
+        {
+          title: 'Step 3: Track Referrals and Auto-redeem Rewards',
+          description: 'Once a referred friend registers via any lead capture form or popup on your landing page, points are instantly added. The referrer can spend points to unlock secure download links.',
+        }
+      ]
+    },
+    {
+      id: 'widgets',
+      icon: '🧩',
+      title: 'Interactive Widgets & OG Image',
+      subtitle: 'Build embeddable AI Quizzes, ROI Calculators, and generate sharing images',
+      steps: [
+        {
+          title: 'Step 1: Design Interactive AI Quiz or Calculator',
+          description: 'Navigate to the Widgets dashboard, click create new, and choose Quiz or Calculator. Enter a topic and click "Draft with AI" to generate 5 multiple-choice questions instantly.',
+        },
+        {
+          title: 'Step 2: Copy Embed Code to Your Site',
+          description: 'Save the widget configuration to generate a script tag. Paste the script tag into any HTML page. The interactive widget runs automatically and syncs leads with the CRM.',
+          tip: 'When users submit their email at the final step, their scores and answers are synced to the CRM customer log.'
+        },
+        {
+          title: 'Step 3: Generate AI OpenGraph Sharing Images',
+          description: 'Inside the Blog or Landing Page editor, find the SEO/Metadata panel and click "Generate AI Cover Image". The system draws a 1200x630px PNG sharing image featuring the post title and branding logo.',
         }
       ]
     }

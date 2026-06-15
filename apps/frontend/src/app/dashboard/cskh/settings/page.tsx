@@ -26,6 +26,20 @@ type CskhConfig = {
   knowledgeUrls?: string | null;
 };
 
+type KnowledgeSource = {
+  id: number;
+  name: string;
+  type: 'FILE' | 'URL' | 'TEXT';
+  status: 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  fileSize: number | null;
+  url: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  _count?: {
+    chunks: number;
+  };
+};
+
 type ChatMessage = {
   id: number;
   sessionId: string;
@@ -87,6 +101,11 @@ export default function CskhSettingsPage() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [crawlingUrl, setCrawlingUrl] = useState(false);
   const [resettingKnowledge, setResettingKnowledge] = useState(false);
+  const [sources, setSources] = useState<KnowledgeSource[]>([]);
+  const [loadingSources, setLoadingSources] = useState(false);
+  const [previewText, setPreviewText] = useState('');
+  const [previewingSource, setPreviewingSource] = useState<KnowledgeSource | null>(null);
+  const [syncingSourceId, setSyncingSourceId] = useState<number | null>(null);
 
 
   // AI CRM Auto-care states
@@ -228,6 +247,38 @@ export default function CskhSettingsPage() {
     }
   }, []);
 
+  const loadSources = useCallback(async () => {
+    try {
+      setLoadingSources(true);
+      const data = await apiJson<KnowledgeSource[]>('/cskh/knowledge/sources');
+      if (data) {
+        setSources(data);
+      }
+    } catch (err: any) {
+      console.error('Lỗi tải danh sách tài liệu tri thức:', err);
+    } finally {
+      setLoadingSources(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'config' && aiChatbotEnabled) {
+      loadSources();
+    }
+  }, [activeTab, aiChatbotEnabled, loadSources]);
+
+  // Polling for processing sources
+  useEffect(() => {
+    const hasProcessing = sources.some(s => s.status === 'PROCESSING');
+    if (!hasProcessing) return;
+
+    const interval = setInterval(() => {
+      loadSources();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [sources, loadSources]);
+
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
@@ -361,6 +412,12 @@ export default function CskhSettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 20 * 1024 * 1024) {
+      setError('Kích thước tệp quá lớn. Vui lòng tải lên tệp dưới 20MB.');
+      e.target.value = '';
+      return;
+    }
+
     setUploadingFile(true);
     setError('');
     setSuccess('');
@@ -387,8 +444,8 @@ export default function CskhSettingsPage() {
         throw new Error(result.error || 'Lỗi tải tệp tin tri thức');
       }
 
-      setSuccess(result.message || 'Tải lên tài liệu thành công.');
-      loadConfig();
+      setSuccess(result.message || 'Tải lên tài liệu thành công. Đang tiến hành phân tích và học...');
+      loadSources();
     } catch (err: any) {
       setError(err.message || 'Lỗi khi tải tài liệu lên.');
     } finally {
@@ -411,13 +468,57 @@ export default function CskhSettingsPage() {
         body: JSON.stringify({ url: urlInput.trim() }),
       });
 
-      setSuccess(result.message || 'Cào dữ liệu website thành công.');
+      setSuccess(result.message || 'Đang cào dữ liệu website và học tri thức...');
       setUrlInput('');
-      loadConfig();
+      loadSources();
     } catch (err: any) {
       setError(err.message || 'Lỗi cào dữ liệu từ URL.');
     } finally {
       setCrawlingUrl(false);
+    }
+  };
+
+  const handleDeleteSource = async (id: number, name: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa tài liệu "${name}" không? AI sẽ không còn nhớ thông tin từ nguồn này.`)) return;
+    setError('');
+    setSuccess('');
+    try {
+      await apiJson(`/cskh/knowledge/sources/${id}`, { method: 'DELETE' });
+      setSuccess(`Đã xóa thành công tài liệu: ${name}`);
+      loadSources();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi xóa tài liệu.');
+    }
+  };
+
+  const handleReSyncSource = async (id: number) => {
+    setError('');
+    setSuccess('');
+    try {
+      setSyncingSourceId(id);
+      await apiJson(`/cskh/knowledge/sources/${id}/re-sync`, { method: 'POST' });
+      setSuccess('Đang đồng bộ lại tài liệu...');
+      loadSources();
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi đồng bộ lại tài liệu.');
+    } finally {
+      setSyncingSourceId(null);
+    }
+  };
+
+  const handlePreviewSource = async (source: KnowledgeSource) => {
+    setError('');
+    setSuccess('');
+    try {
+      setPreviewingSource(source);
+      setPreviewText('Đang tải nội dung văn bản tri thức...');
+      const res = await apiJson<{ extractedText: string }>(`/cskh/knowledge/sources/${source.id}/preview`);
+      if (res) {
+        setPreviewText(res.extractedText);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Không thể lấy nội dung xem trước.');
+      setPreviewingSource(null);
     }
   };
 
@@ -431,7 +532,7 @@ export default function CskhSettingsPage() {
     try {
       await apiJson('/cskh/knowledge/reset', { method: 'POST' });
       setSuccess('Đã đặt lại và xóa sạch tri thức doanh nghiệp.');
-      loadConfig();
+      setSources([]);
     } catch (err: any) {
       setError(err.message || 'Lỗi khi xóa tri thức.');
     } finally {
@@ -536,113 +637,19 @@ export default function CskhSettingsPage() {
             </label>
           </div>
 
-          {/* AI Chatbot Knowledge Base */}
+          {/* AI Chatbot Knowledge Base Redirect */}
           {aiChatbotEnabled && (
-            <div className="space-y-4 animate-fadeIn border-b border-orange-100/50 pb-6">
-              <div className="flex justify-between items-center">
-                <h4 className="font-bold text-[#f25c22] text-sm uppercase tracking-wider flex items-center gap-1.5">
-                  📚 Kho tri thức đa kênh (Knowledge Base)
-                </h4>
-                <button
-                  type="button"
-                  onClick={handleResetKnowledge}
-                  disabled={resettingKnowledge}
-                  className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 transition"
-                >
-                  {resettingKnowledge ? 'Đang xóa...' : 'Xóa toàn bộ tri thức'}
-                </button>
+            <div className="p-5 bg-orange-50 border border-orange-200/50 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs animate-fadeIn pb-6 border-b border-orange-100/50">
+              <div className="space-y-1">
+                <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">📚 Quản lý Kho Tri thức Doanh nghiệp (RAG)</span>
+                <p className="text-slate-500">Tải lên các file tài liệu (.pdf, .docx, .txt) hoặc cào dữ liệu từ đường dẫn website để huấn luyện cho Trợ lý AI của bạn.</p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Cột Trái: Text Area nhập thủ công */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-slate-700 uppercase">Soạn thảo văn bản thủ công</label>
-                  <textarea
-                    value={knowledgeBaseText}
-                    onChange={(e) => setKnowledgeBaseText(e.target.value)}
-                    placeholder="Nhập thông tin sản phẩm, chính sách hoàn tiền, giờ mở cửa... AI sẽ dựa vào thông tin này để tư vấn khách hàng tự động."
-                    rows={12}
-                    className="w-full bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-xl p-4 text-slate-800 text-sm focus:outline-none transition placeholder-slate-400"
-                  />
-                  <p className="text-[10px] text-slate-400">Bạn có thể tự do chỉnh sửa văn bản này bất kỳ lúc nào.</p>
-                </div>
-
-                {/* Cột Phải: Upload File và Crawl Website URL */}
-                <div className="space-y-6">
-                  {/* Tải lên File */}
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-slate-700 uppercase">Tải lên tệp tài liệu (PDF, DOCX, TXT)</label>
-                    <div className="relative border-2 border-dashed border-orange-200 hover:border-[#f25c22] rounded-xl p-4 transition bg-orange-50/5 flex flex-col items-center justify-center cursor-pointer">
-                      <input
-                        type="file"
-                        accept=".pdf,.docx,.txt"
-                        onChange={handleFileUpload}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                        disabled={uploadingFile}
-                      />
-                      <span className="text-2xl mb-1">📄</span>
-                      <span className="text-xs font-bold text-slate-600">
-                        {uploadingFile ? 'Đang trích xuất tri thức...' : 'Nhấp hoặc kéo thả tệp tin vào đây'}
-                      </span>
-                      <span className="text-[10px] text-slate-400 mt-1">Hỗ trợ PDF, Word (.docx) và Văn bản (.txt) tối đa 5MB</span>
-                    </div>
-
-                    {/* Danh sách file đã tải lên */}
-                    {knowledgeFiles.length > 0 && (
-                      <div className="space-y-1 mt-2 max-h-[110px] overflow-y-auto pr-1">
-                        <div className="text-[10px] font-bold text-slate-500">Tài liệu đã học ({knowledgeFiles.length}):</div>
-                        {knowledgeFiles.map((f, idx) => (
-                          <div key={idx} className="flex justify-between items-center text-[11px] bg-slate-50 border border-slate-100 rounded-lg p-2">
-                            <span className="font-semibold text-slate-700 truncate max-w-[200px]" title={f.name}>{f.name}</span>
-                            <span className="text-slate-400 font-mono text-[9px]">
-                              {(f.size / 1024).toFixed(1)} KB • {new Date(f.learnedAt).toLocaleDateString('vi-VN')}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Cào URL Website */}
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-slate-700 uppercase">Cào tri thức từ liên kết trang web (Website URL)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={urlInput}
-                        onChange={(e) => setUrlInput(e.target.value)}
-                        placeholder="https://example.com/chinh-sach-mua-hang"
-                        className="flex-1 bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-lg px-3 py-2 text-slate-800 text-xs focus:outline-none transition placeholder-slate-400"
-                        disabled={crawlingUrl}
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCrawlWebsite}
-                        disabled={crawlingUrl || !urlInput.trim()}
-                        className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-lg text-xs transition shadow flex items-center gap-1"
-                      >
-                        {crawlingUrl ? 'Đang cào...' : 'Cào dữ liệu'}
-                      </button>
-                    </div>
-
-                    {/* Danh sách URL đã học */}
-                    {knowledgeUrls.length > 0 && (
-                      <div className="space-y-1 mt-2 max-h-[110px] overflow-y-auto pr-1">
-                        <div className="text-[10px] font-bold text-slate-500">Liên kết đã học ({knowledgeUrls.length}):</div>
-                        {knowledgeUrls.map((u, idx) => (
-                          <div key={idx} className="flex flex-col bg-slate-50 border border-slate-100 rounded-lg p-2 text-[11px]">
-                            <div className="font-semibold text-slate-700 truncate" title={u.title}>{u.title}</div>
-                            <div className="flex justify-between items-center text-slate-400 text-[9px] mt-1 font-mono">
-                              <span className="truncate max-w-[200px]">{u.url}</span>
-                              <span>{new Date(u.learnedAt).toLocaleDateString('vi-VN')}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <Link
+                href="/dashboard/cskh/knowledge"
+                className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition shadow-md whitespace-nowrap flex-shrink-0"
+              >
+                Quản lý Tri thức (RAG) →
+              </Link>
             </div>
           )}
 
@@ -952,6 +959,10 @@ export default function CskhSettingsPage() {
                         labelName = 'Bạn';
                       }
                       
+                      const cleanContent = msg.content.replace(/\*\(Tham khảo từ:\s*([^\)]+)\)\*/g, '').trim();
+                      const citationMatch = msg.content.match(/\*\(Tham khảo từ:\s*([^\)]+)\)\*/);
+                      const references = citationMatch ? citationMatch[1].split(',').map(s => s.trim()) : [];
+
                       return (
                         <div
                           key={msg.id}
@@ -967,7 +978,20 @@ export default function CskhSettingsPage() {
                               />
                             </div>
                           )}
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
+                          <p className="whitespace-pre-wrap">{cleanContent}</p>
+                          {references.length > 0 && (
+                            <div className="mt-2 pt-1.5 border-t border-white/20 flex flex-wrap gap-1 items-center">
+                              <span className="text-[9px] font-bold opacity-80">📖 Nguồn:</span>
+                              {references.map((ref, rIdx) => (
+                                <span 
+                                  key={rIdx} 
+                                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${sender === 'visitor' ? 'bg-slate-200 text-slate-700' : 'bg-white/20 text-white'}`}
+                                >
+                                  {ref}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                           <span className={`block text-[8px] text-right mt-1.5 ${labelColor}`}>
                             {labelName} • {new Date(msg.createdAt).toLocaleTimeString('vi-VN')}
                           </span>
@@ -1015,6 +1039,29 @@ export default function CskhSettingsPage() {
                 <div className="text-slate-400 text-center font-medium">Chọn một cuộc hội thoại bên trái để xem nội dung chat chi tiết</div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal preview tài liệu */}
+      {previewingSource && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative border border-orange-100 flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
+              <h4 className="font-bold text-slate-800 text-sm truncate pr-4" title={previewingSource.name}>
+                📄 Xem nội dung: {previewingSource.name}
+              </h4>
+              <button
+                type="button"
+                onClick={() => { setPreviewingSource(null); setPreviewText(''); }}
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1"
+              >
+                X
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto bg-slate-50 border border-slate-100 rounded-xl p-4 text-slate-700 text-xs font-mono whitespace-pre-wrap leading-relaxed">
+              {previewText}
+            </div>
           </div>
         </div>
       )}

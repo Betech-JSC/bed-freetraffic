@@ -63,6 +63,23 @@ export function errorHandler(
     return;
   }
 
+  // Handle Multer limit or custom file upload errors
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    res.status(413).json({
+      error: 'Kích thước tệp quá lớn. Vui lòng tải lên tệp nhỏ hơn giới hạn cho phép.',
+      code: 'LIMIT_FILE_SIZE',
+    });
+    return;
+  }
+
+  if (err.name === 'MulterError') {
+    res.status(400).json({
+      error: `Lỗi tải lên tệp tin: ${err.message}`,
+      code: err.code || 'MULTER_ERROR',
+    });
+    return;
+  }
+
   // Handle generic error
   const statusCode = err.status || err.statusCode || 500;
   const message = err.message || 'Đã xảy ra sự cố không mong muốn trên hệ thống.';

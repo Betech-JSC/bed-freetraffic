@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getAiConfig, parseAiJson, fetchWithRetry } from '../lib/ai';
+import prisma from '../lib/prisma';
 
 
 export type GeneratedPost = {
@@ -12,7 +13,9 @@ export type GeneratedPost = {
 export async function generateAiPostContent(
   urlTarget: string,
   aiPrompt?: string | null,
-  contentType?: 'blog' | 'facebook' | 'video_script'
+  contentType?: 'blog' | 'facebook' | 'video_script',
+  workspaceId?: number,
+  useKnowledgeBase?: boolean
 ): Promise<{
   title: string;
   content: string;
@@ -125,7 +128,33 @@ Quy tắc viết bài:
     console.warn(`[AI Scraper] Không thể tải thông tin từ URL ${urlTarget}:`, err);
   }
 
-  const userPrompt = `URL đích: ${urlTarget}${urlMetadataText}
+  let ragContextText = '';
+  if (workspaceId) {
+    try {
+      const { retrieveRelevantChunksStructured } = await import('../lib/embeddings');
+      const queryStr = aiPrompt || urlTarget;
+      const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, queryStr, 5);
+      
+      const config = await prisma.cskhConfig.findUnique({
+        where: { workspaceId }
+      });
+      const kbText = config?.knowledgeBaseText || '';
+      
+      let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+      if (relevantChunks.length === 0 && kbText) {
+        const { retrieveRelevantChunks } = await import('./cskhService');
+        relevantChunks = retrieveRelevantChunks(kbText, queryStr, 5);
+      }
+      
+      if (relevantChunks.length > 0) {
+        ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ VIẾT NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${relevantChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+      }
+    } catch (ragErr) {
+      console.error('[AI Content Generation RAG] Lỗi tích hợp tri thức:', ragErr);
+    }
+  }
+
+  const userPrompt = `URL đích: ${urlTarget}${urlMetadataText}${ragContextText}
 ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy nghĩ chủ đề thu hút nhất liên quan đến URL đích.'}`;
 
   try {
@@ -618,7 +647,9 @@ export async function generateAiContentPlan(
   topic: string,
   industry: string,
   tone: string,
-  postCount = 5
+  postCount = 5,
+  workspaceId?: number,
+  useKnowledgeBase?: boolean
 ): Promise<CopilotPlanItem[]> {
   const ai = getAiConfig('/chat/completions');
   if (!ai.apiKey) {
@@ -694,9 +725,35 @@ Quy tắc viết bài:
    }
 KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô.`;
 
+  let ragContextText = '';
+  if (workspaceId) {
+    try {
+      const { retrieveRelevantChunksStructured } = await import('../lib/embeddings');
+      const queryStr = `${topic} ${industry}`;
+      const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, queryStr, 5);
+      
+      const config = await prisma.cskhConfig.findUnique({
+        where: { workspaceId }
+      });
+      const kbText = config?.knowledgeBaseText || '';
+      
+      let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+      if (relevantChunks.length === 0 && kbText) {
+        const { retrieveRelevantChunks } = await import('./cskhService');
+        relevantChunks = retrieveRelevantChunks(kbText, queryStr, 5);
+      }
+      
+      if (relevantChunks.length > 0) {
+        ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ VIẾT NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${relevantChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+      }
+    } catch (ragErr) {
+      console.error('[AI Plan Generation RAG] Lỗi tích hợp tri thức:', ragErr);
+    }
+  }
+
   const userPrompt = `Chủ đề: ${topic}
 Ngành nghề: ${industry}
-Giọng điệu: ${tone}`;
+Giọng điệu: ${tone}${ragContextText}`;
 
   try {
     const res = await fetchWithRetry(ai.url, {

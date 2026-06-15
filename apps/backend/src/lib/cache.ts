@@ -153,7 +153,7 @@ export const cache = cacheInstance;
 
 export async function invalidateWorkspaceCache(workspaceId: number, namespaces: string[]): Promise<void> {
   for (const ns of namespaces) {
-    if (ns === 'keywords' || ns === 'cskh-config') {
+    if (ns === 'keywords' || ns === 'cskh-config' || ns === 'knowledge-sources') {
       await cache.del(`ws:${workspaceId}:${ns}`);
     } else {
       const pattern = `ws:${workspaceId}:${ns}:*`;

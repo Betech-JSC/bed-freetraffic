@@ -62,6 +62,10 @@ model Workspace {
   chatSessions      ChatSession[]
   auditLogs         AuditLog[]
   knowledgeChunks   KnowledgeChunk[]
+  knowledgeSources  KnowledgeSource[]
+  shortLinks        ShortLink[]
+  popupWidgets      PopupWidget[]
+  marketingWidgets  MarketingWidget[]
 }
 
 model UserWorkspace {
@@ -358,6 +362,14 @@ model Customer {
   emailWorkflowQueues EmailWorkflowQueue[]
   chatSessions        ChatSession[]
 
+  // Viral Referral fields
+  referralCode   String?              @unique
+  referredById   Int?
+  referredBy     Customer?            @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals      Customer[]           @relation("Referrals")
+  pointsBalance  Int                  @default(0)
+  redemptions    ReferralRedemption[]
+
   @@index([workspaceId])
   @@index([status])
   @@index([createdAt])
@@ -453,6 +465,7 @@ model BlogPost {
   workspace    Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  ogImageUrl   String?    @db.Text
 
   @@index([workspaceId])
   @@index([slug])
@@ -477,6 +490,7 @@ model LandingPage {
   targetKeyword String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
+  ogImageUrl   String?          @db.Text
 
   @@index([workspaceId])
   @@index([slug])
@@ -573,6 +587,8 @@ model Product {
   workspace   Workspace?  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   orderItems  OrderItem[]
   createdAt   DateTime    @default(now())
+
+  referralRedemptions ReferralRedemption[]
 
   @@index([workspaceId])
 }
@@ -696,10 +712,31 @@ model AuditLog {
   @@index([action])
 }
 
+model KnowledgeSource {
+  id            Int              @id @default(autoincrement())
+  workspaceId   Int
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name          String
+  type          String           // "FILE" | "URL" | "TEXT"
+  status        String           @default("PROCESSING") // "PROCESSING", "COMPLETED", "FAILED"
+  fileSize      Int?
+  url           String?          // URL nguồn (nếu có)
+  syncSchedule  String?          // e.g. "daily", "weekly"
+  extractedText String?          @db.Text
+  errorMessage  String?          @db.Text
+  chunks        KnowledgeChunk[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([workspaceId])
+}
+
 model KnowledgeChunk {
   id          Int                          @id @default(autoincrement())
   workspaceId Int
   workspace   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sourceId    Int?
+  sourceObj   KnowledgeSource?             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   source      String
   content     String                       @db.Text
   embedding   Unsupported("vector(1536)")?
@@ -707,3 +744,88 @@ model KnowledgeChunk {
 
   @@index([workspaceId])
 }
+
+model ShortLink {
+  id           Int              @id @default(autoincrement())
+  workspaceId  Int
+  workspace    Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  code         String           @unique
+  originalUrl  String           @db.Text
+  title        String?
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  clicks       ShortLinkClick[]
+
+  @@index([workspaceId])
+  @@index([code])
+}
+
+model ShortLinkClick {
+  id           Int        @id @default(autoincrement())
+  shortLinkId  Int
+  shortLink    ShortLink  @relation(fields: [shortLinkId], references: [id], onDelete: Cascade)
+  referrer     String?    @db.Text
+  userAgent    String?    @db.Text
+  deviceType   String?    // "mobile" | "desktop" | "tablet"
+  ipAddress    String?
+  country      String?
+  clickedAt    DateTime   @default(now())
+
+  @@index([shortLinkId])
+  @@index([clickedAt])
+}
+
+model PopupWidget {
+  id           Int        @id @default(autoincrement())
+  workspaceId  Int
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  type         String     // "EXIT_INTENT" | "DELAY" | "SCROLL"
+  delaySeconds Int        @default(5)
+  scrollDepth  Int        @default(50)
+  title        String
+  description  String     @db.Text
+  buttonText   String     @default("Đăng ký")
+  formFields   String     @default("email") // e.g. "email", "email,name", "email,name,phone"
+  themeColor   String     @default("#e85d26")
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([workspaceId])
+}
+
+model ReferralRedemption {
+  id            Int      @id @default(autoincrement())
+  customerId    Int
+  customer      Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId     Int
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  pointsSpent   Int
+  downloadToken String   @unique
+  createdAt     DateTime @default(now())
+
+  @@index([customerId])
+}
+
+model MarketingWidget {
+  id           Int        @id @default(autoincrement())
+  workspaceId  Int
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  type         String     // "QUIZ" | "CALCULATOR"
+  title        String
+  description  String     @db.Text
+  configJson   String     @db.Text // Questions list or custom formula configuration
+  themeColor   String     @default("#e85d26")
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([workspaceId])
+}
+
+
