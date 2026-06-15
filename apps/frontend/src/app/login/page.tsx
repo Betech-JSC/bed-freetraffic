@@ -69,9 +69,12 @@ export default function LoginPage() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col lg:flex-row">
         {/* LEFT PANEL: Form centered */}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 md:p-16 bg-app-mesh">
-          <div className="w-full max-w-md space-y-6">
-            
+        <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 md:p-16 bg-slate-50 relative overflow-hidden">
+          {/* Decorative glowing gradient blobs */}
+          <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-brand/10 blur-[80px] rounded-full pointer-events-none animate-pulse-slow" />
+          <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 bg-orange-400/10 blur-[80px] rounded-full pointer-events-none animate-pulse-slow" />
+
+          <div className="w-full max-w-md space-y-6 relative z-10">
             {/* Brand Logo & Tagline */}
             <div className="text-center space-y-2">
               <Link href="/" className="inline-block hover:opacity-90 transition-opacity cursor-pointer">
@@ -85,7 +88,7 @@ export default function LoginPage() {
               </p>
             </div>
 
-            <div className="bg-white border border-[#fce8de] rounded-2xl p-6 sm:p-8 shadow-sm space-y-5">
+            <div className="bg-white/80 backdrop-blur-md border border-slate-100 rounded-3xl p-6 sm:p-8 shadow-xl space-y-5 relative transition-all duration-300 hover:shadow-2xl hover:border-brand/20">
               {error && (
                 <div className="alert-error mb-5 text-xs sm:text-sm py-2.5 flex items-start gap-2.5">
                   <span>{error}</span>
@@ -103,7 +106,7 @@ export default function LoginPage() {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="px-4 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand/40 focus:ring-1 focus:ring-brand/40 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350"
+                      className="px-4 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350 transition-all duration-200 bg-white/50 focus:bg-white"
                       placeholder="name@company.com"
                       required
                     />
@@ -120,7 +123,7 @@ export default function LoginPage() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-4 pr-11 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand/40 focus:ring-1 focus:ring-brand/40 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350"
+                      className="pl-4 pr-11 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350 transition-all duration-200 bg-white/50 focus:bg-white"
                       placeholder="••••••••"
                       required
                     />
@@ -195,7 +198,7 @@ export default function LoginPage() {
               <div className="grid grid-cols-2 gap-2.5">
                 <button 
                   type="button" 
-                  className="flex items-center justify-center flex-col gap-1.5 py-2.5 rounded-xl bg-[#ea4335]/5 hover:bg-[#ea4335]/10 border border-[#ea4335]/15 text-[#ea4335] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  className="flex items-center justify-center flex-col gap-1.5 py-3 rounded-xl bg-white hover:bg-[#ea4335]/5 border border-slate-200 hover:border-[#ea4335]/30 text-slate-700 hover:text-[#ea4335] text-[10px] font-extrabold tracking-wider uppercase transition-all duration-300 cursor-pointer hover:scale-[1.03] active:scale-[0.97] shadow-sm hover:shadow-md hover:shadow-[#ea4335]/5"
                   onClick={() => handleSocialLogin('google')}
                 >
                   <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0">
@@ -208,7 +211,7 @@ export default function LoginPage() {
                 </button>
                 <button 
                   type="button" 
-                  className="flex items-center justify-center flex-col gap-1.5 py-2.5 rounded-xl bg-[#0068ff]/5 hover:bg-[#0068ff]/10 border border-[#0068ff]/15 text-[#0068ff] text-[10px] font-extrabold tracking-wider uppercase transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  className="flex items-center justify-center flex-col gap-1.5 py-3 rounded-xl bg-white hover:bg-[#0068ff]/5 border border-slate-200 hover:border-[#0068ff]/30 text-slate-700 hover:text-[#0068ff] text-[10px] font-extrabold tracking-wider uppercase transition-all duration-300 cursor-pointer hover:scale-[1.03] active:scale-[0.97] shadow-sm hover:shadow-md hover:shadow-[#0068ff]/5"
                   onClick={() => handleSocialLogin('zalo')}
                 >
                   <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0">
@@ -219,7 +222,7 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-
+ 
             {/* Footer Registration text */}
             <p className="text-xs text-slate-500 text-center font-medium">
               Chưa có tài khoản?{' '}
@@ -227,17 +230,17 @@ export default function LoginPage() {
                 Đăng ký ngay
               </Link>
             </p>
-
+ 
           </div>
         </div>
-
+ 
         {/* RIGHT PANEL: Traffic Lights Blur Banner */}
         <div 
           className="hidden lg:block lg:w-[42%] relative overflow-hidden bg-cover bg-center border-l border-slate-200/50" 
           style={{ backgroundImage: 'url(/traffic_lights_blur.png)' }}
         >
           {/* Journey Optimization Card */}
-          <div className="absolute bottom-16 right-8 left-8 bg-white border border-[#fce8de] rounded-2xl p-6 shadow-xl max-w-sm ml-auto animate-in slide-in-from-bottom-2 duration-300">
+          <div className="absolute bottom-16 right-8 left-8 bg-white/95 backdrop-blur-md border border-[#fce8de] rounded-3xl p-6 shadow-2xl max-w-sm ml-auto animate-float transition-all duration-300 hover:scale-[1.01]">
             <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">
               Tối ưu hóa hành trình
             </h3>
