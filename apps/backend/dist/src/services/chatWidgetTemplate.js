@@ -431,6 +431,52 @@ function getChatWidgetHtml(workspaceId) {
     function appendMessage(text, sender) {
       const msgDiv = document.createElement('div');
       msgDiv.className = 'ai-message ' + sender + ' fade-in';
+      
+      if (sender === 'bot') {
+        const citationRegex = /\\\*\\(Tham khảo từ:\\s\*([^\\)]+)\\)\\\*/;
+        // fallback regex for non-escaped matches
+        const citationRegexAlt = /\*\(Tham khảo từ:\s*([^\)]+)\)\*/;
+        const match = text.match(citationRegex) || text.match(citationRegexAlt);
+        if (match) {
+          const cleanText = text.replace(citationRegex, '').replace(citationRegexAlt, '').trim();
+          const refs = match[1].split(',').map(s => s.trim()).filter(Boolean);
+          
+          msgDiv.innerText = cleanText;
+          
+          const refsContainer = document.createElement('div');
+          refsContainer.style.marginTop = '6px';
+          refsContainer.style.paddingTop = '6px';
+          refsContainer.style.borderTop = '1px solid rgba(0,0,0,0.06)';
+          refsContainer.style.display = 'flex';
+          refsContainer.style.flexWrap = 'wrap';
+          refsContainer.style.gap = '4px';
+          refsContainer.style.alignItems = 'center';
+          
+          const label = document.createElement('span');
+          label.innerText = '📖 Nguồn:';
+          label.style.fontSize = '9px';
+          label.style.fontWeight = 'bold';
+          label.style.opacity = '0.7';
+          refsContainer.appendChild(label);
+          
+          refs.forEach(ref => {
+            const badge = document.createElement('span');
+            badge.innerText = ref;
+            badge.style.fontSize = '9.5px';
+            badge.style.padding = '2px 5px';
+            badge.style.borderRadius = '4px';
+            badge.style.background = 'rgba(0,0,0,0.06)';
+            badge.style.color = '#374151';
+            badge.style.fontWeight = '600';
+            refsContainer.appendChild(badge);
+          });
+          
+          msgDiv.appendChild(refsContainer);
+          messagesContainer.appendChild(msgDiv);
+          return;
+        }
+      }
+      
       msgDiv.innerText = text;
       messagesContainer.appendChild(msgDiv);
     }

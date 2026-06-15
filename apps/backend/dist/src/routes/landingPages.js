@@ -46,6 +46,19 @@ router.get('/', auth_1.authenticate, async (req, res) => {
     try {
         const pages = await prisma_1.default.landingPage.findMany({
             where: { workspaceId: req.workspaceId },
+            select: {
+                id: true,
+                slug: true,
+                title: true,
+                status: true,
+                fbPixelId: true,
+                googleTagId: true,
+                enableMessengerChat: true,
+                targetKeyword: true,
+                ogImageUrl: true,
+                createdAt: true,
+                updatedAt: true,
+            },
             orderBy: { createdAt: 'desc' },
         });
         res.json(pages);
@@ -247,7 +260,7 @@ const getThemedUnsplashImage = (theme, prompt) => {
 // AI Page generator
 router.post('/generate-ai', auth_1.authenticate, async (req, res) => {
     try {
-        const { prompt, theme, useCase } = req.body;
+        const { prompt, theme, useCase, useKnowledgeBase } = req.body;
         if (!prompt) {
             res.status(400).json({ error: 'Mô tả (prompt) là bắt buộc.' });
             return;
@@ -297,6 +310,28 @@ router.post('/generate-ai', auth_1.authenticate, async (req, res) => {
         else {
             layoutInstructions = 'Thiết kế bố cục cơ bản: hero -> features -> testimonials -> form -> faq -> footer.';
         }
+        let ragContextText = '';
+        if (req.workspaceId) {
+            try {
+                const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+                const structuredChunks = await retrieveRelevantChunksStructured(req.workspaceId, prompt, 5);
+                const config = await prisma_1.default.cskhConfig.findUnique({
+                    where: { workspaceId: req.workspaceId }
+                });
+                const kbText = config?.knowledgeBaseText || '';
+                let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+                let mergedChunks = [...relevantChunks];
+                if (kbText && !mergedChunks.some(c => c.includes('Hướng dẫn & Ghi chú nhanh') || c.includes('Hướng dẫn chung') || c.includes(kbText.slice(0, 30)))) {
+                    mergedChunks.unshift(`[Nguồn: Hướng dẫn & Ghi chú nhanh]\n${kbText}`);
+                }
+                if (mergedChunks.length > 0) {
+                    ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ THIẾT KẾ NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${mergedChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+                }
+            }
+            catch (ragErr) {
+                console.error('[AI Landing Page RAG] Lỗi tích hợp tri thức:', ragErr);
+            }
+        }
         const systemInstructions = `Bạn là một kỹ sư thiết kế Landing Page AI chuyên nghiệp kiêm chuyên gia Copywriter chuyển đổi cao (Conversion Copywriting).
 Nhiệm vụ của bạn là tạo ra cấu trúc trang web Landing Page tuyệt đẹp dưới dạng một mảng JSON các khối PageBlock theo đúng định dạng được yêu cầu.
 
@@ -335,7 +370,7 @@ Quy quy tắc thiết kế & Copywriting quan trọng:
                 model: ai.model,
                 messages: [
                     { role: 'system', content: systemInstructions },
-                    { role: 'user', content: `Hãy sinh các khối Landing Page tuyệt đẹp cho chủ đề sau: ${prompt}` }
+                    { role: 'user', content: `Hãy sinh các khối Landing Page tuyệt đẹp cho chủ đề sau: ${prompt}${ragContextText}` }
                 ],
                 temperature: 0.8,
                 max_tokens: 4000,
@@ -351,7 +386,7 @@ Quy quy tắc thiết kế & Copywriting quan trọng:
                     model: 'meta-llama/llama-3.2-3b-instruct:free',
                     messages: [
                         { role: 'system', content: systemInstructions },
-                        { role: 'user', content: `Hãy sinh các khối Landing Page tuyệt đẹp cho chủ đề sau: ${prompt}` }
+                        { role: 'user', content: `Hãy sinh các khối Landing Page tuyệt đẹp cho chủ đề sau: ${prompt}${ragContextText}` }
                     ],
                     temperature: 0.8,
                     max_tokens: 4000,
@@ -397,6 +432,82 @@ Quy quy tắc thiết kế & Copywriting quan trọng:
     catch (err) {
         console.error('[AI Page Generator Error]:', err);
         res.status(500).json({ error: err.message || 'Lỗi hệ thống khi sinh trang.' });
+    }
+});
+// AI copywriting helper for specific section
+router.post('/generate-section-copy', auth_1.authenticate, async (req, res) => {
+    try {
+        const { prompt, sectionType, useKnowledgeBase } = req.body;
+        if (!prompt) {
+            res.status(400).json({ error: 'Mô tả/yêu cầu là bắt buộc.' });
+            return;
+        }
+        const ai = (0, ai_1.getAiConfig)('/chat/completions');
+        if (!ai.apiKey) {
+            res.status(400).json({ error: 'Chưa cấu hình API Key AI. Vui lòng kiểm tra file .env.' });
+            return;
+        }
+        let ragContextText = '';
+        if (req.workspaceId) {
+            try {
+                const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+                const structuredChunks = await retrieveRelevantChunksStructured(req.workspaceId, prompt, 5);
+                const config = await prisma_1.default.cskhConfig.findUnique({
+                    where: { workspaceId: req.workspaceId }
+                });
+                const kbText = config?.knowledgeBaseText || '';
+                let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+                let mergedChunks = [...relevantChunks];
+                if (kbText && !mergedChunks.some(c => c.includes('Hướng dẫn & Ghi chú nhanh') || c.includes('Hướng dẫn chung') || c.includes(kbText.slice(0, 30)))) {
+                    mergedChunks.unshift(`[Nguồn: Hướng dẫn & Ghi chú nhanh]\n${kbText}`);
+                }
+                if (mergedChunks.length > 0) {
+                    ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ VIẾT NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${mergedChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+                }
+            }
+            catch (ragErr) {
+                console.error('[AI Section Copy RAG] Lỗi tích hợp tri thức:', ragErr);
+            }
+        }
+        const systemInstructions = `Bạn là một chuyên gia Copywriter chuyên nghiệp tối ưu chuyển đổi bằng tiếng Việt.
+Nhiệm vụ của bạn là viết lại/soạn thảo tiêu đề (title) và đoạn văn mô tả (subtitle hoặc content) cho một khối website loại "${sectionType || 'chúng tôi'}" dựa trên yêu cầu của người dùng.
+
+Yêu cầu định dạng:
+BẮT BUỘC trả về DUY NHẤT một đối tượng JSON hợp lệ (KHÔNG có markdown code block, không giải thích):
+{"title": "tiêu đề hấp dẫn, giật tít thu hút", "content": "nội dung chi tiết thuyết phục khách hàng"}`;
+        const userPrompt = `Yêu cầu từ người dùng: ${prompt}${ragContextText}`;
+        let response = await (0, ai_1.fetchWithRetry)(ai.url, {
+            method: 'POST',
+            headers: ai.headers,
+            body: JSON.stringify({
+                model: ai.model,
+                messages: [
+                    { role: 'system', content: systemInstructions },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: 0.7,
+                max_tokens: 1000
+            }),
+            signal: AbortSignal.timeout(60000)
+        });
+        if (!response.ok) {
+            const errText = await response.text();
+            res.status(500).json({ error: `AI API returned status ${response.status}: ${errText}` });
+            return;
+        }
+        const data = await response.json();
+        const contentText = data.choices?.[0]?.message?.content?.trim() || '{}';
+        try {
+            const parsed = (0, ai_1.parseAiJson)(contentText);
+            res.json(parsed);
+        }
+        catch (e) {
+            res.status(500).json({ error: 'AI không trả về đúng định dạng JSON.', raw: contentText });
+        }
+    }
+    catch (err) {
+        console.error('[AI Section Copy Error]:', err);
+        res.status(500).json({ error: err.message || 'Lỗi hệ thống khi sinh nội dung.' });
     }
 });
 router.post('/:id/share-facebook', auth_1.authenticate, auth_1.requireWrite, async (req, res) => {

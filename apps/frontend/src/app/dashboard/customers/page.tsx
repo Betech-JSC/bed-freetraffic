@@ -534,6 +534,39 @@ export default function CustomersPage() {
 
   const needsBackendRestart = loadError.includes('404') || loadError.includes('Không kết nối');
 
+  // Parse AI Lead Score note if it exists
+  const aiNote = detail?.notes?.find(n => n.content.startsWith('[AI Phân Loại]:'));
+  let aiScore = 0;
+  let aiReason = '';
+  let aiStatus = detail?.status || '';
+  let hasAiInsight = false;
+
+  if (detail) {
+    if (aiNote) {
+      const match = aiNote.content.match(/\[AI Phân Loại\]:\s*Trạng thái:\s*(\w+)\s*\(Điểm:\s*(\d+)\/100\)\s*-\s*Lý do:\s*(.*)/);
+      if (match) {
+        aiStatus = match[1];
+        aiScore = parseInt(match[2], 10);
+        aiReason = match[3];
+        hasAiInsight = true;
+      }
+    } else if (['HOT', 'WARM', 'COLD'].includes(detail.status.toUpperCase())) {
+      aiStatus = detail.status.toUpperCase();
+      aiScore = aiStatus === 'HOT' ? 85 : aiStatus === 'WARM' ? 50 : 20;
+      aiReason = 'Phân loại tự động dựa trên trạng thái hiện tại.';
+      hasAiInsight = true;
+    }
+  }
+
+  let aiAction = '';
+  if (aiStatus === 'HOT') {
+    aiAction = 'Khách hàng có ý định mua hàng rất cao! Hãy liên hệ trực tiếp qua Zalo hoặc gọi Hotline để chốt đơn ngay lập tức.';
+  } else if (aiStatus === 'WARM') {
+    aiAction = 'Khách hàng quan tâm sản phẩm nhưng cần tư vấn thêm. Nên gửi email chi tiết kèm ưu đãi riêng.';
+  } else if (aiStatus === 'COLD') {
+    aiAction = 'Khách hàng chưa có nhu cầu rõ ràng. Nên đưa vào chiến dịch email tự động để nuôi dưỡng thêm.';
+  }
+
   // Compute metrics
   const totalCustomers = total;
   const vipCustomers = vipTotal;
@@ -871,6 +904,79 @@ export default function CustomersPage() {
                     {detail.lastContactAt && ` · Tương tác gần nhất: ${new Date(detail.lastContactAt).toLocaleString('vi-VN')}`}
                   </p>
                 </div>
+
+                {/* AI Insights & Lead Scoring Card */}
+                {hasAiInsight && (
+                  <div className="card p-5 shadow-sm border border-orange-500/20 bg-gradient-to-br from-white via-slate-50/20 to-orange-500/5 relative overflow-hidden space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🤖</span>
+                        <h4 className="font-extrabold text-slate-800 text-sm tracking-tight">AI Insights & Lead Scoring</h4>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide uppercase shadow-sm border ${
+                        aiStatus === 'HOT'
+                          ? 'bg-rose-50 border-rose-200 text-rose-700 animate-pulse'
+                          : aiStatus === 'WARM'
+                          ? 'bg-amber-50 border-amber-200 text-amber-700'
+                          : 'bg-slate-100 border-slate-200 text-slate-600'
+                      }`}>
+                        {aiStatus === 'HOT' ? '🔥 HOT (AI)' : aiStatus === 'WARM' ? '⚡ WARM (AI)' : '❄️ COLD (AI)'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-5 items-center">
+                      {/* Circular Gauge */}
+                      <div className="relative w-16 h-16 flex items-center justify-center shrink-0">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle
+                            cx="32"
+                            cy="32"
+                            r="28"
+                            className="stroke-slate-100"
+                            strokeWidth="5"
+                            fill="transparent"
+                          />
+                          <circle
+                            cx="32"
+                            cy="32"
+                            r="28"
+                            className={`transition-all duration-1000 ${
+                              aiStatus === 'HOT'
+                                ? 'stroke-rose-500'
+                                : aiStatus === 'WARM'
+                                ? 'stroke-amber-500'
+                                : 'stroke-slate-400'
+                            }`}
+                            strokeWidth="5"
+                            strokeDasharray={2 * Math.PI * 28}
+                            strokeDashoffset={2 * Math.PI * 28 * (1 - aiScore / 100)}
+                            strokeLinecap="round"
+                            fill="transparent"
+                          />
+                        </svg>
+                        <div className="absolute flex flex-col items-center justify-center">
+                          <span className="text-xs font-black text-slate-800">{aiScore}</span>
+                          <span className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">Điểm</span>
+                        </div>
+                      </div>
+
+                      {/* Score Reasoning & Suggestions */}
+                      <div className="flex-1 space-y-2.5 w-full">
+                        <div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide">Phân tích hội thoại:</span>
+                          <p className="text-xs text-slate-700 leading-relaxed font-medium mt-0.5">{aiReason}</p>
+                        </div>
+                        
+                        <div className="bg-orange-500/5 border border-orange-500/10 rounded-xl p-3">
+                          <span className="text-[9px] font-extrabold text-[#f25c22] uppercase tracking-wide flex items-center gap-1">
+                            🎯 Gợi ý hành động:
+                          </span>
+                          <p className="text-[11px] text-slate-650 font-bold mt-1 leading-relaxed">{aiAction}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Notes Card */}
                 <div className="card p-5 space-y-3 shadow-sm">

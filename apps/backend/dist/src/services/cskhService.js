@@ -813,17 +813,33 @@ Các tính năng và dịch vụ chính:
 6. CSKH AI & Chatbot: Hỗ trợ live chat trực tuyến, tự động ghi nhận lead (Email, SĐT) và cảnh báo về Telegram, tự động follow-up sau khi chat kết thúc.
 7. Thanh toán đối soát tự động: Tích hợp cổng PayOS VietQR và Stripe quốc tế để nâng hạng khách hàng khi thanh toán thành công.`;
             // RAG Động qua pgvector (Neon Postgres), tự động fallback sang text-matching nếu không có dữ liệu/lỗi
+            let structuredChunks = [];
             let relevantChunks = [];
-            if (kbText) {
+            let kbTextCombined = kbText;
+            try {
+                const completedSources = await prisma_1.default.knowledgeSource.findMany({
+                    where: { workspaceId, status: 'COMPLETED' }
+                });
+                for (const src of completedSources) {
+                    if (src.extractedText) {
+                        kbTextCombined += `\n\n--- [Nguồn tài liệu: ${src.name}] ---\n` + src.extractedText;
+                    }
+                }
+            }
+            catch (srcErr) {
+                console.error('[cskhService] Lỗi đọc các nguồn tri thức bổ sung:', srcErr);
+            }
+            if (kbTextCombined) {
                 try {
-                    const { retrieveRelevantChunksVector } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
-                    relevantChunks = await retrieveRelevantChunksVector(workspaceId, message, 5);
+                    const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+                    structuredChunks = await retrieveRelevantChunksStructured(workspaceId, message, 5);
+                    relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
                 }
                 catch (err) {
                     console.warn('[cskhService] Lỗi khi sử dụng pgvector RAG, tự động chuyển sang fallback:', err);
                 }
                 if (relevantChunks.length === 0) {
-                    relevantChunks = retrieveRelevantChunks(kbText, message, 5);
+                    relevantChunks = retrieveRelevantChunks(kbTextCombined, message, 5);
                 }
             }
             const effectiveKb = relevantChunks.length > 0
@@ -1029,9 +1045,15 @@ Nhiệm vụ của bạn:
             console.error('Lỗi segmentLeadWithAi:', err);
         });
     }
+    let references = [];
+    const citationMatch = replyText.match(/\*\(Tham khảo từ:\s*([^\)]+)\)\*/);
+    if (citationMatch) {
+        references = citationMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+    }
     return {
         sessionId: session.id,
         reply: replyText,
         customerId,
+        references,
     };
 }

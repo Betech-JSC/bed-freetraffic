@@ -39,7 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const cskhService_1 = require("../services/cskhService");
-const chatWidgetTemplate_1 = require("../services/chatWidgetTemplate");
+// import { getChatWidgetHtml } from '../services/chatWidgetTemplate';
 const node_1 = __importDefault(require("@payos/node"));
 const stripe_1 = __importDefault(require("stripe"));
 const cache_1 = require("../lib/cache");
@@ -50,6 +50,7 @@ const fs_1 = __importDefault(require("fs"));
 const form_data_1 = __importDefault(require("form-data"));
 const ai_1 = require("../lib/ai");
 const markdown_1 = require("../lib/markdown");
+const referrals_1 = require("./referrals");
 const uploadDir = path_1.default.join(__dirname, '../../uploads');
 if (!fs_1.default.existsSync(uploadDir)) {
     fs_1.default.mkdirSync(uploadDir, { recursive: true });
@@ -78,6 +79,91 @@ const uploadImage = (0, multer_1.default)({
     }
 });
 const router = (0, express_1.Router)();
+// Redirect Short Link: GET /r/:code
+router.get('/r/:code', async (req, res) => {
+    const code = String(req.params.code || '');
+    if (!code) {
+        res.status(400).send('Mã rút gọn không hợp lệ');
+        return;
+    }
+    try {
+        const link = await prisma_1.default.shortLink.findUnique({
+            where: { code }
+        });
+        if (!link) {
+            res.status(404).send('Không tìm thấy liên kết hoặc liên kết đã bị xóa');
+            return;
+        }
+        const rawReferrer = req.headers['referer'] || req.headers['referrer'];
+        const referrer = (Array.isArray(rawReferrer) ? rawReferrer[0] : rawReferrer) || null;
+        const rawUa = req.headers['user-agent'];
+        const userAgent = (Array.isArray(rawUa) ? rawUa[0] : rawUa) || null;
+        // Parse device
+        const deviceType = parseDeviceType(userAgent || undefined);
+        // Parse IP
+        const xForwardedFor = req.headers['x-forwarded-for'];
+        const ipAddress = (Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor?.split(',')[0]) || req.ip || null;
+        // Country mockup
+        const country = mockCountry(ipAddress || undefined);
+        // Log click asynchronously
+        prisma_1.default.shortLinkClick.create({
+            data: {
+                shortLinkId: link.id,
+                referrer,
+                userAgent,
+                deviceType,
+                ipAddress,
+                country,
+            }
+        }).catch((err) => {
+            console.error('Failed to log shortlink click:', err);
+        });
+        // Build target UTM URL
+        let targetUrl = link.originalUrl;
+        const utmParams = [];
+        if (link.utmSource)
+            utmParams.push(`utm_source=${encodeURIComponent(link.utmSource)}`);
+        if (link.utmMedium)
+            utmParams.push(`utm_medium=${encodeURIComponent(link.utmMedium)}`);
+        if (link.utmCampaign)
+            utmParams.push(`utm_campaign=${encodeURIComponent(link.utmCampaign)}`);
+        if (utmParams.length > 0) {
+            const separator = targetUrl.includes('?') ? '&' : '?';
+            targetUrl = targetUrl + separator + utmParams.join('&');
+        }
+        // Perform redirect
+        res.redirect(302, targetUrl);
+    }
+    catch (error) {
+        console.error('[GET /public/r/:code]', error);
+        res.status(500).send('Lỗi máy chủ khi chuyển hướng liên kết');
+    }
+});
+function parseDeviceType(ua) {
+    if (!ua)
+        return 'desktop';
+    const uaLower = ua.toLowerCase();
+    if (uaLower.includes('tablet') || uaLower.includes('ipad') || (uaLower.includes('android') && !uaLower.includes('mobile'))) {
+        return 'tablet';
+    }
+    if (uaLower.includes('mobile') || uaLower.includes('iphone') || uaLower.includes('android') || uaLower.includes('phone')) {
+        return 'mobile';
+    }
+    return 'desktop';
+}
+function mockCountry(ip) {
+    if (!ip)
+        return 'Vietnam';
+    if (ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+        return 'Vietnam';
+    }
+    const countries = ['Vietnam', 'United States', 'Singapore', 'Japan', 'United Kingdom', 'Germany'];
+    let hash = 0;
+    for (let i = 0; i < ip.length; i++) {
+        hash += ip.charCodeAt(i);
+    }
+    return countries[hash % countries.length];
+}
 // Retrieve all published blog posts of a workspace (public)
 router.get('/blog/workspace/:workspaceId', async (req, res) => {
     try {
@@ -350,6 +436,7 @@ router.post('/forms/submit', rateLimiter_1.publicSpamLimiter, async (req, res) =
                 },
             });
         }
+        await (0, referrals_1.checkAndApplyReferral)(customer.id, req);
         // Save Form Submission Log
         const submission = await prisma_1.default.formSubmission.create({
             data: {
@@ -475,6 +562,26 @@ router.get('/pages/:slug/html', async (req, res) => {
                     }).catch(err => console.error('Error incrementing impressionsB:', err));
                 }
             }
+            else {
+                // AUTO WINNER ROUTING:
+                // Check if there is a completed A/B test for this Landing Page A where Variant B won
+                const completedTest = await prisma_1.default.abTest.findFirst({
+                    where: {
+                        landingPageAId: page.id,
+                        status: 'COMPLETED',
+                        winner: 'B'
+                    },
+                    orderBy: { updatedAt: 'desc' }
+                });
+                if (completedTest && completedTest.landingPageBId) {
+                    const pageB = await prisma_1.default.landingPage.findUnique({
+                        where: { id: completedTest.landingPageBId }
+                    });
+                    if (pageB) {
+                        targetPage = pageB;
+                    }
+                }
+            }
         }
         let html = targetPage.htmlContent;
         let headInject = '';
@@ -527,7 +634,7 @@ router.get('/pages/:slug/html', async (req, res) => {
                 where: { workspaceId: page.workspaceId },
             });
             if (cskhConfig?.liveChatEnabled || preview) {
-                const widgetHtml = (0, chatWidgetTemplate_1.getChatWidgetHtml)(page.workspaceId);
+                const widgetHtml = `<script src="/api/public/cskh/widget.js" data-workspace-id="${page.workspaceId}"></script>`;
                 if (html.includes('</body>')) {
                     html = html.replace('</body>', `${widgetHtml}\n</body>`);
                 }
@@ -610,7 +717,12 @@ router.get('/pages/:slug/html', async (req, res) => {
 router.post('/cskh/upload-image', (req, res) => {
     uploadImage.single('image')(req, res, (err) => {
         if (err) {
-            res.status(400).json({ error: err.message || 'Lỗi tải tệp tin.' });
+            const isLimitSize = err.code === 'LIMIT_FILE_SIZE';
+            res.status(400).json({
+                error: isLimitSize
+                    ? 'Kích thước tệp quá lớn. Vui lòng tải lên tệp dưới giới hạn cho phép.'
+                    : (err.message || 'Lỗi tải tệp tin.')
+            });
             return;
         }
         if (!req.file) {
@@ -650,7 +762,12 @@ router.post('/cskh/transcribe', (req, res) => {
     uploadAudio.single('audio')(req, res, async (err) => {
         if (err) {
             console.error('[STT Fallback] Multer error:', err);
-            res.status(400).json({ error: err.message || 'Lỗi tải tệp tin âm thanh.' });
+            const isLimitSize = err.code === 'LIMIT_FILE_SIZE';
+            res.status(400).json({
+                error: isLimitSize
+                    ? 'Kích thước tệp quá lớn. Vui lòng tải lên tệp dưới giới hạn cho phép.'
+                    : (err.message || 'Lỗi tải tệp tin âm thanh.')
+            });
             return;
         }
         if (!req.file) {
@@ -789,6 +906,7 @@ const handleCheckout = async (req, res) => {
                 },
             });
         }
+        await (0, referrals_1.checkAndApplyReferral)(customer.id, req);
         // 3. Generate unique order number
         let orderNumber = '';
         let isUnique = false;
@@ -990,59 +1108,270 @@ function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'oc
     opacity: 1;
     transform: translateY(0);
   }
+
+  /* Vanilla CSS Fallback for Navigation Header */
+  .custom-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    width: 100%;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: all 0.3s ease;
+  }
+  .custom-navbar.navbar-light {
+    background-color: rgba(255, 255, 255, 0.85);
+    border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+    color: #1e293b;
+  }
+  .custom-navbar.navbar-dark {
+    background-color: rgba(15, 23, 42, 0.85);
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    color: #f1f5f9;
+  }
+  .custom-nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .custom-nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    font-weight: 950;
+    font-size: 20px;
+    letter-spacing: -0.5px;
+    color: inherit;
+  }
+  .custom-nav-logo img {
+    height: 36px;
+    max-width: 200px;
+    object-fit: contain;
+  }
+  .custom-nav-menu {
+    display: none;
+    gap: 24px;
+    align-items: center;
+  }
+  @media (min-width: 768px) {
+    .custom-nav-menu {
+      display: flex;
+    }
+  }
+  .custom-nav-link {
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .navbar-light .custom-nav-link {
+    color: #475569;
+  }
+  .navbar-light .custom-nav-link:hover {
+    color: #f25c22;
+  }
+  .navbar-dark .custom-nav-link {
+    color: #cbd5e1;
+  }
+  .navbar-dark .custom-nav-link:hover {
+    color: #f25c22;
+  }
+  .navbar-light .custom-nav-link.active {
+    color: #f25c22;
+  }
+  .navbar-dark .custom-nav-link.active {
+    color: #f25c22;
+  }
+  
+  .custom-nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .custom-auth-section {
+    display: none;
+    align-items: center;
+    gap: 12px;
+  }
+  @media (min-width: 768px) {
+    .custom-auth-section {
+      display: flex;
+    }
+  }
+  .custom-btn-login {
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 6px 12px;
+    transition: color 0.2s ease;
+  }
+  .navbar-light .custom-btn-login {
+    color: #475569;
+  }
+  .navbar-light .custom-btn-login:hover {
+    color: #0f172a;
+  }
+  .navbar-dark .custom-btn-login {
+    color: #94a3b8;
+  }
+  .navbar-dark .custom-btn-login:hover {
+    color: #f8fafc;
+  }
+  
+  .custom-btn-register {
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 12px;
+    color: #ffffff !important;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+  .custom-btn-register:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+  }
+  
+  .custom-hamburger {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+    color: inherit;
+  }
+  @media (min-width: 768px) {
+    .custom-hamburger {
+      display: none;
+    }
+  }
+  .navbar-light .custom-hamburger:hover {
+    background-color: rgba(0,0,0,0.05);
+  }
+  .navbar-dark .custom-hamburger:hover {
+    background-color: rgba(255,255,255,0.05);
+  }
+  .custom-hamburger svg {
+    width: 24px;
+    height: 24px;
+    stroke: currentColor;
+  }
+  
+  .custom-mobile-panel {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 24px;
+    transition: all 0.3s ease;
+  }
+  .navbar-light .custom-mobile-panel {
+    background-color: rgba(255, 255, 255, 0.98);
+    border-top: 1px solid rgba(226, 232, 240, 0.5);
+  }
+  .navbar-dark .custom-mobile-panel {
+    background-color: rgba(15, 23, 42, 0.98);
+    border-top: 1px solid rgba(51, 65, 85, 0.3);
+  }
+  @media (min-width: 768px) {
+    .custom-mobile-panel {
+      display: none !important;
+    }
+  }
+  .custom-mobile-panel.show {
+    display: flex;
+  }
+  .custom-mobile-panel nav {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .custom-mobile-panel .custom-nav-link {
+    padding: 8px 0;
+  }
+  .custom-mobile-divider {
+    height: 1px;
+    width: 100%;
+  }
+  .navbar-light .custom-mobile-divider {
+    background-color: rgba(226, 232, 240, 0.8);
+  }
+  .navbar-dark .custom-mobile-divider {
+    background-color: rgba(51, 65, 85, 0.5);
+  }
+  .custom-mobile-auth {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .custom-mobile-auth .custom-btn-login,
+  .custom-mobile-auth .custom-btn-register {
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Theme color rules */
+  .theme-orange .active-text-color { color: #f25c22 !important; }
+  .theme-orange .custom-nav-link:hover { color: #f25c22 !important; }
+  .theme-orange .theme-btn-bg { background-color: #f25c22 !important; }
+  .theme-orange .theme-btn-bg:hover { background-color: #d94d1a !important; }
+  
+  .theme-sky .active-text-color { color: #0284c7 !important; }
+  .theme-sky .custom-nav-link:hover { color: #0284c7 !important; }
+  .theme-sky .theme-btn-bg { background-color: #0284c7 !important; }
+  .theme-sky .theme-btn-bg:hover { background-color: #0369a1 !important; }
+  
+  .theme-red .active-text-color { color: #f05123 !important; }
+  .theme-red .custom-nav-link:hover { color: #f05123 !important; }
+  .theme-red .theme-btn-bg { background-color: #f05123 !important; }
+  .theme-red .theme-btn-bg:hover { background-color: #d94416 !important; }
 </style>\n`;
     const isDark = html.includes('bg-gray-950') || html.includes('bg-slate-950') || html.includes('bg-gray-900') || html.includes('background-color: #0f172a') || html.includes('background-color: #030712') || html.includes('background-color: #0b0f19') || html.includes('background-color: #111827');
-    let activeColorClass = 'text-[#f25c22]';
-    let btnColorClass = 'bg-[#f25c22] hover:bg-[#d94d1a]';
+    let themeNameClass = 'theme-orange';
     if (theme === 'saleticket-theme') {
-        activeColorClass = 'text-sky-600';
-        btnColorClass = 'bg-sky-600 hover:bg-sky-700';
+        themeNameClass = 'theme-sky';
     }
     else if (theme === 'education-theme') {
-        activeColorClass = 'text-[#f05123]';
-        btnColorClass = 'bg-[#f05123] hover:bg-[#d94416]';
+        themeNameClass = 'theme-red';
     }
-    const navClass = isDark
-        ? 'backdrop-blur-md bg-slate-950/80 border-b border-slate-900/60 text-slate-200'
-        : 'backdrop-blur-md bg-white/80 border-b border-slate-100 text-slate-800';
-    const linkClass = isDark
-        ? 'hover:text-[#f25c22] text-slate-300'
-        : 'hover:text-[#f25c22] text-slate-600';
-    const loginClass = isDark
-        ? 'text-slate-400 hover:text-slate-100'
-        : 'text-slate-600 hover:text-slate-900';
     const brandTitleText = brandConfig?.brandTitle || workspaceName;
     const brandLogoHtml = brandConfig?.logoUrl
-        ? `<img src="${brandConfig.logoUrl}" alt="${brandTitleText}" class="h-8 md:h-10 max-w-[200px] object-contain transition" />`
-        : `<span class="text-xl font-black tracking-tight ${activeColorClass}">${brandTitleText}</span>`;
+        ? `<img src="${brandConfig.logoUrl}" alt="${brandTitleText}" />`
+        : `<span class="active-text-color">${brandTitleText}</span>`;
     const logoLinkHtml = `
-    <a href="/api/public/pages/${slug}/html" class="flex items-center gap-2 hover:opacity-90 transition">
+    <a href="/api/public/pages/${slug}/html" class="custom-nav-logo">
       ${brandLogoHtml}
     </a>
   `;
     const navbarHtml = `
-<header class="sticky top-0 z-50 w-full ${navClass} transition-all duration-300">
-  <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center gap-4">
+<header class="custom-navbar ${isDark ? 'navbar-dark' : 'navbar-light'} ${themeNameClass} transition-all duration-300">
+  <div class="custom-nav-container">
     ${logoLinkHtml}
     
     <!-- Desktop navigation menu -->
-    <nav class="hidden md:flex gap-6 items-center text-sm font-bold">
-      <a href="/api/public/pages/${slug}/html" class="transition ${activeTab === 'home' ? activeColorClass : linkClass}">Trang chủ</a>
-      <a href="/api/public/pages/${slug}/html/blog" class="transition ${activeTab === 'blog' ? activeColorClass : linkClass}">Blog</a>
-      <a href="/api/public/pages/${slug}/html/products" class="transition ${activeTab === 'products' ? activeColorClass : linkClass}">Sản phẩm</a>
-      <a href="/api/public/pages/${slug}/html/about" class="transition ${activeTab === 'about' ? activeColorClass : linkClass}">Giới thiệu</a>
+    <nav class="custom-nav-menu">
+      <a href="/api/public/pages/${slug}/html" class="custom-nav-link ${activeTab === 'home' ? 'active active-text-color' : ''}">Trang chủ</a>
+      <a href="/api/public/pages/${slug}/html/blog" class="custom-nav-link ${activeTab === 'blog' ? 'active active-text-color' : ''}">Blog</a>
+      <a href="/api/public/pages/${slug}/html/products" class="custom-nav-link ${activeTab === 'products' ? 'active active-text-color' : ''}">Sản phẩm</a>
+      <a href="/api/public/pages/${slug}/html/about" class="custom-nav-link ${activeTab === 'about' ? 'active active-text-color' : ''}">Giới thiệu</a>
     </nav>
     
-    <div class="flex gap-3 items-center">
+    <div class="custom-nav-right">
       <!-- Desktop Auth links (hidden on mobile) -->
-      <div class="hidden md:flex gap-3 items-center" id="nav-auth-section-desktop">
-        <a href="/api/public/pages/${slug}/html/login" class="text-xs ${loginClass} px-3 py-1.5 font-bold transition">Đăng nhập</a>
-        <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+      <div class="custom-auth-section" id="nav-auth-section-desktop">
+        <a href="/api/public/pages/${slug}/html/login" class="custom-btn-login">Đăng nhập</a>
+        <a href="/api/public/pages/${slug}/html/register" class="custom-btn-register theme-btn-bg">Đăng ký</a>
       </div>
       
       <!-- Mobile Menu Button (Hamburger) -->
-      <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg transition hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none" aria-label="Toggle Menu">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <button id="mobile-menu-btn" class="custom-hamburger" aria-label="Toggle Menu">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path id="hamburger-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
           <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
         </svg>
@@ -1051,17 +1380,17 @@ function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'oc
   </div>
   
   <!-- Mobile Navigation Panel (Dropdown/Drawer) -->
-  <div id="mobile-nav-panel" class="hidden md:hidden border-t border-slate-200/20 dark:border-slate-800/60 py-4 px-6 flex flex-col gap-4 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md transition-all duration-300">
-    <nav class="flex flex-col gap-3 text-sm font-bold">
-      <a href="/api/public/pages/${slug}/html" class="py-2 transition ${activeTab === 'home' ? activeColorClass : linkClass}">Trang chủ</a>
-      <a href="/api/public/pages/${slug}/html/blog" class="py-2 transition ${activeTab === 'blog' ? activeColorClass : linkClass}">Blog</a>
-      <a href="/api/public/pages/${slug}/html/products" class="py-2 transition ${activeTab === 'products' ? activeColorClass : linkClass}">Sản phẩm</a>
-      <a href="/api/public/pages/${slug}/html/about" class="py-2 transition ${activeTab === 'about' ? activeColorClass : linkClass}">Giới thiệu</a>
+  <div id="mobile-nav-panel" class="custom-mobile-panel">
+    <nav>
+      <a href="/api/public/pages/${slug}/html" class="custom-nav-link ${activeTab === 'home' ? 'active active-text-color' : ''}">Trang chủ</a>
+      <a href="/api/public/pages/${slug}/html/blog" class="custom-nav-link ${activeTab === 'blog' ? 'active active-text-color' : ''}">Blog</a>
+      <a href="/api/public/pages/${slug}/html/products" class="custom-nav-link ${activeTab === 'products' ? 'active active-text-color' : ''}">Sản phẩm</a>
+      <a href="/api/public/pages/${slug}/html/about" class="custom-nav-link ${activeTab === 'about' ? 'active active-text-color' : ''}">Giới thiệu</a>
     </nav>
-    <div class="h-[1px] bg-slate-200/20 dark:bg-slate-800/60 my-1"></div>
-    <div class="flex flex-col gap-3" id="nav-auth-section-mobile">
-      <a href="/api/public/pages/${slug}/html/login" class="text-center text-xs ${loginClass} py-2 font-bold transition">Đăng nhập</a>
-      <a href="/api/public/pages/${slug}/html/register" class="text-center text-xs ${btnColorClass} text-white py-2.5 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+    <div class="custom-mobile-divider"></div>
+    <div class="custom-mobile-auth" id="nav-auth-section-mobile">
+      <a href="/api/public/pages/${slug}/html/login" class="custom-btn-login">Đăng nhập</a>
+      <a href="/api/public/pages/${slug}/html/register" class="custom-btn-register theme-btn-bg">Đăng ký</a>
     </div>
   </div>
 </header>
@@ -1074,7 +1403,7 @@ function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'oc
     
     if (btn && panel) {
       btn.addEventListener('click', function() {
-        panel.classList.toggle('hidden');
+        panel.classList.toggle('show');
         if (hamburger && closeIcon) {
           hamburger.classList.toggle('hidden');
           closeIcon.classList.toggle('hidden');
@@ -1091,8 +1420,8 @@ function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'oc
       if (!container) return;
       if (name) {
         container.innerHTML = \`
-          <span class="text-xs font-semibold \${container.id.includes('mobile') ? 'py-2' : ''} ${isDark ? 'text-slate-400' : 'text-slate-600'}">Xin chào, <strong class="${activeColorClass}">\${name}</strong></span>
-          <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-350' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'} px-3 py-1.5 rounded-lg font-bold transition \${container.id.includes('mobile') ? 'w-full py-2.5 mt-2' : 'ml-2'}">Đăng xuất</button>
+          <span class="text-xs font-semibold \${container.id.includes('mobile') ? 'py-2' : ''} ${isDark ? 'text-slate-400' : 'text-slate-650'}">Xin chào, <strong class="active-text-color">\${name}</strong></span>
+          <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-350' : 'bg-slate-100 hover:bg-slate-200 text-slate-750'} px-3 py-1.5 rounded-lg font-bold transition \${container.id.includes('mobile') ? 'w-full py-2.5 mt-2' : 'ml-2'}">Đăng xuất</button>
         \`;
       }
     }
@@ -1159,11 +1488,59 @@ function injectNavbarAndFooter(html, slug, workspaceName, activeTab, theme = 'oc
   })();
 </script>
 `;
+    const referralWidget = `
+<!-- Referral Loop Widget (Footer Banner & Exit-Intent Popup) -->
+<div id="referral-footer-banner" style="background: linear-gradient(135deg, #f25c22, #ffa37b); color: white; padding: 14px; text-align: center; font-size: 13.5px; font-weight: bold; position: relative; z-index: 999; box-shadow: 0 -4px 15px rgba(242,92,34,0.15);">
+  🎁 Bạn muốn nhận E-book & Quà tặng miễn phí? Đăng ký giới thiệu và chia sẻ trang này để tích lũy điểm đổi quà ngay! 
+  <a href="/public/portal" style="color: white; text-decoration: underline; margin-left: 8px; font-weight: 800; border-bottom: 2px solid white; padding-bottom: 1px;">Tham gia ngay →</a>
+</div>
+
+<!-- Exit-Intent Referral Modal -->
+<div id="exit-intent-referral-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000000; align-items: center; justify-content: center; padding: 16px; font-family: system-ui, -apple-system, sans-serif;">
+  <div style="background: white; border-radius: 20px; padding: 30px; max-width: 450px; width: 100%; text-align: center; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); position: relative; border: 1px solid #ffd8c7;">
+    <button id="close-exit-modal-btn" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 24px; cursor: pointer; color: #9ca3af; line-height: 1;">&times;</button>
+    <div style="font-size: 40px; margin-bottom: 12px;">🎁</div>
+    <h3 style="font-size: 18px; font-weight: 850; color: #1e293b; margin-bottom: 8px;">Đừng đi tay trắng!</h3>
+    <p style="font-size: 13.5px; color: #64748b; margin-bottom: 20px; line-height: 1.5;">Chia sẻ trang này cho bạn bè để tích điểm quy đổi **E-book hoặc Quà tặng miễn phí** từ chúng tôi.</p>
+    <a href="/public/portal" style="display: block; background: linear-gradient(135deg, #f25c22, #ff7e40); color: white; text-align: center; padding: 12px; border-radius: 12px; font-weight: bold; text-decoration: none; font-size: 14px; box-shadow: 0 4px 10px rgba(242, 92, 34, 0.3); transition: all 0.2s;">
+      Nhận Quà Tặng & Link Chia Sẻ →
+    </a>
+  </div>
+</div>
+
+<script>
+  (function() {
+    const modal = document.getElementById('exit-intent-referral-modal');
+    const closeBtn = document.getElementById('close-exit-modal-btn');
+    
+    if (modal && closeBtn) {
+      let shown = false;
+      
+      function onMouseOut(e) {
+        if (e.clientY < 20 && !shown) {
+          const dismissed = localStorage.getItem('exit_referral_dismissed');
+          if (!dismissed) {
+            modal.style.display = 'flex';
+            shown = true;
+          }
+        }
+      }
+      
+      document.addEventListener('mouseout', onMouseOut);
+      
+      closeBtn.addEventListener('click', function() {
+        modal.style.display = 'none';
+        localStorage.setItem('exit_referral_dismissed', 'true');
+      });
+    }
+  })();
+</script>
+`;
     if (resultHtml.includes('</body>')) {
-        resultHtml = resultHtml.replace('</body>', `${scrollScript}\n</body>`);
+        resultHtml = resultHtml.replace('</body>', `${referralWidget}\n${scrollScript}\n</body>`);
     }
     else {
-        resultHtml = resultHtml + '\n' + scrollScript;
+        resultHtml = resultHtml + '\n' + referralWidget + '\n' + scrollScript;
     }
     return resultHtml;
 }
@@ -1171,22 +1548,25 @@ function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 
     let activeColorClass = 'text-[#f25c22]';
     let btnColorClass = 'bg-[#f25c22] hover:bg-[#d94d1a]';
     let hoverTextClass = 'hover:text-[#f25c22]';
+    let themeNameClass = 'theme-orange';
     if (theme === 'saleticket-theme') {
         activeColorClass = 'text-sky-600';
         btnColorClass = 'bg-sky-600 hover:bg-sky-700';
         hoverTextClass = 'hover:text-sky-600';
+        themeNameClass = 'theme-sky';
     }
     else if (theme === 'education-theme') {
         activeColorClass = 'text-[#f05123]';
         btnColorClass = 'bg-[#f05123] hover:bg-[#d94416]';
         hoverTextClass = 'hover:text-[#f05123]';
+        themeNameClass = 'theme-red';
     }
     const brandTitleText = brandConfig?.brandTitle || workspaceName;
     const brandLogoHtml = brandConfig?.logoUrl
-        ? `<img src="${brandConfig.logoUrl}" alt="${brandTitleText}" class="h-8 md:h-10 max-w-[200px] object-contain transition" />`
-        : `<span class="text-xl font-black tracking-tight ${activeColorClass}">${brandTitleText}</span>`;
+        ? `<img src="${brandConfig.logoUrl}" alt="${brandTitleText}" />`
+        : `<span class="active-text-color">${brandTitleText}</span>`;
     const logoLinkHtml = `
-    <a href="/api/public/pages/${slug}/html" class="flex items-center gap-2 hover:opacity-90 transition">
+    <a href="/api/public/pages/${slug}/html" class="custom-nav-logo">
       ${brandLogoHtml}
     </a>
   `;
@@ -1215,32 +1595,267 @@ function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 
       opacity: 1;
       transform: translateY(0);
     }
+
+    /* Vanilla CSS Fallback for Navigation Header */
+    .custom-navbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      width: 100%;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+    }
+    .custom-navbar.navbar-light {
+      background-color: rgba(255, 255, 255, 0.85);
+      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+      color: #1e293b;
+    }
+    .custom-navbar.navbar-dark {
+      background-color: rgba(15, 23, 42, 0.85);
+      border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+      color: #f1f5f9;
+    }
+    .custom-nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .custom-nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      font-weight: 950;
+      font-size: 20px;
+      letter-spacing: -0.5px;
+      color: inherit;
+    }
+    .custom-nav-logo img {
+      height: 36px;
+      max-width: 200px;
+      object-fit: contain;
+    }
+    .custom-nav-menu {
+      display: none;
+      gap: 24px;
+      align-items: center;
+    }
+    @media (min-width: 768px) {
+      .custom-nav-menu {
+        display: flex;
+      }
+    }
+    .custom-nav-link {
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+    .navbar-light .custom-nav-link {
+      color: #475569;
+    }
+    .navbar-light .custom-nav-link:hover {
+      color: #f25c22;
+    }
+    .navbar-dark .custom-nav-link {
+      color: #cbd5e1;
+    }
+    .navbar-dark .custom-nav-link:hover {
+      color: #f25c22;
+    }
+    .navbar-light .custom-nav-link.active {
+      color: #f25c22;
+    }
+    .navbar-dark .custom-nav-link.active {
+      color: #f25c22;
+    }
+    
+    .custom-nav-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .custom-auth-section {
+      display: none;
+      align-items: center;
+      gap: 12px;
+    }
+    @media (min-width: 768px) {
+      .custom-auth-section {
+        display: flex;
+      }
+    }
+    .custom-btn-login {
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 6px 12px;
+      transition: color 0.2s ease;
+    }
+    .navbar-light .custom-btn-login {
+      color: #475569;
+    }
+    .navbar-light .custom-btn-login:hover {
+      color: #0f172a;
+    }
+    .navbar-dark .custom-btn-login {
+      color: #94a3b8;
+    }
+    .navbar-dark .custom-btn-login:hover {
+      color: #f8fafc;
+    }
+    
+    .custom-btn-register {
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 12px;
+      color: #ffffff !important;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .custom-btn-register:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    
+    .custom-hamburger {
+      background: none;
+      border: none;
+      padding: 8px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background-color 0.2s;
+      color: inherit;
+    }
+    @media (min-width: 768px) {
+      .custom-hamburger {
+        display: none;
+      }
+    }
+    .navbar-light .custom-hamburger:hover {
+      background-color: rgba(0,0,0,0.05);
+    }
+    .navbar-dark .custom-hamburger:hover {
+      background-color: rgba(255,255,255,0.05);
+    }
+    .custom-hamburger svg {
+      width: 24px;
+      height: 24px;
+      stroke: currentColor;
+    }
+    
+    .custom-mobile-panel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px 24px;
+      transition: all 0.3s ease;
+    }
+    .navbar-light .custom-mobile-panel {
+      background-color: rgba(255, 255, 255, 0.98);
+      border-top: 1px solid rgba(226, 232, 240, 0.5);
+    }
+    .navbar-dark .custom-mobile-panel {
+      background-color: rgba(15, 23, 42, 0.98);
+      border-top: 1px solid rgba(51, 65, 85, 0.3);
+    }
+    @media (min-width: 768px) {
+      .custom-mobile-panel {
+        display: none !important;
+      }
+    }
+    .custom-mobile-panel.show {
+      display: flex;
+    }
+    .custom-mobile-panel nav {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .custom-mobile-panel .custom-nav-link {
+      padding: 8px 0;
+    }
+    .custom-mobile-divider {
+      height: 1px;
+      width: 100%;
+    }
+    .navbar-light .custom-mobile-divider {
+      background-color: rgba(226, 232, 240, 0.8);
+    }
+    .navbar-dark .custom-mobile-divider {
+      background-color: rgba(51, 65, 85, 0.5);
+    }
+    .custom-mobile-auth {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .custom-mobile-auth .custom-btn-login,
+    .custom-mobile-auth .custom-btn-register {
+      text-align: center;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* Theme color rules */
+    .theme-orange .active-text-color { color: #f25c22 !important; }
+    .theme-orange .custom-nav-link:hover { color: #f25c22 !important; }
+    .theme-orange .theme-btn-bg { background-color: #f25c22 !important; }
+    .theme-orange .theme-btn-bg:hover { background-color: #d94d1a !important; }
+    
+    .theme-sky .active-text-color { color: #0284c7 !important; }
+    .theme-sky .custom-nav-link:hover { color: #0284c7 !important; }
+    .theme-sky .theme-btn-bg { background-color: #0284c7 !important; }
+    .theme-sky .theme-btn-bg:hover { background-color: #0369a1 !important; }
+    
+    .theme-red .active-text-color { color: #f05123 !important; }
+    .theme-red .custom-nav-link:hover { color: #f05123 !important; }
+    .theme-red .theme-btn-bg { background-color: #f05123 !important; }
+    .theme-red .theme-btn-bg:hover { background-color: #d94416 !important; }
+
+    /* Enforce solid black text on light backgrounds for blog post / products subpages */
+    main p, 
+    main li, 
+    main label, 
+    article.prose p, 
+    article.prose li,
+    article.prose strong,
+    main .faq-answer,
+    main .testimonial-quote {
+      color: #000000 !important;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col justify-between">
   <div>
-    <header class="sticky top-0 z-50 w-full backdrop-blur-md bg-white/80 border-b border-slate-100 text-slate-800 transition-all duration-300">
-      <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center gap-4">
+    <header class="custom-navbar navbar-light ${themeNameClass} transition-all duration-300">
+      <div class="custom-nav-container">
         ${logoLinkHtml}
         
         <!-- Desktop navigation menu -->
-        <nav class="hidden md:flex gap-6 items-center text-sm font-bold">
-          <a href="/api/public/pages/${slug}/html" class="transition ${hoverTextClass} ${activeTab === 'home' ? activeColorClass : 'text-slate-600'}">Trang chủ</a>
-          <a href="/api/public/pages/${slug}/html/blog" class="transition ${hoverTextClass} ${activeTab === 'blog' ? activeColorClass : 'text-slate-600'}">Blog</a>
-          <a href="/api/public/pages/${slug}/html/products" class="transition ${hoverTextClass} ${activeTab === 'products' ? activeColorClass : 'text-slate-600'}">Sản phẩm</a>
-          <a href="/api/public/pages/${slug}/html/about" class="transition ${hoverTextClass} ${activeTab === 'about' ? activeColorClass : 'text-slate-600'}">Giới thiệu</a>
+        <nav class="custom-nav-menu">
+          <a href="/api/public/pages/${slug}/html" class="custom-nav-link ${activeTab === 'home' ? 'active active-text-color' : ''}">Trang chủ</a>
+          <a href="/api/public/pages/${slug}/html/blog" class="custom-nav-link ${activeTab === 'blog' ? 'active active-text-color' : ''}">Blog</a>
+          <a href="/api/public/pages/${slug}/html/products" class="custom-nav-link ${activeTab === 'products' ? 'active active-text-color' : ''}">Sản phẩm</a>
+          <a href="/api/public/pages/${slug}/html/about" class="custom-nav-link ${activeTab === 'about' ? 'active active-text-color' : ''}">Giới thiệu</a>
         </nav>
         
-        <div class="flex gap-3 items-center">
+        <div class="custom-nav-right">
           <!-- Desktop Auth links (hidden on mobile) -->
-          <div class="hidden md:flex gap-3 items-center" id="nav-auth-section-desktop">
-            <a href="/api/public/pages/${slug}/html/login" class="text-xs text-slate-600 hover:text-slate-900 px-3 py-1.5 font-bold transition">Đăng nhập</a>
-            <a href="/api/public/pages/${slug}/html/register" class="text-xs ${btnColorClass} text-white px-4 py-2 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+          <div class="custom-auth-section" id="nav-auth-section-desktop">
+            <a href="/api/public/pages/${slug}/html/login" class="custom-btn-login">Đăng nhập</a>
+            <a href="/api/public/pages/${slug}/html/register" class="custom-btn-register theme-btn-bg">Đăng ký</a>
           </div>
           
           <!-- Mobile Menu Button (Hamburger) -->
-          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg transition hover:bg-black/5 dark:hover:bg-white/5 focus:outline-none" aria-label="Toggle Menu">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <button id="mobile-menu-btn" class="custom-hamburger" aria-label="Toggle Menu">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path id="hamburger-icon" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
               <path id="close-icon" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
@@ -1249,17 +1864,17 @@ function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 
       </div>
       
       <!-- Mobile Navigation Panel (Dropdown/Drawer) -->
-      <div id="mobile-nav-panel" class="hidden md:hidden border-t border-slate-200/20 py-4 px-6 flex flex-col gap-4 bg-white/95 backdrop-blur-md transition-all duration-300">
-        <nav class="flex flex-col gap-3 text-sm font-bold">
-          <a href="/api/public/pages/${slug}/html" class="py-2 transition ${hoverTextClass} ${activeTab === 'home' ? activeColorClass : 'text-slate-600'}">Trang chủ</a>
-          <a href="/api/public/pages/${slug}/html/blog" class="py-2 transition ${hoverTextClass} ${activeTab === 'blog' ? activeColorClass : 'text-slate-600'}">Blog</a>
-          <a href="/api/public/pages/${slug}/html/products" class="py-2 transition ${hoverTextClass} ${activeTab === 'products' ? activeColorClass : 'text-slate-600'}">Sản phẩm</a>
-          <a href="/api/public/pages/${slug}/html/about" class="py-2 transition ${hoverTextClass} ${activeTab === 'about' ? activeColorClass : 'text-slate-600'}">Giới thiệu</a>
+      <div id="mobile-nav-panel" class="custom-mobile-panel">
+        <nav>
+          <a href="/api/public/pages/${slug}/html" class="custom-nav-link ${activeTab === 'home' ? 'active active-text-color' : ''}">Trang chủ</a>
+          <a href="/api/public/pages/${slug}/html/blog" class="custom-nav-link ${activeTab === 'blog' ? 'active active-text-color' : ''}">Blog</a>
+          <a href="/api/public/pages/${slug}/html/products" class="custom-nav-link ${activeTab === 'products' ? 'active active-text-color' : ''}">Sản phẩm</a>
+          <a href="/api/public/pages/${slug}/html/about" class="custom-nav-link ${activeTab === 'about' ? 'active active-text-color' : ''}">Giới thiệu</a>
         </nav>
-        <div class="h-[1px] bg-slate-200/20 my-1"></div>
-        <div class="flex flex-col gap-3" id="nav-auth-section-mobile">
-          <a href="/api/public/pages/${slug}/html/login" class="text-center text-xs text-slate-600 hover:text-slate-900 py-2 font-bold transition">Đăng nhập</a>
-          <a href="/api/public/pages/${slug}/html/register" class="text-center text-xs ${btnColorClass} text-white py-2.5 rounded-xl font-bold transition shadow-sm">Đăng ký</a>
+        <div class="custom-mobile-divider"></div>
+        <div class="custom-mobile-auth" id="nav-auth-section-mobile">
+          <a href="/api/public/pages/${slug}/html/login" class="custom-btn-login">Đăng nhập</a>
+          <a href="/api/public/pages/${slug}/html/register" class="custom-btn-register theme-btn-bg">Đăng ký</a>
         </div>
       </div>
     </header>
@@ -1285,7 +1900,7 @@ function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 
       
       if (btn && panel) {
         btn.addEventListener('click', function() {
-          panel.classList.toggle('hidden');
+          panel.classList.toggle('show');
           if (hamburger && closeIcon) {
             hamburger.classList.toggle('hidden');
             closeIcon.classList.toggle('hidden');
@@ -1302,8 +1917,8 @@ function renderPage(slug, workspaceName, title, contentHtml, activeTab, theme = 
         if (!container) return;
         if (name) {
           container.innerHTML = \`
-            <span class="text-xs font-semibold \\\${container.id.includes('mobile') ? 'py-2' : ''} text-slate-600">Xin chào, <strong class="${activeColorClass}">\\\${name}</strong></span>
-            <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg font-bold transition \\\${container.id.includes('mobile') ? 'w-full py-2.5 mt-2' : 'ml-2'}">Đăng xuất</button>
+            <span class="text-xs font-semibold \\\${container.id.includes('mobile') ? 'py-2' : ''} text-slate-650">Xin chào, <strong class="active-text-color">\\\${name}</strong></span>
+            <button onclick="localStorage.removeItem('customerName'); localStorage.removeItem('customerEmail'); window.location.reload();" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-750 px-3 py-1.5 rounded-lg font-bold transition \\\${container.id.includes('mobile') ? 'w-full py-2.5 mt-2' : 'ml-2'}">Đăng xuất</button>
           \`;
         }
       }
@@ -1386,6 +2001,7 @@ router.post('/auth/register', async (req, res) => {
                 },
             });
         }
+        await (0, referrals_1.checkAndApplyReferral)(customer.id, req);
         res.json({
             success: true,
             customer: {
@@ -2262,6 +2878,7 @@ router.post('/tiktokshop/webhook', async (req, res) => {
                 }
             });
         }
+        await (0, referrals_1.checkAndApplyReferral)(customer.id, req);
         // 2. Create Order
         const existingOrder = await prisma_1.default.order.findUnique({
             where: { orderNumber: orderId }
@@ -2643,6 +3260,246 @@ router.get('/cskh/widget-config', async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: error.message || 'Lỗi lấy cấu hình widget' });
+    }
+});
+// Script delivery route for Lead Capture Popups: GET /api/public/popups/script/:workspaceId
+router.get('/popups/script/:workspaceId', async (req, res) => {
+    const workspaceId = parseInt(req.params.workspaceId);
+    if (isNaN(workspaceId)) {
+        res.status(400).send('/* Invalid Workspace ID */');
+        return;
+    }
+    try {
+        const activePopups = await prisma_1.default.popupWidget.findMany({
+            where: { workspaceId, isActive: true }
+        });
+        const host = process.env.NEXT_PUBLIC_API_URL
+            ? process.env.NEXT_PUBLIC_API_URL.replace(/\/api$/, '')
+            : (typeof window !== 'undefined' ? window.location.origin.replace(':3000', ':4000') : 'http://localhost:4000');
+        res.setHeader('Content-Type', 'application/javascript');
+        res.send(`
+(function() {
+  const workspaceId = ${workspaceId};
+  const activePopups = ${JSON.stringify(activePopups)};
+  const backendUrl = "${host}";
+  
+  if (!activePopups || activePopups.length === 0) return;
+  
+  const shownPopups = new Set();
+  
+  function createModal(popup) {
+    if (shownPopups.has(popup.id)) return;
+    shownPopups.add(popup.id);
+    
+    const fields = popup.formFields.split(',');
+    const hasName = fields.includes('name');
+    const hasPhone = fields.includes('phone');
+    
+    const modalId = 'growth-os-popup-' + popup.id;
+    if (document.getElementById(modalId)) return;
+    
+    const backdrop = document.createElement('div');
+    backdrop.id = modalId;
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:999999;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s ease;font-family:system-ui, -apple-system, sans-serif;';
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background:#fff;border-radius:24px;width:100%;max-width:440px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;transform:scale(0.95);transition:transform 0.3s ease;border:1px solid rgba(226,232,240,0.8);position:relative;margin:16px;';
+    
+    const banner = document.createElement('div');
+    banner.style.cssText = 'height:8px;background:' + (popup.themeColor || '#f25c22') + ';';
+    modal.appendChild(banner);
+    
+    const content = document.createElement('div');
+    content.style.cssText = 'padding:32px;';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&#x2715;';
+    closeBtn.style.cssText = 'position:absolute;top:16px;right:16px;background:none;border:none;font-size:16px;cursor:pointer;color:#94a3b8;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:background 0.2s;';
+    closeBtn.onmouseover = () => closeBtn.style.background = '#f1f5f9';
+    closeBtn.onmouseout = () => closeBtn.style.background = 'none';
+    closeBtn.onclick = () => {
+      backdrop.style.opacity = '0';
+      modal.style.transform = 'scale(0.95)';
+      setTimeout(() => backdrop.remove(), 300);
+    };
+    modal.appendChild(closeBtn);
+    
+    const title = document.createElement('h3');
+    title.innerText = popup.title;
+    title.style.cssText = 'margin:0 0 8px 0;font-size:20px;font-weight:850;color:#1e293b;line-height:1.3;';
+    content.appendChild(title);
+    
+    const desc = document.createElement('p');
+    desc.innerText = popup.description;
+    desc.style.cssText = 'margin:0 0 24px 0;font-size:13px;color:#64748b;line-height:1.6;';
+    content.appendChild(desc);
+    
+    const form = document.createElement('form');
+    form.style.cssText = 'display:flex;flex-direction:column;gap:12px;';
+    
+    let nameInput;
+    if (hasName) {
+      nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'Họ và tên';
+      nameInput.required = true;
+      nameInput.style.cssText = 'padding:12px 16px;border-radius:12px;border:1px solid #cbd5e1;font-size:13px;outline:none;transition:border-color 0.2s;';
+      nameInput.onfocus = () => nameInput.style.borderColor = popup.themeColor;
+      nameInput.onblur = () => nameInput.style.borderColor = '#cbd5e1';
+      form.appendChild(nameInput);
+    }
+    
+    const emailInput = document.createElement('input');
+    emailInput.type = 'email';
+    emailInput.placeholder = 'Địa chỉ email';
+    emailInput.required = true;
+    emailInput.style.cssText = 'padding:12px 16px;border-radius:12px;border:1px solid #cbd5e1;font-size:13px;outline:none;transition:border-color 0.2s;';
+    emailInput.onfocus = () => emailInput.style.borderColor = popup.themeColor;
+    emailInput.onblur = () => emailInput.style.borderColor = '#cbd5e1';
+    form.appendChild(emailInput);
+    
+    let phoneInput;
+    if (hasPhone) {
+      phoneInput = document.createElement('input');
+      phoneInput.type = 'tel';
+      phoneInput.placeholder = 'Số điện thoại';
+      phoneInput.required = true;
+      phoneInput.style.cssText = 'padding:12px 16px;border-radius:12px;border:1px solid #cbd5e1;font-size:13px;outline:none;transition:border-color 0.2s;';
+      phoneInput.onfocus = () => phoneInput.style.borderColor = popup.themeColor;
+      phoneInput.onblur = () => phoneInput.style.borderColor = '#cbd5e1';
+      form.appendChild(phoneInput);
+    }
+    
+    const submitBtn = document.createElement('button');
+    submitBtn.type = 'submit';
+    submitBtn.innerText = popup.buttonText || 'Đăng ký';
+    submitBtn.style.cssText = 'padding:14px;border-radius:12px;border:none;background:' + (popup.themeColor || '#f25c22') + ';color:#fff;font-weight:700;font-size:14px;cursor:pointer;transition:brightness 0.2s;margin-top:8px;';
+    submitBtn.onmouseover = () => submitBtn.style.filter = 'brightness(0.9)';
+    submitBtn.onmouseout = () => submitBtn.style.filter = 'none';
+    form.appendChild(submitBtn);
+    
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Đang gửi...';
+      
+      const payload = {
+        workspaceId: workspaceId,
+        popupId: popup.id,
+        email: emailInput.value,
+        name: hasName ? nameInput.value : '',
+        phone: hasPhone ? phoneInput.value : '',
+      };
+      
+      fetch(backendUrl + '/api/public/popups/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => {
+        content.innerHTML = '<div style="text-align:center;padding:16px 0;"><div style="font-size:48px;margin-bottom:16px;">🎉</div><h3 style="margin:0 0 8px 0;font-size:20px;font-weight:800;color:#1e293b;">Cảm ơn bạn!</h3><p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">Đăng ký thông tin thành công.</p></div>';
+        setTimeout(() => {
+          backdrop.style.opacity = '0';
+          modal.style.transform = 'scale(0.95)';
+          setTimeout(() => backdrop.remove(), 300);
+        }, 3000);
+      })
+      .catch(err => {
+        console.error('Error submitting lead:', err);
+        submitBtn.disabled = false;
+        submitBtn.innerText = popup.buttonText || 'Đăng ký';
+        alert('Có lỗi xảy ra, vui lòng thử lại sau.');
+      });
+    };
+    
+    content.appendChild(form);
+    modal.appendChild(content);
+    backdrop.appendChild(modal);
+    document.body.appendChild(backdrop);
+    
+    setTimeout(() => {
+      backdrop.style.opacity = '1';
+      modal.style.transform = 'scale(1)';
+    }, 50);
+  }
+  
+  activePopups.forEach(popup => {
+    if (popup.type === 'DELAY') {
+      setTimeout(() => createModal(popup), (popup.delaySeconds || 5) * 1000);
+    } else if (popup.type === 'SCROLL') {
+      const onScroll = () => {
+        const docEl = document.documentElement;
+        const scrollPercent = (docEl.scrollTop / (docEl.scrollHeight - docEl.clientHeight)) * 100;
+        if (scrollPercent >= (popup.scrollDepth || 50)) {
+          createModal(popup);
+          window.removeEventListener('scroll', onScroll);
+        }
+      };
+      window.addEventListener('scroll', onScroll);
+    } else if (popup.type === 'EXIT_INTENT') {
+      const onMouseOut = (e) => {
+        if (e.clientY < 15) {
+          createModal(popup);
+          document.removeEventListener('mouseout', onMouseOut);
+        }
+      };
+      document.addEventListener('mouseout', onMouseOut);
+    }
+  });
+})();
+    `);
+    }
+    catch (error) {
+        res.setHeader('Content-Type', 'application/javascript');
+        res.send(`/* Error loading Popups: ${error.message} */`);
+    }
+});
+// Lead Submission endpoint for Popups: POST /api/public/popups/submit
+router.post('/popups/submit', async (req, res) => {
+    const { workspaceId, popupId, email, name, phone } = req.body;
+    if (!email || !workspaceId) {
+        res.status(400).json({ error: 'Email và Workspace ID là bắt buộc' });
+        return;
+    }
+    try {
+        const wsId = parseInt(workspaceId);
+        // Find or create customer
+        let customer = await prisma_1.default.customer.findFirst({
+            where: { email: email.toLowerCase(), workspaceId: wsId }
+        });
+        const popup = await prisma_1.default.popupWidget.findUnique({
+            where: { id: parseInt(popupId) }
+        });
+        const sourceName = popup ? `Lead Popup: ${popup.name}` : 'Lead Capture Popup';
+        if (customer) {
+            customer = await prisma_1.default.customer.update({
+                where: { id: customer.id },
+                data: {
+                    name: name || customer.name,
+                    phone: phone || customer.phone,
+                    trafficSource: sourceName,
+                }
+            });
+        }
+        else {
+            customer = await prisma_1.default.customer.create({
+                data: {
+                    name: name || email.split('@')[0],
+                    email: email.toLowerCase(),
+                    phone: phone || null,
+                    status: 'NEW',
+                    workspaceId: wsId,
+                    trafficSource: sourceName,
+                }
+            });
+        }
+        await (0, referrals_1.checkAndApplyReferral)(customer.id, req);
+        res.json({ success: true, message: 'Đăng ký thành công!' });
+    }
+    catch (error) {
+        console.error('[POST /public/popups/submit]', error);
+        res.status(500).json({ error: error.message || 'Lỗi máy chủ' });
     }
 });
 exports.default = router;

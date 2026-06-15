@@ -132,7 +132,7 @@ router.delete('/:id', async (req, res) => {
 });
 // Tạo bài viết tự động bằng AI (GPT + DALL-E)
 router.post('/generate-ai', async (req, res) => {
-    const { urlTarget, aiPrompt, generateImage, contentType } = req.body;
+    const { urlTarget, aiPrompt, generateImage, contentType, useKnowledgeBase } = req.body;
     if (!urlTarget?.trim()) {
         res.status(400).json({ error: 'URL đích là bắt buộc để AI phân tích' });
         return;
@@ -184,7 +184,7 @@ router.post('/generate-ai', async (req, res) => {
             }
         }
         else {
-            result = await (0, aiGenerate_1.generateAiPostContent)(urlTarget, aiPrompt, contentType);
+            result = await (0, aiGenerate_1.generateAiPostContent)(urlTarget, aiPrompt, contentType, req.workspaceId, useKnowledgeBase);
         }
         let imageUrl = null;
         if (generateImage) {
@@ -222,13 +222,13 @@ router.post('/generate-image', async (req, res) => {
 });
 // Lên kế hoạch nội dung tự động bằng AI Copilot
 router.post('/copilot-plan', async (req, res) => {
-    const { topic, industry, tone, postCount, generateImage } = req.body;
+    const { topic, industry, tone, postCount, generateImage, useKnowledgeBase } = req.body;
     if (!topic || !industry || !tone) {
         res.status(400).json({ error: 'Chủ đề, ngành nghề và giọng điệu là bắt buộc' });
         return;
     }
     try {
-        const plan = await (0, aiGenerate_1.generateAiContentPlan)(topic, industry, tone, postCount ? parseInt(postCount) : 5);
+        const plan = await (0, aiGenerate_1.generateAiContentPlan)(topic, industry, tone, postCount ? parseInt(postCount) : 5, req.workspaceId, useKnowledgeBase);
         if (generateImage) {
             for (const item of plan) {
                 try {

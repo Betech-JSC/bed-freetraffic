@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -10,7 +43,8 @@ exports.optimizeSeoContent = optimizeSeoContent;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const ai_1 = require("../lib/ai");
-async function generateAiPostContent(urlTarget, aiPrompt, contentType) {
+const prisma_1 = __importDefault(require("../lib/prisma"));
+async function generateAiPostContent(urlTarget, aiPrompt, contentType, workspaceId, useKnowledgeBase) {
     const ai = (0, ai_1.getAiConfig)('/chat/completions');
     if (!ai.apiKey) {
         throw new Error('Chưa cấu hình OPENAI_API_KEY trong file .env');
@@ -111,7 +145,30 @@ Quy tắc viết bài:
     catch (err) {
         console.warn(`[AI Scraper] Không thể tải thông tin từ URL ${urlTarget}:`, err);
     }
-    const userPrompt = `URL đích: ${urlTarget}${urlMetadataText}
+    let ragContextText = '';
+    if (workspaceId) {
+        try {
+            const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+            const queryStr = aiPrompt || urlTarget;
+            const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, queryStr, 5);
+            const config = await prisma_1.default.cskhConfig.findUnique({
+                where: { workspaceId }
+            });
+            const kbText = config?.knowledgeBaseText || '';
+            let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+            let mergedChunks = [...relevantChunks];
+            if (kbText && !mergedChunks.some(c => c.includes('Hướng dẫn & Ghi chú nhanh') || c.includes('Hướng dẫn chung') || c.includes(kbText.slice(0, 30)))) {
+                mergedChunks.unshift(`[Nguồn: Hướng dẫn & Ghi chú nhanh]\n${kbText}`);
+            }
+            if (mergedChunks.length > 0) {
+                ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ VIẾT NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${mergedChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+            }
+        }
+        catch (ragErr) {
+            console.error('[AI Content Generation RAG] Lỗi tích hợp tri thức:', ragErr);
+        }
+    }
+    const userPrompt = `URL đích: ${urlTarget}${urlMetadataText}${ragContextText}
 ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy nghĩ chủ đề thu hút nhất liên quan đến URL đích.'}`;
     try {
         const res = await (0, ai_1.fetchWithRetry)(ai.url, {
@@ -546,7 +603,7 @@ async function generateAiImage(imagePrompt) {
         return null;
     }
 }
-async function generateAiContentPlan(topic, industry, tone, postCount = 5) {
+async function generateAiContentPlan(topic, industry, tone, postCount = 5, workspaceId, useKnowledgeBase) {
     const ai = (0, ai_1.getAiConfig)('/chat/completions');
     if (!ai.apiKey) {
         // Fallback/Stubs for AI content plan when OPENAI_API_KEY is not configured
@@ -618,9 +675,32 @@ Quy tắc viết bài:
      "suggestedTime": "HH:MM"
    }
 KHÔNG bao bọc kết quả bằng thẻ code markdown như \`\`\`json. Hãy trả về text JSON thô.`;
+    let ragContextText = '';
+    if (workspaceId) {
+        try {
+            const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+            const queryStr = `${topic} ${industry}`;
+            const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, queryStr, 5);
+            const config = await prisma_1.default.cskhConfig.findUnique({
+                where: { workspaceId }
+            });
+            const kbText = config?.knowledgeBaseText || '';
+            let relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+            let mergedChunks = [...relevantChunks];
+            if (kbText && !mergedChunks.some(c => c.includes('Hướng dẫn & Ghi chú nhanh') || c.includes('Hướng dẫn chung') || c.includes(kbText.slice(0, 30)))) {
+                mergedChunks.unshift(`[Nguồn: Hướng dẫn & Ghi chú nhanh]\n${kbText}`);
+            }
+            if (mergedChunks.length > 0) {
+                ragContextText = `\n\n--- DƯỚI ĐÂY LÀ THÔNG TIN DOANH NGHIỆP THỰC TẾ (BẮT BUỘC SỬ DỤNG ĐỂ VIẾT NỘI DUNG CHÍNH XÁC, KHÔNG BỊA ĐẶT THÔNG TIN): ---\n${mergedChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+            }
+        }
+        catch (ragErr) {
+            console.error('[AI Plan Generation RAG] Lỗi tích hợp tri thức:', ragErr);
+        }
+    }
     const userPrompt = `Chủ đề: ${topic}
 Ngành nghề: ${industry}
-Giọng điệu: ${tone}`;
+Giọng điệu: ${tone}${ragContextText}`;
     try {
         const res = await (0, ai_1.fetchWithRetry)(ai.url, {
             method: 'POST',

@@ -17,8 +17,8 @@ async function autoCompleteRunningAbTests() {
             const totalImpressions = impressionsA + impressionsB;
             const totalConversions = clicksA + clicksB;
             const totalNonConversions = totalImpressions - totalConversions;
-            // Ngưỡng tối thiểu là 200 impressions và mỗi biến thể phải có ít nhất 50 impressions
-            if (totalImpressions >= 200 && impressionsA >= 50 && impressionsB >= 50) {
+            // Ngưỡng tối thiểu là 1000 impressions và mỗi biến thể phải có ít nhất 200 impressions
+            if (totalImpressions >= 1000 && impressionsA >= 200 && impressionsB >= 200) {
                 if (totalConversions > 0 && totalNonConversions > 0) {
                     const o11 = clicksA;
                     const o12 = impressionsA - clicksA;

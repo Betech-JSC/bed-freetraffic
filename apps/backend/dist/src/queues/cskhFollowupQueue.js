@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -141,6 +174,50 @@ exports.cskhFollowupWorker = connection_1.useRedis
             const conversationText = session.messages
                 .map((m) => `${m.sender === 'visitor' ? 'Khách hàng' : 'Trợ lý ảo AI'}: ${m.content}`)
                 .join('\n');
+            // Lấy tin nhắn của khách hàng làm query truy vấn RAG
+            const visitorMessages = session.messages
+                .filter((m) => m.sender === 'visitor')
+                .map((m) => m.content);
+            let relevantChunks = [];
+            if (workspaceId) {
+                let kbTextCombined = cskhConfig.knowledgeBaseText || '';
+                try {
+                    const completedSources = await prisma_1.default.knowledgeSource.findMany({
+                        where: { workspaceId, status: 'COMPLETED' }
+                    });
+                    for (const src of completedSources) {
+                        if (src.extractedText) {
+                            kbTextCombined += `\n\n--- [Nguồn tài liệu: ${src.name}] ---\n` + src.extractedText;
+                        }
+                    }
+                }
+                catch (srcErr) {
+                    console.error('[cskhFollowupWorker-followup] Lỗi đọc các nguồn tri thức bổ sung:', srcErr);
+                }
+                const queryStr = visitorMessages.join('\n') || cskhConfig.followUpEmailBody || '';
+                if (queryStr) {
+                    try {
+                        const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+                        const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, queryStr, 5);
+                        relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+                    }
+                    catch (err) {
+                        console.warn('[cskhFollowupWorker-followup] Lỗi khi sử dụng pgvector RAG, tự động chuyển sang fallback:', err);
+                    }
+                    if (relevantChunks.length === 0 && kbTextCombined) {
+                        try {
+                            const { retrieveRelevantChunks } = await Promise.resolve().then(() => __importStar(require('../services/cskhService')));
+                            relevantChunks = retrieveRelevantChunks(kbTextCombined, queryStr, 5);
+                        }
+                        catch (err) {
+                            console.warn('[cskhFollowupWorker-followup] Lỗi khi sử dụng fallback text RAG:', err);
+                        }
+                    }
+                }
+            }
+            const ragContext = relevantChunks.length > 0
+                ? `\nTri thức sản phẩm/doanh nghiệp tham khảo để soạn email:\n---\n${relevantChunks.join('\n\n')}\n---\n`
+                : '';
             const ai = (0, ai_1.getAiConfig)('/chat/completions');
             let emailBody = '';
             if (ai.apiKey) {
@@ -150,12 +227,13 @@ Dưới đây là định hướng phong cách và nội dung thư của quản 
 ---
 ${cskhConfig.followUpEmailBody || 'Hỏi thăm khách hàng xem họ có cần hỗ trợ thêm thông tin gì từ cuộc trò chuyện trước không.'}
 ---
+${ragContext}
 Chi tiết cuộc hội thoại của khách hàng với chatbot:
 ${conversationText}
 
 Quy tắc:
 1. Viết email lịch sự, chân thành, tự nhiên, không sáo rỗng. Hãy xưng hô thân mật phù hợp (ví dụ: chào anh/chị, xưng em hoặc tên thương hiệu).
-2. Email cần tóm tắt ngắn gọn mối quan tâm hoặc thắc mắc trước đó của khách hàng, hỏi han xem họ đã giải quyết được vấn đề chưa, hoặc có cần hỗ trợ thêm thông tin gì không.
+2. Email cần tóm tắt ngắn gọn mối quan tâm hoặc thắc mắc trước đó của khách hàng, hỏi han xem họ đã giải quyết được vấn đề chưa, hoặc có cần hỗ trợ thêm thông tin gì không. Sử dụng thông tin trong phần Tri thức sản phẩm/doanh nghiệp ở trên (nếu có) để đưa ra thông tin tư vấn chính xác.
 3. Hãy đưa ra giải pháp/định hướng rõ ràng và mời họ phản hồi lại thư này nếu cần hỗ trợ trực tiếp.
 4. Chỉ trả về NỘI DUNG EMAIL DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
                 try {
@@ -272,6 +350,57 @@ Quy tắc:
                 const ordersText = customer.orders
                     .map((o) => `- Đơn hàng ${o.orderNumber}: ${o.totalAmount} VND (Trạng thái: ${o.status})`)
                     .join('\n');
+                // Lấy thông tin ghi chú & đơn hàng làm query truy vấn RAG
+                let relevantChunks = [];
+                if (workspaceId) {
+                    let kbTextCombined = config.knowledgeBaseText || '';
+                    try {
+                        const completedSources = await prisma_1.default.knowledgeSource.findMany({
+                            where: { workspaceId, status: 'COMPLETED' }
+                        });
+                        for (const src of completedSources) {
+                            if (src.extractedText) {
+                                kbTextCombined += `\n\n--- [Nguồn tài liệu: ${src.name}] ---\n` + src.extractedText;
+                            }
+                        }
+                    }
+                    catch (srcErr) {
+                        console.error('[cskhFollowupWorker-autocare] Lỗi đọc các nguồn tri thức bổ sung:', srcErr);
+                    }
+                    const queryParts = [];
+                    if (customer.notes && customer.notes.length > 0) {
+                        queryParts.push(customer.notes.map(n => n.content).join(' '));
+                    }
+                    if (customer.orders && customer.orders.length > 0) {
+                        queryParts.push(customer.orders.map(o => o.orderNumber).join(' '));
+                    }
+                    if (config.autoCareEmailBody) {
+                        queryParts.push(config.autoCareEmailBody);
+                    }
+                    const queryStr = queryParts.join(' ').trim() || 'chăm sóc khách hàng';
+                    if (queryStr) {
+                        try {
+                            const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+                            const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, queryStr, 5);
+                            relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+                        }
+                        catch (err) {
+                            console.warn('[cskhFollowupWorker-autocare] Lỗi khi sử dụng pgvector RAG, tự động chuyển sang fallback:', err);
+                        }
+                        if (relevantChunks.length === 0 && kbTextCombined) {
+                            try {
+                                const { retrieveRelevantChunks } = await Promise.resolve().then(() => __importStar(require('../services/cskhService')));
+                                relevantChunks = retrieveRelevantChunks(kbTextCombined, queryStr, 5);
+                            }
+                            catch (err) {
+                                console.warn('[cskhFollowupWorker-autocare] Lỗi khi sử dụng fallback text RAG:', err);
+                            }
+                        }
+                    }
+                }
+                const ragContext = relevantChunks.length > 0
+                    ? `\nTri thức sản phẩm/doanh nghiệp tham khảo để soạn email:\n---\n${relevantChunks.join('\n\n')}\n---\n`
+                    : '';
                 const ai = (0, ai_1.getAiConfig)('/chat/completions');
                 let messageBody = '';
                 if (ai.apiKey) {
@@ -295,9 +424,10 @@ ${ordersText || '(Chưa có đơn hàng nào)'}
 ---
 ${config.autoCareEmailBody || 'Hỏi thăm khách hàng xem họ có cần hỗ trợ thêm thông tin gì không.'}
 ---
+${ragContext}
 
 Quy tắc:
-1. Viết tin nhắn lịch sự, chân thành, tự nhiên, không sáo rỗng. Cá nhân hóa theo thông tin công ty, ghi chú hoặc đơn hàng của họ.
+1. Viết tin nhắn lịch sự, chân thành, tự nhiên, không sáo rỗng. Cá nhân hóa theo thông tin công ty, ghi chú hoặc đơn hàng của họ. Sử dụng thông tin trong phần Tri thức sản phẩm/doanh nghiệp ở trên (nếu có) để đưa ra nội dung tư vấn chính xác.
 2. Xưng hô thân mật phù hợp (ví dụ: chào anh/chị, xưng em hoặc tên thương hiệu).
 3. Chỉ trả về NỘI DUNG DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br>, <ul>, <li> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
                     try {

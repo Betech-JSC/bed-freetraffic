@@ -13,6 +13,20 @@ router.get('/', auth_1.authenticate, async (req, res) => {
     try {
         const posts = await prisma_1.default.blogPost.findMany({
             where: { workspaceId: req.workspaceId },
+            select: {
+                id: true,
+                slug: true,
+                title: true,
+                summary: true,
+                published: true,
+                publishedAt: true,
+                authorName: true,
+                tags: true,
+                targetKeyword: true,
+                ogImageUrl: true,
+                createdAt: true,
+                updatedAt: true,
+            },
             orderBy: { createdAt: 'desc' },
         });
         res.json(posts);

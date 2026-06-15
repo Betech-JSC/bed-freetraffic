@@ -21,8 +21,13 @@ exports.fetchWithRetry = fetchWithRetry;
  * @returns An object containing the configured API Key, Request URL, Model Name, and Headers.
  */
 function getAiConfig(path = '/chat/completions') {
-    const apiKey = process.env.OPENAI_API_KEY || '';
+    let apiKey = process.env.OPENAI_API_KEY || '';
     let model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    // Custom routing for embeddings if GEMINI_API_KEY is configured
+    if (path === '/embeddings' && process.env.GEMINI_API_KEY) {
+        apiKey = process.env.GEMINI_API_KEY;
+        model = 'text-embedding-004';
+    }
     let url = `https://api.openai.com/v1${path}`;
     const headers = {
         'Content-Type': 'application/json',
@@ -37,7 +42,10 @@ function getAiConfig(path = '/chat/completions') {
     else if (apiKey.startsWith('AIzaSy')) {
         // Google Gemini OpenAI compatibility integration
         url = `https://generativelanguage.googleapis.com/v1beta/openai${path}`;
-        if (model === 'gpt-4o-mini' ||
+        if (path === '/embeddings') {
+            model = 'text-embedding-004';
+        }
+        else if (model === 'gpt-4o-mini' ||
             model.includes('free') ||
             model.includes('gemma') ||
             model === 'gpt-4o') {

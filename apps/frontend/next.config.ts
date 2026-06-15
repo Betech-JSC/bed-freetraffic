@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
         destination: `${BACKEND_URL}/uploads/:path*`,
       },
       {
+        source: "/socket.io/:path*",
+        destination: `${BACKEND_URL}/socket.io/:path*`,
+      },
+      {
         source: "/p/:slug",
         destination: `${BACKEND_URL}/api/public/pages/:slug/html`,
       },

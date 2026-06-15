@@ -377,6 +377,15 @@ export default function LandingPageBuilder() {
     .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.25s ease-out; }
     .accordion-item.active .accordion-content { max-height: 350px; }
     .accordion-item.active .accordion-arrow { transform: rotate(180deg); }
+    
+    /* Enforce solid black text on light background sections */
+    .light-section p:not(#form-message):not(#checkout-error):not(#popup-form-message),
+    .light-section li, 
+    .light-section label,
+    .light-section .testimonial-quote,
+    .light-section .faq-answer {
+      color: #000000 !important;
+    }
   </style>
 </head>
 <body class="bg-white text-gray-900 min-h-screen">`;
@@ -389,15 +398,17 @@ export default function LandingPageBuilder() {
         const align = block.imageAlignment || 'right';
         const bgCol = block.backgroundColor || '#0f172a';
         const txtCol = block.textColor || '#ffffff';
+        const isBgLight = isColorLight(bgCol);
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
 
         if (hasImage && align !== 'center') {
           const isLeft = align === 'left';
           html += `
-  <section class="py-24 px-6 relative overflow-hidden${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
+  <section class="py-24 px-6 relative overflow-hidden ${themeClass}${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
     <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
       <div class="space-y-6 ${isLeft ? 'md:order-2' : ''}">
         <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight leading-tight">${block.title}</h1>
-        <p class="text-lg text-gray-300 max-w-xl leading-relaxed">${block.subtitle || ''}</p>
+        <p class="text-lg max-w-xl leading-relaxed" style="color: inherit; opacity: 0.9;">${block.subtitle || ''}</p>
         <div class="pt-4">
           <a href="${block.buttonLink || '#register-form'}" class="inline-block px-8 py-4 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition duration-200 shadow-lg transform hover:-translate-y-1">
             ${block.buttonText || 'Bắt đầu ngay'}
@@ -411,10 +422,10 @@ export default function LandingPageBuilder() {
   </section>`;
         } else {
           html += `
-  <section class="py-24 px-6 text-center relative overflow-hidden${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
+  <section class="py-24 px-6 text-center relative overflow-hidden ${themeClass}${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
     <div class="max-w-4xl mx-auto space-y-6">
       <h1 class="text-4xl md:text-6xl font-extrabold tracking-tight leading-tight">${block.title}</h1>
-      <p class="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto leading-relaxed">${block.subtitle || ''}</p>
+      <p class="text-lg md:text-xl max-w-2xl mx-auto leading-relaxed" style="color: inherit; opacity: 0.9;">${block.subtitle || ''}</p>
       ${hasImage ? `
       <div class="my-8 flex justify-center">
         <img src="${block.imageUrl}" alt="${block.title}" class="rounded-2xl shadow-2xl border border-gray-800 max-h-[450px] object-cover" />
@@ -428,8 +439,10 @@ export default function LandingPageBuilder() {
   </section>`;
         }
       } else if (block.type === 'features') {
+        const isBgLight = isColorLight(block.backgroundColor || '#f1f5f9');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         html += `
-  <section class="py-20 px-6${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f1f5f9'}; color: ${block.textColor || '#1e293b'};">
+  <section class="py-20 px-6 ${themeClass}${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f1f5f9'}; color: ${block.textColor || '#1e293b'};">
     <div class="max-w-5xl mx-auto">
       <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">${block.title}</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -442,8 +455,10 @@ export default function LandingPageBuilder() {
     </div>
   </section>`;
       } else if (block.type === 'form') {
+        const isBgLight = isColorLight(block.backgroundColor || '#ffffff');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         html += `
-  <section id="register-form" class="py-20 px-6${isMobileHidden}" style="background-color: ${block.backgroundColor || '#ffffff'};">
+  <section id="register-form" class="py-20 px-6 ${themeClass}${isMobileHidden}" style="background-color: ${block.backgroundColor || '#ffffff'};">
     <div class="max-w-md mx-auto bg-white border border-gray-200 rounded-xl p-8 shadow-xl">
       <h3 class="text-2xl font-bold text-gray-900 text-center mb-6">${block.title}</h3>
       <p class="text-gray-500 text-sm text-center mb-6">${block.subtitle || 'Vui lòng điền thông tin để tiếp tục'}</p>
@@ -519,6 +534,8 @@ export default function LandingPageBuilder() {
     </script>
   </section>`;
       } else if (block.type === 'pricing') {
+        const isBgLight = isColorLight(block.backgroundColor || '#0b0f19');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         const isDirectCheckout = !!block.productId;
         const buttonActionHtml = isDirectCheckout 
           ? `onclick="openCheckout('${block.productId}', '${block.title}', '${block.priceVal || ''}')"` 
@@ -590,7 +607,7 @@ export default function LandingPageBuilder() {
 
         if (aiTheme === 'sale-theme') {
           html += `
-  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
+  <section class="py-20 px-6 text-center ${themeClass}${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
     <div class="max-w-6xl mx-auto space-y-6">
       <div class="text-center max-w-xl mx-auto mb-12">
         <span class="px-3 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full uppercase tracking-wider">Đặc Sản</span>
@@ -633,7 +650,7 @@ export default function LandingPageBuilder() {
   </section>`;
         } else if (aiTheme === 'education-theme') {
           html += `
-  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
+  <section class="py-20 px-6 text-center ${themeClass}${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
     <div class="max-w-6xl mx-auto space-y-6">
       <div class="text-center max-w-xl mx-auto mb-12">
         <span class="px-3 py-1 bg-orange-100 text-orange-800 text-[10px] font-bold rounded-full uppercase tracking-wider">Lộ Trình Bài Bản</span>
@@ -676,7 +693,7 @@ export default function LandingPageBuilder() {
   </section>`;
         } else if (aiTheme === 'saleticket-theme') {
           html += `
-  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
+  <section class="py-20 px-6 text-center ${themeClass}${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
     <div class="max-w-6xl mx-auto space-y-6">
       <div class="text-center max-w-xl mx-auto mb-12">
         <span class="px-3 py-1 bg-sky-100 text-sky-800 text-[10px] font-bold rounded-full uppercase tracking-wider">Hành Trình Mơ Ước</span>
@@ -720,7 +737,7 @@ export default function LandingPageBuilder() {
   </section>`;
         } else {
           html += `
-  <section class="py-20 px-6 text-center${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
+  <section class="py-20 px-6 text-center ${themeClass}${isMobileHidden}" style="background-color: ${bgCol}; color: ${txtCol};">
     <div class="max-w-4xl mx-auto space-y-6">
       <h2 class="text-3xl md:text-4xl font-bold">${block.title}</h2>
       <p class="opacity-90 text-sm max-w-2xl mx-auto">${block.subtitle || ''}</p>
@@ -748,8 +765,10 @@ export default function LandingPageBuilder() {
   </section>`;
         }
       } else if (block.type === 'countdown') {
+        const isBgLight = isColorLight(block.backgroundColor || '#f8fafc');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         html += `
-  <section class="py-12 px-6 text-center${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f8fafc'}; color: ${block.textColor || '#0f172a'};">
+  <section class="py-12 px-6 text-center ${themeClass}${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f8fafc'}; color: ${block.textColor || '#0f172a'};">
     <div class="max-w-4xl mx-auto space-y-4">
       <h2 class="text-2xl md:text-3xl font-bold">${block.title}</h2>
       <p class="text-gray-500 text-sm">${block.subtitle || ''}</p>
@@ -803,8 +822,10 @@ export default function LandingPageBuilder() {
     </script>
   </section>`;
       } else if (block.type === 'testimonials') {
+        const isBgLight = isColorLight(block.backgroundColor || '#f8fafc');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         html += `
-  <section class="py-20 px-6${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f8fafc'}; color: ${block.textColor || '#0f172a'};">
+  <section class="py-20 px-6 ${themeClass}${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f8fafc'}; color: ${block.textColor || '#0f172a'};">
     <div class="max-w-6xl mx-auto">
       <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">${block.title}</h2>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -814,7 +835,7 @@ export default function LandingPageBuilder() {
             <div class="text-[#f25c22] text-sm">
               ${'★'.repeat(r.rating || 5)}${'☆'.repeat(5 - (r.rating || 5))}
             </div>
-            <p class="text-gray-600 italic text-sm leading-relaxed">"${r.quote}"</p>
+            <p class="testimonial-quote text-gray-600 italic text-sm leading-relaxed">"${r.quote}"</p>
           </div>
           <div class="flex items-center gap-3 mt-6 pt-4 border-t border-gray-100">
             ${r.avatar ? `<img src="${r.avatar}" alt="${r.name}" class="w-10 h-10 rounded-full object-cover" />` : `
@@ -829,8 +850,10 @@ export default function LandingPageBuilder() {
     </div>
   </section>`;
       } else if (block.type === 'faq') {
+        const isBgLight = isColorLight(block.backgroundColor || '#ffffff');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         html += `
-  <section class="py-20 px-6${isMobileHidden}" style="background-color: ${block.backgroundColor || '#ffffff'}; color: ${block.textColor || '#1e293b'};">
+  <section class="py-20 px-6 ${themeClass}${isMobileHidden}" style="background-color: ${block.backgroundColor || '#ffffff'}; color: ${block.textColor || '#1e293b'};">
     <div class="max-w-3xl mx-auto">
       <h2 class="text-3xl font-bold text-center text-gray-900 mb-12">${block.title}</h2>
       <div class="space-y-4">
@@ -841,15 +864,17 @@ export default function LandingPageBuilder() {
             <span class="text-gray-500 font-bold transition transform accordion-arrow text-xs">▼</span>
           </button>
           <div class="accordion-content border-t border-gray-200">
-            <div class="px-6 py-4 text-xs md:text-sm text-gray-600 leading-relaxed">${faq.answer}</div>
+            <div class="faq-answer px-6 py-4 text-xs md:text-sm text-gray-600 leading-relaxed">${faq.answer}</div>
           </div>
         </div>`).join('')}
       </div>
     </div>
   </section>`;
       } else if (block.type === 'logo_cloud') {
+        const isBgLight = isColorLight(block.backgroundColor || '#ffffff');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         html += `
-  <section class="py-16 px-6${isMobileHidden}" style="background-color: ${block.backgroundColor || '#ffffff'}; color: ${block.textColor || '#64748b'};">
+  <section class="py-16 px-6 ${themeClass}${isMobileHidden}" style="background-color: ${block.backgroundColor || '#ffffff'}; color: ${block.textColor || '#64748b'};">
     <div class="max-w-6xl mx-auto space-y-8 text-center">
       <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 opacity-80">${block.title}</h2>
       <div class="flex flex-wrap justify-center items-center gap-12 md:gap-16 py-4">
@@ -860,8 +885,10 @@ export default function LandingPageBuilder() {
     </div>
   </section>`;
       } else if (block.type === 'footer') {
+        const isBgLight = isColorLight(block.backgroundColor || '#f8fafc');
+        const themeClass = isBgLight ? 'light-section' : 'dark-section';
         html += `
-  <footer class="py-12 px-6 border-t border-gray-100${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f8fafc'}; color: ${block.textColor || '#4b5563'};">
+  <footer class="py-12 px-6 border-t border-gray-100 ${themeClass}${isMobileHidden}" style="background-color: ${block.backgroundColor || '#f8fafc'}; color: ${block.textColor || '#4b5563'};">
     <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
       <div class="text-center md:text-left">
         <h4 class="text-gray-800 font-bold text-lg">${block.title}</h4>
@@ -1159,6 +1186,11 @@ export default function LandingPageBuilder() {
         seo,
         theme: aiTheme,
         useCase: useCase,
+        brandConfig: {
+          brandTitle,
+          logoUrl,
+          fontFamily
+        },
         popupConfig: {
           enabled: popupEnabled,
           exitIntent: popupExitIntent,

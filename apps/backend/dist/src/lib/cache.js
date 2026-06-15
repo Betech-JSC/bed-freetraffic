@@ -139,7 +139,7 @@ else {
 exports.cache = cacheInstance;
 async function invalidateWorkspaceCache(workspaceId, namespaces) {
     for (const ns of namespaces) {
-        if (ns === 'keywords' || ns === 'cskh-config') {
+        if (ns === 'keywords' || ns === 'cskh-config' || ns === 'knowledge-sources') {
             await exports.cache.del(`ws:${workspaceId}:${ns}`);
         }
         else {
