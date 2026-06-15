@@ -571,16 +571,16 @@ export default function CskhSettingsPage() {
       )}
 
       {/* Navigation Tabs */}
-      <div className="flex border-b border-slate-800 gap-2">
+      <div className="flex border-b border-slate-200 gap-2">
         <button
           onClick={() => setActiveTab('config')}
-          className={`py-3 px-5 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'config' ? 'border-[#f25c22] text-[#f25c22]' : 'border-transparent text-slate-400 hover:text-white hover:border-slate-800'}`}
+          className={`py-3 px-5 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'config' ? 'border-[#f25c22] text-[#f25c22]' : 'border-transparent text-slate-400 hover:text-slate-800 hover:border-slate-300'}`}
         >
           Cấu hình Chatbot & Follow-up
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`py-3 px-5 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'history' ? 'border-[#f25c22] text-[#f25c22]' : 'border-transparent text-slate-400 hover:text-white hover:border-slate-800'}`}
+          className={`py-3 px-5 font-semibold text-sm border-b-2 transition flex items-center gap-2 ${activeTab === 'history' ? 'border-[#f25c22] text-[#f25c22]' : 'border-transparent text-slate-400 hover:text-slate-800 hover:border-slate-300'}`}
         >
           Lịch sử trò chuyện Live Chat
         </button>
