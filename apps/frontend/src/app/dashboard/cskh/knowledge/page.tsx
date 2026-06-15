@@ -164,6 +164,22 @@ export default function KnowledgeBasePage() {
     return () => clearInterval(interval);
   }, [sources, loadSources]);
 
+  // Auto-dismiss success notification
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  // Auto-dismiss error notification
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const handleSaveTextKnowledge = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!config) return;
