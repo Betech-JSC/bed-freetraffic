@@ -435,8 +435,8 @@ export async function generateAiImage(imagePrompt: string): Promise<string | nul
     const englishPrompt = await translateToEnglishImagePrompt(imagePrompt);
     console.log(`[AI Image] Original: "${imagePrompt}" -> Translated/Optimized: "${englishPrompt}"`);
 
-    // If API key is not set, is an OpenRouter key, or is a Gemini key, route to AI Horde with Flickr+Preset fallbacks!
-    if (!ai.apiKey || ai.apiKey.startsWith('sk-or-') || ai.apiKey.startsWith('AIzaSy')) {
+    // If API key is not set, is an OpenRouter key, a Gemini key, or a DeepSeek key (since DeepSeek does not support image generation), route to AI Horde with Flickr+Preset fallbacks!
+    if (!ai.apiKey || ai.apiKey.startsWith('sk-or-') || ai.apiKey.startsWith('AIzaSy') || ai.model.includes('deepseek') || ai.url.includes('deepseek.com')) {
       const stylizedPrompt = `flat minimal vector illustration of ${englishPrompt.slice(0, 200)}, clean minimalist design, professional corporate marketing graphic art, orange and warm color scheme, white background`;
       console.log(`[AI Image] Querying AI Horde with prompt: "${stylizedPrompt}"`);
 
