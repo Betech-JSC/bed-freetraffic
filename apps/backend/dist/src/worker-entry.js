@@ -22,6 +22,7 @@ const cskhFollowupWorker_1 = require("./workers/cskhFollowupWorker");
 const pagespeedAuditorEngine_1 = require("./workers/pagespeedAuditorEngine");
 const tiktokSyncWorker_1 = require("./workers/tiktokSyncWorker");
 const backupWorker_1 = require("./workers/backupWorker");
+const socialListeningWorker_1 = require("./workers/socialListeningWorker");
 async function main() {
     console.log('==================================================================');
     console.log('👷 Standalone Growth OS Worker Process Starting...');
@@ -48,6 +49,7 @@ async function main() {
     (0, pagespeedAuditorEngine_1.startPageSpeedAuditorEngine)();
     (0, tiktokSyncWorker_1.startTikTokSyncWorker)();
     (0, backupWorker_1.startBackupWorker)();
+    (0, socialListeningWorker_1.startSocialListeningEngine)();
     // Keep references to workers to prevent garbage collection
     const activeWorkers = {};
     if (emailCampaignQueue_1.emailCampaignWorker)

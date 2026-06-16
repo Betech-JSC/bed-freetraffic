@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv'; // Reloader trigger comment
+import dotenv from 'dotenv'; // Reloader trigger comment - updated telegram token
 import path from 'path';
 import { createServer } from 'http';
 import { initSocket } from './lib/socket';
@@ -41,6 +41,7 @@ import paymentsRoutes from './routes/payments';
 import ordersRoutes from './routes/orders';
 import cskhRoutes from './routes/cskh';
 import socialAuthRoutes from './routes/socialAuth';
+import listeningRoutes from './routes/listening';
 import { workspaceMiddleware } from './middleware/workspace';
 import { authenticate } from './middleware/auth';
 import { API_FEATURES, API_VERSION } from './lib/apiMeta';
@@ -56,6 +57,7 @@ import { startCskhFollowupWorker } from './workers/cskhFollowupWorker';
 import { startPageSpeedAuditorEngine } from './workers/pagespeedAuditorEngine';
 import { startTikTokSyncWorker } from './workers/tiktokSyncWorker';
 import { startKeywordCrawlerEngine } from './workers/keywordCrawlerWorker';
+import { startSocialListeningEngine } from './workers/socialListeningWorker';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
 
@@ -155,6 +157,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/payments', paymentsRoutes); // auth handled internally per-route (webhooks are public)
 app.use('/api/orders', authenticate, workspaceMiddleware, ordersRoutes);
 app.use('/api/cskh', authenticate, workspaceMiddleware, cskhRoutes);
+app.use('/api/listening', authenticate, workspaceMiddleware, listeningRoutes);
 
 // Fallback 404 for any unregistered /api routes
 app.use('/api', notFoundHandler);
@@ -190,6 +193,7 @@ server.listen(port, () => {
     startPageSpeedAuditorEngine();
     startTikTokSyncWorker();
     startKeywordCrawlerEngine();
+    startSocialListeningEngine();
   } else {
     console.log('👷 DISABLE_LOCAL_WORKERS=true: Đang chạy ở chế độ API thuần. Bỏ qua chạy các tác vụ nền cục bộ.');
   }

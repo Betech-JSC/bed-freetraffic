@@ -46,6 +46,7 @@ export function Sidebar() {
         { href: '/dashboard/email', label: t('emailCampaigns') },
         { href: '/dashboard/automation/workflows', label: 'Email Automation' },
         { href: '/dashboard/cskh/settings', label: 'CSKH & Chatbot AI' },
+        { href: '/dashboard/listening', label: 'AI Social Listening' },
         { href: '/dashboard/store/products', label: 'Sản phẩm số' },
         { href: '/dashboard/store/orders', label: 'Đơn hàng & Doanh thu' },
       ]

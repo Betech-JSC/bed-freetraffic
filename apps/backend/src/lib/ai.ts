@@ -23,7 +23,7 @@ export function getAiConfig(path: string = '/chat/completions') {
   // Custom routing for embeddings if GEMINI_API_KEY is configured
   if (path === '/embeddings' && process.env.GEMINI_API_KEY) {
     apiKey = process.env.GEMINI_API_KEY;
-    model = 'text-embedding-004';
+    model = 'gemini-embedding-001';
   }
 
   let url = `https://api.openai.com/v1${path}`;
@@ -41,7 +41,7 @@ export function getAiConfig(path: string = '/chat/completions') {
     // Google Gemini OpenAI compatibility integration
     url = `https://generativelanguage.googleapis.com/v1beta/openai${path}`;
     if (path === '/embeddings') {
-      model = 'text-embedding-004';
+      model = 'gemini-embedding-001';
     } else if (
       model === 'gpt-4o-mini' ||
       model.includes('free') ||

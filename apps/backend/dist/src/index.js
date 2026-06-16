@@ -38,7 +38,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const dotenv_1 = __importDefault(require("dotenv")); // Reloader trigger comment
+const dotenv_1 = __importDefault(require("dotenv")); // Reloader trigger comment - updated telegram token
 const path_1 = __importDefault(require("path"));
 const http_1 = require("http");
 const socket_1 = require("./lib/socket");
@@ -79,6 +79,7 @@ const payments_1 = __importDefault(require("./routes/payments"));
 const orders_1 = __importDefault(require("./routes/orders"));
 const cskh_1 = __importDefault(require("./routes/cskh"));
 const socialAuth_1 = __importDefault(require("./routes/socialAuth"));
+const listening_1 = __importDefault(require("./routes/listening"));
 const workspace_1 = require("./middleware/workspace");
 const auth_3 = require("./middleware/auth");
 const apiMeta_1 = require("./lib/apiMeta");
@@ -94,6 +95,7 @@ const cskhFollowupWorker_1 = require("./workers/cskhFollowupWorker");
 const pagespeedAuditorEngine_1 = require("./workers/pagespeedAuditorEngine");
 const tiktokSyncWorker_1 = require("./workers/tiktokSyncWorker");
 const keywordCrawlerWorker_1 = require("./workers/keywordCrawlerWorker");
+const socialListeningWorker_1 = require("./workers/socialListeningWorker");
 const errorHandler_1 = require("./middleware/errorHandler");
 const rateLimiter_1 = require("./middleware/rateLimiter");
 dotenv_1.default.config();
@@ -183,6 +185,7 @@ app.use('/api/public', public_1.default);
 app.use('/api/payments', payments_1.default); // auth handled internally per-route (webhooks are public)
 app.use('/api/orders', auth_3.authenticate, workspace_1.workspaceMiddleware, orders_1.default);
 app.use('/api/cskh', auth_3.authenticate, workspace_1.workspaceMiddleware, cskh_1.default);
+app.use('/api/listening', auth_3.authenticate, workspace_1.workspaceMiddleware, listening_1.default);
 // Fallback 404 for any unregistered /api routes
 app.use('/api', errorHandler_1.notFoundHandler);
 // Global Error Handler (must be registered last)
@@ -211,6 +214,7 @@ server.listen(port, () => {
         (0, pagespeedAuditorEngine_1.startPageSpeedAuditorEngine)();
         (0, tiktokSyncWorker_1.startTikTokSyncWorker)();
         (0, keywordCrawlerWorker_1.startKeywordCrawlerEngine)();
+        (0, socialListeningWorker_1.startSocialListeningEngine)();
     }
     else {
         console.log('👷 DISABLE_LOCAL_WORKERS=true: Đang chạy ở chế độ API thuần. Bỏ qua chạy các tác vụ nền cục bộ.');

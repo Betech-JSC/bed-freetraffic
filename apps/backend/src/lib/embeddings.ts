@@ -62,13 +62,20 @@ export async function getEmbedding(text: string, allowFallback: boolean = true):
   
   if (ai.apiKey) {
     try {
+      const requestBody: any = {
+        input: text,
+        model: ai.model || 'text-embedding-3-small',
+      };
+      
+      // Force 1536 dimensions for models supporting MRL (gemini-embedding-001 or text-embedding-3-small) to match the postgres schema vector(1536)
+      if (ai.model === 'gemini-embedding-001' || ai.model === 'text-embedding-3-small') {
+        requestBody.dimensions = 1536;
+      }
+
       const res = await fetch(ai.url, {
         method: 'POST',
         headers: ai.headers,
-        body: JSON.stringify({
-          input: text,
-          model: ai.model || 'text-embedding-3-small',
-        }),
+        body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(10000),
       });
 
@@ -483,3 +490,21 @@ export async function retrieveRelevantChunksVector(
   const structured = await retrieveRelevantChunksStructured(workspaceId, query, topN);
   return structured.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
 }
+
+/**
+ * Calculates cosine similarity between two numeric vectors.
+ */
+export function cosineSimilarity(vecA: number[], vecB: number[]): number {
+  if (vecA.length !== vecB.length) return 0;
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < vecA.length; i++) {
+    dotProduct += vecA[i] * vecB[i];
+    normA += vecA[i] * vecA[i];
+    normB += vecB[i] * vecB[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+

@@ -117,9 +117,24 @@ Hôm nay đã hoàn thành nâng cấp hệ thống trí tuệ nhân tạo (AI T
   - **Lớp 3 (Local Preset Fallback)**: Tự động kiểm tra URL trả về từ Flickr. Nếu phát hiện là ảnh mặc định lỗi (chứa `defaultImage` - tượng mèo đen) hoặc kết nối lỗi, hệ thống sẽ **ngay lập tức trả về đường dẫn ảnh preset local** tông màu cam-trắng tương ứng với chủ đề của bài viết.
   - **Kết quả**: Hệ thống vừa đáp ứng khả năng sinh ảnh AI độc nhất theo ý muốn của người dùng, vừa đảm bảo tính ổn định tuyệt đối (100% không bị lỗi ảnh hỏng, không phụ thuộc hoàn toàn vào bên thứ ba và không tốn chi phí duy trì key).
 
+---
 
+## 🛠️ Cập nhật công việc ngày tiếp theo (15/06/2026)
 
+Hôm nay đã hoàn thành triển khai sửa lỗi quét Facebook Group hiển thị thành công nhưng trả về 0 bài viết, bổ sung cơ chế chuẩn hóa dữ liệu cookie đầu vào và dọn dẹp hệ thống.
 
+### 1. Chuẩn hóa và làm sạch Cookie tự động (Self-Healing Cookie Parser)
+- **Hàm `normalizeCookie`**: Xây dựng thuật toán nhận diện và tự động tách chuỗi cookie thô. Khi người dùng copy nhầm cả JSON payload của công cụ cựu capture (bắt đầu bằng `{`), backend sẽ tự động phân tích cú pháp JSON và trích xuất chuỗi cookie sạch tại trường `Cookie` hoặc mảng `cookies`.
+- **Tích hợp API**: Tích hợp chuẩn hóa cookie tại tất cả các đầu vào lưu cookie của `listening.ts` (API tạo, sửa chiến dịch và endpoint `/api/listening/update-cookie` nhận dữ liệu từ Bookmarklet).
+- **Lợi ích**: Giúp hệ thống tự phục hồi dữ liệu kể cả khi người dùng cấu hình sai/dán nhầm định dạng thô.
 
+### 2. Cải tiến Trình cào nhóm Facebook Desktop (`www.facebook.com`)
+- **Chuyển đổi URL & User-Agent**: Đổi địa chỉ cào từ bản di động cũ `mbasic.facebook.com` (hiện đã chặn hầu hết các thiết bị di động) sang bản Desktop `www.facebook.com/groups/<groupId>/?sorting_setting=CHRONOLOGICAL` đi kèm với giả lập đầy đủ Desktop User-Agent và Headers.
+- **Phân tích cú pháp script GraphQL (Comet)**: Phát triển bộ phân tích cú pháp nâng cao kết hợp Regex để đọc các script JSON Comet chứa thông tin bài viết (`post_id`, `message`, `owning_profile`, `profile_picture`, `url`) được kết xuất dưới dạng GraphQL payload nhúng sẵn trong mã nguồn HTML.
+- **Hợp nhất DOM Cheerio**: Bổ sung bộ bóc tách DOM Cheerio làm phương án dự phòng để đảm bảo độ tin cậy tối đa.
+- **Cơ chế Cookie Expired mới**: Nâng cấp bộ lọc phát hiện cookie hết hạn qua các chuyển hướng trang đăng nhập desktop (`login/?next=`).
 
+### 3. Dọn dẹp hệ thống & Giải phóng dung lượng
+- **Xóa file rác**: Loại bỏ hoàn toàn các file log tạm thời, các file HTML cào thử nặng hàng chục MB (như `test_www_success.html`, `chrono_response.html`, `search_response.html`) và các file script test thừa trong thư mục `scratch/` để tối ưu hóa bộ nhớ và tăng tốc hệ thống.
+- **TypeScript Typecheck**: Xác minh thành công không có lỗi type-safety sau thay đổi, chạy lệnh build `npm run build` của backend vượt qua 100% không phát sinh lỗi.
 

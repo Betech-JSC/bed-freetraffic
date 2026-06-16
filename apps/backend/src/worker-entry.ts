@@ -19,6 +19,7 @@ import { startCskhFollowupWorker } from './workers/cskhFollowupWorker';
 import { startPageSpeedAuditorEngine } from './workers/pagespeedAuditorEngine';
 import { startTikTokSyncWorker } from './workers/tiktokSyncWorker';
 import { startBackupWorker } from './workers/backupWorker';
+import { startSocialListeningEngine } from './workers/socialListeningWorker';
 
 async function main() {
   console.log('==================================================================');
@@ -47,6 +48,7 @@ async function main() {
   startPageSpeedAuditorEngine();
   startTikTokSyncWorker();
   startBackupWorker();
+  startSocialListeningEngine();
 
   // Keep references to workers to prevent garbage collection
   const activeWorkers: Record<string, any> = {};

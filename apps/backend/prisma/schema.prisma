@@ -66,6 +66,7 @@ model Workspace {
   shortLinks        ShortLink[]
   popupWidgets      PopupWidget[]
   marketingWidgets  MarketingWidget[]
+  socialListeningCampaigns SocialListeningCampaign[]
 }
 
 model UserWorkspace {
@@ -827,5 +828,58 @@ model MarketingWidget {
 
   @@index([workspaceId])
 }
+
+model SocialListeningCampaign {
+  id               Int                   @id @default(autoincrement())
+  name             String
+  keywords         String                // Danh sách từ khóa ngăn cách bằng dấu phẩy
+  excludeKeywords  String?               // Từ khóa phủ định loại trừ rác
+  groupUrls        String                // URL hoặc ID các nhóm Facebook ngăn cách bằng dấu phẩy
+  facebookCookie   String?               @db.Text // Lưu cookie đăng nhập của người dùng
+  cookieStatus     String                @default("ACTIVE") // ACTIVE, EXPIRED, ERROR
+  isActive         Boolean               @default(true)
+  useAi            Boolean               @default(true)
+  telegramEnabled  Boolean               @default(true)
+  telegramBotToken String?
+  telegramChatId   String?
+  workspaceId      Int
+  workspace        Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  scanInterval     Int                   @default(15)
+  lastScannedAt    DateTime?
+  minScore         Int                   @default(50)
+  enableSemanticFilter Boolean             @default(false)
+  semanticThreshold   Float               @default(0.70)
+  targetAudience      String?             @db.Text
+  scrapeComments      Boolean             @default(false)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  logs             SocialListeningLog[]
+
+  @@index([workspaceId])
+}
+
+model SocialListeningLog {
+  id          Int                     @id @default(autoincrement())
+  campaignId  Int
+  campaign    SocialListeningCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  postUrl     String                  @db.Text
+  postAuthor  String
+  authorAvatar String?
+  postContent String                  @db.Text
+  aiScore     Int                     @default(0)
+  aiDecision  String                  @default("COLD") // HOT, WARM, COLD, SPAM
+  aiReason    String?                 @db.Text
+  aiDraftMsg  String?                 @db.Text
+  status      String                  @default("PENDING") // NOTIFIED, IGNORED, ERROR
+  errorMessage String?                @db.Text
+  isComment   Boolean                 @default(false)
+  commentId   String?
+  parentPostAuthor String?
+  createdAt   DateTime                @default(now())
+
+  @@index([campaignId])
+  @@index([createdAt])
+}
+
 
 
