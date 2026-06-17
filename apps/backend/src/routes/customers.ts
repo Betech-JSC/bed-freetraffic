@@ -140,6 +140,13 @@ router.post('/', requireWrite, async (req: AuthRequest, res: Response): Promise<
       },
       include: { notes: { orderBy: { createdAt: 'desc' }, take: 5 } },
     });
+
+    // Kích hoạt gửi email chào mừng cho khách hàng mới
+    const { triggerEmailEvent } = await import('../services/emailEventTrigger');
+    void triggerEmailEvent('WELCOME', {
+      customerId: customer.id,
+      workspaceId: req.workspaceId
+    }).catch(e => console.error('Error triggering customer welcome email:', e));
     // Ghi audit log
     await logActivity({
       userId: req.user!.userId,

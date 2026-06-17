@@ -228,6 +228,13 @@ router.post('/payos-webhook', async (req: Request, res: Response): Promise<void>
         where: { id: order.customerId },
         data: { status: 'ACTIVE' },
       });
+
+      // Kích hoạt gửi email cảm ơn mua hàng tự động
+      const { triggerEmailEvent } = await import('../services/emailEventTrigger');
+      void triggerEmailEvent('PURCHASE', {
+        orderId: order.id,
+        workspaceId: order.workspaceId
+      }).catch(e => console.error('Error triggering PayOS purchase email:', e));
     }
 
     res.json({ success: true });
@@ -300,6 +307,13 @@ router.post('/stripe-webhook', async (req: Request, res: Response): Promise<void
         where: { id: order.customerId },
         data: { status: 'ACTIVE' },
       });
+
+      // Kích hoạt gửi email cảm ơn mua hàng tự động
+      const { triggerEmailEvent } = await import('../services/emailEventTrigger');
+      void triggerEmailEvent('PURCHASE', {
+        orderId: order.id,
+        workspaceId: order.workspaceId
+      }).catch(e => console.error('Error triggering Stripe purchase email:', e));
     }
 
     res.json({ received: true });
@@ -411,6 +425,13 @@ router.post('/sepay-webhook', async (req: Request, res: Response): Promise<void>
         where: { id: order.customerId },
         data: { status: 'ACTIVE' },
       });
+
+      // Kích hoạt gửi email cảm ơn mua hàng tự động
+      const { triggerEmailEvent } = await import('../services/emailEventTrigger');
+      void triggerEmailEvent('PURCHASE', {
+        orderId: order.id,
+        workspaceId: order.workspaceId
+      }).catch(e => console.error('Error triggering SePay purchase email:', e));
 
       console.log(`[SePay Webhook] Đơn hàng ${orderNumber} đã thanh toán thành công qua SePay! Số tiền: ${actualAmount}`);
     } else {

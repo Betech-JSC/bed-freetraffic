@@ -1093,6 +1093,13 @@ Nhiệm vụ của bạn:
         }
       });
 
+      // Kích hoạt gửi email chào mừng cho khách hàng mới từ chatbot
+      const { triggerEmailEvent } = await import('./emailEventTrigger');
+      void triggerEmailEvent('WELCOME', {
+        customerId: customer.id,
+        workspaceId
+      }).catch(e => console.error('Error triggering welcome email from chatbot:', e));
+
       // Send Telegram alert for new lead
       const alertMsg = `🔔 <b>Lead mới từ Live Chat Chatbot!</b>\n\n` +
         `• <b>Email:</b> ${email}\n` +

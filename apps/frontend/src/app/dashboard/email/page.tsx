@@ -119,6 +119,247 @@ function formatHtmlToContent(html: string): string {
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
+type TemplateMetadata = {
+  style: 'simple' | 'newsletter' | 'promotion' | 'announcement';
+  primaryColor: string;
+  headerTitle: string;
+  ctaText?: string;
+  ctaUrl?: string;
+  footerText?: string;
+};
+
+function adjustColorBrightness(hex: string, percent: number): string {
+  let num = parseInt(hex.replace("#",""), 16),
+  amt = Math.round(2.55 * percent),
+  R = (num >> 16) + amt,
+  G = (num >> 8 & 0x00FF) + amt,
+  B = (num & 0x0000FF) + amt;
+  return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+}
+
+function renderTextToHtmlParagraphs(text: string): string {
+  if (!text) return '';
+  return text
+    .split(/\n\n+/)
+    .map(p => `<p style="margin: 0 0 16px 0; font-size: 15px; line-height: 1.6; color: #334155;">${p.replace(/\n/g, '<br />')}</p>`)
+    .join('');
+}
+
+function compileEmailHtml(bodyText: string, metadata: TemplateMetadata, trackOpenUrlPlaceholder = '{track_open}'): string {
+  const { style, primaryColor, headerTitle, ctaText, ctaUrl, footerText } = metadata;
+  const paragraphsHtml = renderTextToHtmlParagraphs(bodyText);
+  
+  let html = '';
+  switch (style) {
+    case 'simple':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: Arial, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border: 1px solid #e2e8f0; border-top: 6px solid ${primaryColor}; border-radius: 12px; overflow: hidden;">
+        ${headerTitle ? `
+        <tr>
+          <td style="padding: 28px 32px 10px 32px; text-align: center;">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 800; color: #1e293b; letter-spacing: -0.5px;">${headerTitle}</h2>
+          </td>
+        </tr>
+        ` : ''}
+        <tr>
+          <td style="padding: 24px 32px; font-size: 15px; color: #334155; line-height: 1.6;">
+            ${paragraphsHtml}
+            
+            ${ctaText && ctaUrl ? `
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 28px; margin-bottom: 12px;">
+              <tr>
+                <td align="center">
+                  <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 28px; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">
+                    ${ctaText}
+                  </a>
+                </td>
+              </tr>
+            </table>
+            ` : ''}
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #f1f5f9; padding: 20px 32px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;">
+            <p style="margin: 0; line-height: 1.5;">${footerText || 'Cảm ơn bạn đã đồng hành cùng chúng tôi.'}</p>
+            <p style="margin: 8px 0 0 0; font-size: 11px; color: #94a3b8;">Bạn nhận được email này vì đã đăng ký nhận thông tin từ hệ thống của chúng tôi.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'newsletter':
+      const gradColor = adjustColorBrightness(primaryColor, -20);
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+        <tr>
+          <td style="background: linear-gradient(135deg, ${primaryColor} 0%, ${gradColor} 100%); padding: 32px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.15);">${headerTitle || 'BẢN TIN'}</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 32px; font-size: 15px; color: #334155; line-height: 1.6;">
+            ${paragraphsHtml}
+            
+            ${ctaText && ctaUrl ? `
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 32px; margin-bottom: 8px;">
+              <tr>
+                <td align="center">
+                  <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 14px 32px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 9999px; display: inline-block;">
+                    ${ctaText}
+                  </a>
+                </td>
+              </tr>
+            </table>
+            ` : ''}
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #f8fafc; padding: 24px 32px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #f1f5f9;">
+            <p style="margin: 0; line-height: 1.5; font-weight: 600; color: #475569;">${footerText || 'Thông tin từ bản tin Free Traffic System'}</p>
+            <p style="margin: 8px 0 0 0; line-height: 1.6; font-size: 11px; color: #94a3b8;">Để từ chối nhận các email tương tự, vui lòng liên hệ bộ phận hỗ trợ khách hàng của chúng tôi.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'promotion':
+      const gradColor2 = adjustColorBrightness(primaryColor, -10);
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #eaeaea; box-shadow: 0 10px 15px rgba(0,0,0,0.03);">
+        <tr>
+          <td height="10" style="background: linear-gradient(90deg, ${primaryColor} 0%, #a855f7 50%, #ec4899 100%);"></td>
+        </tr>
+        <tr>
+          <td style="padding: 40px 32px; text-align: center;">
+            ${headerTitle ? `
+            <div style="font-size: 14px; font-weight: 800; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 24px;">
+              ${headerTitle}
+            </div>
+            ` : ''}
+            
+            <div style="text-align: left; font-size: 15px; color: #334155; line-height: 1.6; margin-bottom: 30px;">
+              ${paragraphsHtml}
+            </div>
+
+            ${ctaText && ctaUrl ? `
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 30px 0;">
+              <tr>
+                <td align="center">
+                  <a href="${ctaUrl}" target="_blank" style="background: linear-gradient(135deg, ${primaryColor} 0%, ${gradColor2} 100%); color: #ffffff; padding: 14px 40px; font-size: 15px; font-weight: 800; text-decoration: none; border-radius: 10px; display: inline-block; letter-spacing: 0.5px;">
+                    ${ctaText}
+                  </a>
+                </td>
+              </tr>
+            </table>
+            ` : ''}
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #fafafa; padding: 24px 32px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #f3f3f3;">
+            <p style="margin: 0; line-height: 1.5;">${footerText || 'Cập nhật từ chương trình ưu đãi của chúng tôi.'}</p>
+            <p style="margin: 6px 0 0 0;">Nếu không muốn nhận những thông báo ưu đãi đặc biệt này, vui lòng bỏ đăng ký.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'announcement':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f3f4f6; font-family: Arial, sans-serif; padding: 30px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+        <tr>
+          <td style="padding: 32px 32px 16px 32px; border-bottom: 1px solid #f3f4f6;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td style="border-left: 4px solid ${primaryColor}; padding-left: 14px;">
+                  <span style="font-size: 11px; font-weight: 800; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 4px;">Thông báo</span>
+                  <h2 style="margin: 0; font-size: 18px; font-weight: 800; color: #111827;">${headerTitle || 'THÔNG BÁO QUAN TRỌNG'}</h2>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 32px; font-size: 15px; color: #374151; line-height: 1.6;">
+            ${paragraphsHtml}
+
+            ${ctaText && ctaUrl ? `
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 28px;">
+              <tr>
+                <td align="left">
+                  <a href="${ctaUrl}" target="_blank" style="background-color: #111827; color: #ffffff; padding: 12px 24px; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 6px; display: inline-block;">
+                    ${ctaText}
+                  </a>
+                </td>
+              </tr>
+            </table>
+            ` : ''}
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #f9fafb; padding: 24px 32px; text-align: left; font-size: 11px; color: #6b7280; border-top: 1px solid #f3f4f6;">
+            <p style="margin: 0; line-height: 1.5;">${footerText || 'Đây là thông báo chính thức từ hệ thống.'}</p>
+            <p style="margin: 8px 0 0 0; font-size: 10px; color: #9ca3af;">Vui lòng không trả lời trực tiếp email này. Đây là hộp thư tự động.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    default:
+      html = renderTextToHtmlParagraphs(bodyText);
+  }
+
+  // Append metadata block as an HTML comment
+  const metadataComment = `\n<!-- TEMPLATE_METADATA: ${JSON.stringify({ ...metadata, bodyText })} -->`;
+  
+  if (trackOpenUrlPlaceholder && !html.includes(trackOpenUrlPlaceholder)) {
+    return html + '\n' + trackOpenUrlPlaceholder + metadataComment;
+  }
+  return html + metadataComment;
+}
+
+function parseTemplateMetadata(html: string): { bodyText: string; metadata: TemplateMetadata } | null {
+  if (!html) return null;
+  const match = html.match(/<!-- TEMPLATE_METADATA: ([\s\S]*?) -->/);
+  if (!match) return null;
+  try {
+    const metadata = JSON.parse(match[1]) as TemplateMetadata & { bodyText?: string };
+    const bodyText = metadata.bodyText || '';
+    const cleanMetadata = { ...metadata };
+    delete (cleanMetadata as any).bodyText;
+    return {
+      bodyText,
+      metadata: cleanMetadata as TemplateMetadata
+    };
+  } catch (e) {
+    console.error('Failed to parse template metadata', e);
+    return null;
+  }
+}
+
 export default function EmailCampaignsPage() {
   const { t } = useLocale();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
@@ -142,6 +383,14 @@ export default function EmailCampaignsPage() {
 
   // Inline CRM selector collapse state
   const [showInlineSelector, setShowInlineSelector] = useState(false);
+
+  // Template customizer states
+  const [templateStyle, setTemplateStyle] = useState<'simple' | 'newsletter' | 'promotion' | 'announcement'>('simple');
+  const [primaryColor, setPrimaryColor] = useState('#3b82f6');
+  const [headerTitle, setHeaderTitle] = useState('');
+  const [ctaText, setCtaText] = useState('');
+  const [ctaUrl, setCtaUrl] = useState('');
+  const [footerText, setFooterText] = useState('');
 
   const fetchCustomers = async () => {
     try {
@@ -334,20 +583,49 @@ export default function EmailCampaignsPage() {
     setAiUrl('');
     setAiPrompt('');
     setAiInfoTip('');
+    setTemplateStyle('simple');
+    setPrimaryColor('#3b82f6');
+    setHeaderTitle('');
+    setCtaText('');
+    setCtaUrl('');
+    setFooterText('');
   };
 
   const startEdit = (c: Campaign) => {
     if (c.status === 'SENT') return;
     setEditingId(c.id);
-    const cleanHtml = c.htmlContent.replace(/\{track_open\}/g, '').trim();
-    const cleanContent = formatHtmlToContent(cleanHtml);
-    setForm({
-      name: c.name,
-      subject: c.subject,
-      htmlContent: cleanContent,
-      recipients: c.recipients,
-      scheduledAt: toDatetimeLocal(c.scheduledAt),
-    });
+    const parsed = parseTemplateMetadata(c.htmlContent);
+    if (parsed) {
+      setTemplateStyle(parsed.metadata.style);
+      setPrimaryColor(parsed.metadata.primaryColor);
+      setHeaderTitle(parsed.metadata.headerTitle || '');
+      setCtaText(parsed.metadata.ctaText || '');
+      setCtaUrl(parsed.metadata.ctaUrl || '');
+      setFooterText(parsed.metadata.footerText || '');
+      setForm({
+        name: c.name,
+        subject: c.subject,
+        htmlContent: parsed.bodyText,
+        recipients: c.recipients,
+        scheduledAt: toDatetimeLocal(c.scheduledAt),
+      });
+    } else {
+      setTemplateStyle('simple');
+      setPrimaryColor('#3b82f6');
+      setHeaderTitle(c.subject || '');
+      setCtaText('');
+      setCtaUrl('');
+      setFooterText('');
+      const cleanHtml = c.htmlContent.replace(/\{track_open\}/g, '').trim();
+      const cleanContent = formatHtmlToContent(cleanHtml);
+      setForm({
+        name: c.name,
+        subject: c.subject,
+        htmlContent: cleanContent,
+        recipients: c.recipients,
+        scheduledAt: toDatetimeLocal(c.scheduledAt),
+      });
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -355,10 +633,18 @@ export default function EmailCampaignsPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
-    const htmlBody = formatContentToHtml(form.htmlContent);
-    const finalHtml = htmlBody.includes('{track_open}')
-      ? htmlBody
-      : htmlBody + '\n{track_open}';
+    
+    const metadata: TemplateMetadata = {
+      style: templateStyle,
+      primaryColor,
+      headerTitle: headerTitle || form.subject,
+      ctaText: ctaText || undefined,
+      ctaUrl: ctaUrl || undefined,
+      footerText: footerText || undefined,
+    };
+    
+    const finalHtml = compileEmailHtml(form.htmlContent, metadata, '{track_open}');
+    
     const payload = {
       ...form,
       htmlContent: finalHtml,
@@ -759,6 +1045,98 @@ export default function EmailCampaignsPage() {
               </div>
             </div>
 
+            {/* Template Customizer Panel */}
+            <div className="bg-slate-50/50 rounded-xl p-4 border border-slate-200 text-xs space-y-3">
+              <span className="text-xs font-black text-slate-700 flex items-center gap-1.5 uppercase tracking-wider">
+                🎨 {t('Cấu hình Email Template')}
+              </span>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Chọn Giao diện')}</label>
+                  <select
+                    className="input w-full text-xs py-1 px-2 bg-white cursor-pointer"
+                    value={templateStyle}
+                    onChange={(e) => setTemplateStyle(e.target.value as any)}
+                  >
+                    <option value="simple">{t('Tối giản (Simple)')}</option>
+                    <option value="newsletter">{t('Bản tin (Newsletter)')}</option>
+                    <option value="promotion">{t('Khuyến mãi (Promotion)')}</option>
+                    <option value="announcement">{t('Thông báo (Announcement)')}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Màu chủ đạo')}</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="color"
+                      className="w-7 h-7 rounded border border-slate-200 cursor-pointer p-0 bg-transparent"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                    />
+                    <select
+                      className="input flex-1 text-xs py-1 px-2 bg-white cursor-pointer"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                    >
+                      <option value="#3b82f6">{t('Xanh dương')}</option>
+                      <option value="#10b981">{t('Lục bảo')}</option>
+                      <option value="#8b5cf6">{t('Tím')}</option>
+                      <option value="#f59e0b">{t('Cam')}</option>
+                      <option value="#ef4444">{t('Đỏ thương hiệu')}</option>
+                      <option value="#111827">{t('Đen sang trọng')}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Tiêu đề biểu ngữ (Header Title)')}</label>
+                <input
+                  type="text"
+                  className="input w-full text-xs py-1.5 bg-white"
+                  placeholder={t('Ví dụ: BẢN TIN KHỞI NGHIỆP')}
+                  value={headerTitle}
+                  onChange={(e) => setHeaderTitle(e.target.value)}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Nhãn nút bấm (CTA Button)')}</label>
+                  <input
+                    type="text"
+                    className="input w-full text-xs py-1.5 bg-white"
+                    placeholder={t('Ví dụ: Xem chi tiết')}
+                    value={ctaText}
+                    onChange={(e) => setCtaText(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Liên kết nút bấm (CTA URL)')}</label>
+                  <input
+                    type="url"
+                    className="input w-full text-xs py-1.5 bg-white"
+                    placeholder="https://example.com/promotion"
+                    value={ctaUrl}
+                    onChange={(e) => setCtaUrl(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Nội dung chân trang (Footer Text)')}</label>
+                <input
+                  type="text"
+                  className="input w-full text-xs py-1.5 bg-white"
+                  placeholder={t('Ví dụ: Bản quyền © 2026 Free Traffic System. Đã đăng ký.')}
+                  value={footerText}
+                  onChange={(e) => setFooterText(e.target.value)}
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{t('Hẹn giờ gửi (Để trống để lưu nháp)')}</label>
               <input
@@ -803,9 +1181,16 @@ export default function EmailCampaignsPage() {
                 />
               ) : (
                 <div 
-                  className="w-full min-h-[180px] p-0 bg-slate-50 border border-slate-200 rounded-lg overflow-y-auto max-h-[300px] text-xs"
+                  className="w-full min-h-[300px] bg-slate-50 border border-slate-200 rounded-lg overflow-y-auto max-h-[450px] text-xs shadow-inner"
                   dangerouslySetInnerHTML={{
-                    __html: formatContentToHtml(form.htmlContent).replace(/\{email\}/g, 'customer@example.com')
+                    __html: compileEmailHtml(form.htmlContent, {
+                      style: templateStyle,
+                      primaryColor,
+                      headerTitle: headerTitle || form.subject || t('Tiêu đề biểu ngữ'),
+                      ctaText: ctaText || undefined,
+                      ctaUrl: ctaUrl || undefined,
+                      footerText: footerText || undefined,
+                    }, '').replace(/\{email\}/g, 'customer@example.com')
                   }}
                 />
               )}

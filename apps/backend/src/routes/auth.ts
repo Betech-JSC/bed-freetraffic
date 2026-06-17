@@ -35,6 +35,14 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       }
     });
 
+    // Kích hoạt gửi email chào mừng cho quản trị viên mới
+    const { triggerEmailEvent } = await import('../services/emailEventTrigger');
+    void triggerEmailEvent('WELCOME', {
+      email: user.email,
+      customerName: user.name || 'Thành viên mới',
+      customMessage: 'Chào mừng bạn đến với Growth OS! Chúc bạn có trải nghiệm tuyệt vời khi quản lý website và SEO.'
+    }).catch(e => console.error('Error triggering user welcome email:', e));
+
     res.status(201).json({ message: 'Đăng ký thành công', userId: user.id });
   } catch (error) {
     console.error('Lỗi đăng ký:', error);

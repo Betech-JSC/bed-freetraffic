@@ -418,6 +418,13 @@ router.post('/forms/submit', publicSpamLimiter, async (req: Request, res: Respon
           utmCampaign: utmCampaignVal,
         },
       });
+
+      // Kích hoạt gửi email chào mừng cho khách hàng mới từ landing page
+      const { triggerEmailEvent } = await import('../services/emailEventTrigger');
+      void triggerEmailEvent('WELCOME', {
+        customerId: customer.id,
+        workspaceId: form.workspaceId
+      }).catch(e => console.error('Error triggering welcome email from landing page:', e));
     }
 
     await checkAndApplyReferral(customer.id, req);

@@ -15,12 +15,14 @@ type CskhConfig = {
   followUpDelayHours: number | null;
   followUpEmailSubject: string | null;
   followUpEmailBody: string | null;
+  followUpTemplate?: string | null;
   autoCareEnabled?: boolean;
   autoCareScheduleType?: string;
   autoCareDelayHours?: number;
   autoCareIntervalDays?: number;
   autoCareEmailSubject?: string | null;
   autoCareEmailBody?: string | null;
+  autoCareTemplate?: string | null;
   autoCareChannels?: string | null;
   knowledgeFiles?: string | null;
   knowledgeUrls?: string | null;
@@ -79,6 +81,7 @@ const getFullImageUrl = (url: string | null | undefined) => {
   return `${apiHost}${url}`;
 };
 
+
 export default function CskhSettingsPage() {
   const [activeTab, setActiveTab] = useState<'config' | 'history'>('config');
   const [config, setConfig] = useState<CskhConfig | null>(null);
@@ -120,7 +123,7 @@ export default function CskhSettingsPage() {
     zalo: false,
     messenger: false,
   });
-  
+
   // Notification channels array
   const [channels, setChannels] = useState({
     email: false,
@@ -639,18 +642,73 @@ export default function CskhSettingsPage() {
 
           {/* AI Chatbot Knowledge Base Redirect */}
           {aiChatbotEnabled && (
-            <div className="p-5 bg-orange-50 border border-orange-200/50 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs animate-fadeIn pb-6 border-b border-orange-100/50">
-              <div className="space-y-1">
-                <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">📚 Quản lý Kho Tri thức Doanh nghiệp (RAG)</span>
-                <p className="text-slate-500">Tải lên các file tài liệu (.pdf, .docx, .txt) hoặc cào dữ liệu từ đường dẫn website để huấn luyện cho Trợ lý AI của bạn.</p>
+            <>
+              <div className="p-5 bg-orange-50 border border-orange-200/50 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs animate-fadeIn pb-6 border-b border-orange-100/50">
+                <div className="space-y-1">
+                  <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">📚 Quản lý Kho Tri thức Doanh nghiệp (RAG)</span>
+                  <p className="text-slate-500">Tải lên các file tài liệu (.pdf, .docx, .txt) hoặc cào dữ liệu từ đường dẫn website để huấn luyện cho Trợ lý AI của bạn.</p>
+                </div>
+                <Link
+                  href="/dashboard/cskh/knowledge"
+                  className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition shadow-md whitespace-nowrap flex-shrink-0"
+                >
+                  Quản lý Tri thức (RAG) →
+                </Link>
               </div>
-              <Link
-                href="/dashboard/cskh/knowledge"
-                className="px-4 py-2 bg-[#f25c22] hover:bg-[#d94d1a] text-white font-bold rounded-lg transition shadow-md whitespace-nowrap flex-shrink-0"
-              >
-                Quản lý Tri thức (RAG) →
-              </Link>
-            </div>
+
+              {/* AI Auto-Followup (Theo Dõi Khách Hàng) */}
+              <div className="space-y-4 pt-4 border-t border-orange-100/50 animate-fadeIn">
+                <h4 className="font-bold text-[#f25c22] text-sm uppercase tracking-wider">AI Auto-Followup (Theo Dõi Khách Hàng)</h4>
+                <p className="text-slate-500 text-xs">AI tự động lên lịch gửi thư chăm sóc/theo dõi khách hàng sau khi cuộc trò chuyện live chat kết thúc.</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">Gửi sau khi kết thúc chat</label>
+                    <select
+                      value={followUpDelayHours}
+                      onChange={(e) => setFollowUpDelayHours(Number(e.target.value))}
+                      className="w-full bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none transition"
+                    >
+                      <option value={0}>Tắt (Không tự động gửi)</option>
+                      <option value={1}>Sau 1 giờ</option>
+                      <option value={2}>Sau 2 giờ</option>
+                      <option value={6}>Sau 6 giờ</option>
+                      <option value={12}>Sau 12 giờ</option>
+                      <option value={24}>Sau 24 giờ (1 ngày)</option>
+                      <option value={48}>Sau 48 giờ (2 ngày)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {followUpDelayHours > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase">Tiêu đề email theo dõi</label>
+                      <input
+                        type="text"
+                        value={followUpEmailSubject}
+                        onChange={(e) => setFollowUpEmailSubject(e.target.value)}
+                        placeholder="Ví dụ: Cảm ơn bạn đã trò chuyện với Betech!"
+                        className="w-full bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-lg p-2.5 text-slate-800 text-sm focus:outline-none transition placeholder-slate-400"
+                      />
+                      <p className="text-[10px] text-slate-400">Hỗ trợ các placeholder: {"{{name}}"}, {"{{company}}"}, {"{{email}}"}.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase">Định hướng nội dung cho AI soạn thảo</label>
+                      <textarea
+                        value={followUpEmailBody}
+                        onChange={(e) => setFollowUpEmailBody(e.target.value)}
+                        placeholder="Ví dụ: Tóm tắt nội dung chính đã trao đổi và gửi thêm tài liệu về chủ đề khách hàng quan tâm..."
+                        rows={4}
+                        className="w-full bg-orange-50/20 border border-orange-200/60 focus:border-[#f25c22] rounded-lg p-3 text-slate-800 text-sm focus:outline-none transition placeholder-slate-400"
+                      />
+                      <p className="text-[10px] text-slate-400">AI sẽ tự động đọc lại lịch sử cuộc chat gần nhất để cá nhân hóa nội dung email cho khách hàng.</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
           )}
 
 
@@ -1065,6 +1123,8 @@ export default function CskhSettingsPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
+

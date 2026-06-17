@@ -33,6 +33,8 @@ services:
       - redis
     ports:
       - "4000:4000"
+    volumes:
+      - backend_uploads:/app/dist/uploads
     environment:
       - DATABASE_URL=postgresql://admin:password@postgres:5432/freetraffic?sslmode=disable
       - PORT=4000
@@ -61,6 +63,8 @@ services:
       - postgres
       - redis
     command: ["node", "dist/src/worker-entry.js"]
+    volumes:
+      - backend_uploads:/app/dist/uploads
     environment:
       - DATABASE_URL=postgresql://admin:password@postgres:5432/freetraffic?sslmode=disable
       - REDIS_HOST=redis
@@ -78,7 +82,7 @@ services:
       context: ./apps/frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:4000/api
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
     container_name: freetraffic_frontend
     depends_on:
       - backend-api
@@ -89,3 +93,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  backend_uploads:

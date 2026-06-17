@@ -656,6 +656,7 @@ model CskhConfig {
   followUpDelayHours   Int?       @default(0)   // Số giờ chờ trước khi gửi mail (0 = tắt)
   followUpEmailSubject String?
   followUpEmailBody    String?    @db.Text
+  followUpTemplate     String?    @default("default")
   // Cấu hình AI Bot tự động chăm sóc khách hàng theo lịch & đa kênh
   autoCareEnabled      Boolean    @default(false)
   autoCareScheduleType String     @default("AFTER_CREATION")
@@ -663,6 +664,7 @@ model CskhConfig {
   autoCareIntervalDays Int        @default(7)
   autoCareEmailSubject String?
   autoCareEmailBody    String?    @db.Text
+  autoCareTemplate     String?    @default("default")
   autoCareChannels     String     @default("email")
   widgetSettings       String?    @db.Text
 }
