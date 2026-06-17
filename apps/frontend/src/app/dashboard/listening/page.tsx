@@ -98,8 +98,7 @@ export default function SocialListeningPage() {
   const [recentChats, setRecentChats] = useState<Array<{ chatId: string; chatTitle: string; chatType: string }>>([]);
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
   const [showRecentChatsList, setShowRecentChatsList] = useState(false);
-
-
+  const [workspaceTelegramConn, setWorkspaceTelegramConn] = useState<{ pageName: string; pageId: string } | null>(null);
 
   // Fetch campaigns
   const loadCampaigns = async () => {
@@ -167,9 +166,25 @@ export default function SocialListeningPage() {
       }
     };
 
+    const fetchWorkspaceTelegramConn = async () => {
+      try {
+        const conns = await apiJson<any[]>('/social');
+        const tgConn = conns?.find((c: any) => c.platform === 'telegram' && c.status === 'CONNECTED');
+        if (tgConn) {
+          setWorkspaceTelegramConn({
+            pageName: tgConn.pageName,
+            pageId: tgConn.pageId
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load workspace telegram connection', err);
+      }
+    };
+
     loadCampaigns();
     loadLogs();
     fetchSystemBotInfo();
+    fetchWorkspaceTelegramConn();
   }, []);
 
   const openCreateModal = () => {
@@ -1090,6 +1105,21 @@ export default function SocialListeningPage() {
                       Kết nối nhanh 1-Click
                     </span>
                   </div>
+
+                  {workspaceTelegramConn && (
+                    <div className="p-3.5 bg-emerald-50/60 border border-emerald-100 rounded-xl text-xs text-emerald-800 space-y-1">
+                      <p className="font-bold flex items-center gap-1.5 text-emerald-700">
+                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                        Đã kết nối từ Cài đặt chung:
+                      </p>
+                      <p className="text-[11px] text-emerald-600 font-mono">
+                        {workspaceTelegramConn.pageName} (Chat ID: {workspaceTelegramConn.pageId})
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Bạn có thể để trống Token & Chat ID bên dưới để tự động sử dụng cấu hình này.
+                      </p>
+                    </div>
+                  )}
 
                   {/* 1. System Bot Option (if configured in backend) */}
                   {systemBotInfo && systemBotInfo.systemBotEnabled ? (

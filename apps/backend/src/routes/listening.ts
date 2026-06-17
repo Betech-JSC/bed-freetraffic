@@ -337,7 +337,25 @@ router.get('/telegram/bot-info', async (req: AuthRequest, res: Response): Promis
  */
 router.post('/telegram/recent-chats', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const { botToken } = req.body;
-  const token = (botToken || '').trim() || process.env.TELEGRAM_BOT_TOKEN;
+  let token = (botToken || '').trim();
+
+  if (!token) {
+    const defaultTgConn = await prisma.socialConnection.findFirst({
+      where: {
+        platform: 'telegram',
+        workspaceId: req.workspaceId,
+        status: 'CONNECTED',
+      },
+    });
+    if (defaultTgConn) {
+      token = defaultTgConn.accessToken;
+    }
+  }
+
+  // fallback to system token if still empty
+  if (!token) {
+    token = process.env.TELEGRAM_BOT_TOKEN || '';
+  }
 
   if (!token) {
     res.status(400).json({ error: 'Bot Token là bắt buộc (hoặc chưa cấu hình Telegram Bot hệ thống).' });
@@ -412,9 +430,31 @@ router.post('/telegram/recent-chats', requireWrite, async (req: AuthRequest, res
  */
 router.post('/telegram/send-welcome', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const { botToken, chatId, chatTitle } = req.body;
-  const token = (botToken || '').trim() || process.env.TELEGRAM_BOT_TOKEN;
+  let token = (botToken || '').trim();
+  let finalChatId = chatId;
 
-  if (!token || !chatId) {
+  if (!token || !finalChatId) {
+    const defaultTgConn = await prisma.socialConnection.findFirst({
+      where: {
+        platform: 'telegram',
+        workspaceId: req.workspaceId,
+        status: 'CONNECTED',
+      },
+    });
+    if (defaultTgConn) {
+      if (!token) token = defaultTgConn.accessToken;
+      if (!finalChatId) finalChatId = defaultTgConn.pageId;
+    }
+  }
+
+  if (!token) {
+    token = process.env.TELEGRAM_BOT_TOKEN || '';
+  }
+  if (!finalChatId) {
+    finalChatId = process.env.TELEGRAM_CHAT_ID || '';
+  }
+
+  if (!token || !finalChatId) {
     res.status(400).json({ error: 'Bot Token và Chat ID là bắt buộc.' });
     return;
   }
@@ -422,8 +462,8 @@ router.post('/telegram/send-welcome', requireWrite, async (req: AuthRequest, res
   try {
     const title = chatTitle || 'Thành viên Telegram';
     await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
-      chat_id: chatId,
-      text: `🎉 *KẾT NỐI THÀNH CÔNG!*\n\nBot đã được liên kết thành công với hệ thống AI Social Listening của Be Traffic.\n👤 *Cuộc trò chuyện*: ${title}\n🆔 *Chat ID*: \`${chatId}\`\n\nTừ bây giờ, các cơ hội bán hàng tiềm năng quét từ Facebook Group sẽ được gửi về đây.`,
+      chat_id: finalChatId,
+      text: `🎉 *KẾT NỐI THÀNH CÔNG!*\n\nBot đã được liên kết thành công với hệ thống AI Social Listening của Be Traffic.\n👤 *Cuộc trò chuyện*: ${title}\n🆔 *Chat ID*: \`${finalChatId}\`\n\nTừ bây giờ, các cơ hội bán hàng tiềm năng quét từ Facebook Group sẽ được gửi về đây.`,
       parse_mode: 'Markdown'
     });
     res.json({ success: true, message: 'Đã gửi tin nhắn chào mừng thành công.' });

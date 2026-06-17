@@ -22,6 +22,24 @@ export async function executeCampaignScan(campaignId: number): Promise<{ success
     return { success: false, postsCount: 0, leadsFound: 0, error: 'Facebook Cookie not configured.' };
   }
 
+  // Resolve Telegram Credentials: use campaign level or fallback to workspace connection settings
+  let finalBotToken = campaign.telegramBotToken;
+  let finalChatId = campaign.telegramChatId;
+
+  if (campaign.telegramEnabled && (!finalBotToken || !finalChatId)) {
+    const defaultTgConn = await prisma.socialConnection.findFirst({
+      where: {
+        platform: 'telegram',
+        workspaceId: campaign.workspaceId,
+        status: 'CONNECTED',
+      },
+    });
+    if (defaultTgConn) {
+      if (!finalBotToken) finalBotToken = defaultTgConn.accessToken;
+      if (!finalChatId) finalChatId = defaultTgConn.pageId;
+    }
+  }
+
   const groupUrlsList = campaign.groupUrls
     .split(',')
     .map(g => g.trim())
@@ -200,7 +218,7 @@ export async function executeCampaignScan(campaignId: number): Promise<{ success
             };
 
             try {
-              await sendTelegramAlert(campaign.telegramBotToken, campaign.telegramChatId, alertText, replyMarkup);
+              await sendTelegramAlert(finalBotToken, finalChatId, alertText, replyMarkup);
               await prisma.socialListeningLog.update({
                 where: { id: log.id },
                 data: { status: 'NOTIFIED' },
@@ -324,7 +342,7 @@ export async function executeCampaignScan(campaignId: number): Promise<{ success
                 };
 
                 try {
-                  await sendTelegramAlert(campaign.telegramBotToken, campaign.telegramChatId, alertText, replyMarkup);
+                  await sendTelegramAlert(finalBotToken, finalChatId, alertText, replyMarkup);
                   await prisma.socialListeningLog.update({
                     where: { id: log.id },
                     data: { status: 'NOTIFIED' },
@@ -365,7 +383,7 @@ export async function executeCampaignScan(campaignId: number): Promise<{ success
           `Phiên quét facebook đã bị ngắt kết nối do Cookie hết hạn hoặc không hoạt động. Vui lòng kết nối lại tài khoản Facebook bằng cách nhập Cookie thủ công trên Dashboard Be Traffic.`;
         
         try {
-          await sendTelegramAlert(campaign.telegramBotToken, campaign.telegramChatId, warningText);
+          await sendTelegramAlert(finalBotToken, finalChatId, warningText);
         } catch (teleErr: any) {
           console.error(`Failed to send Telegram cookie warning: ${teleErr.message}`);
         }
