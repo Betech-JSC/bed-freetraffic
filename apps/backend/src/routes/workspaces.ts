@@ -81,6 +81,8 @@ router.get('/current', workspaceMiddleware, async (req: WorkspaceRequest, res: R
     res.json({
       id: workspace.id,
       name: workspace.name,
+      companyName: workspace.companyName,
+      websiteUrl: workspace.websiteUrl,
       createdAt: workspace.createdAt,
       members: workspace.users.map(u => ({
         id: u.user.id,
@@ -200,5 +202,53 @@ router.post('/', async (req: WorkspaceRequest, res: Response): Promise<void> => 
     res.status(500).json({ error: 'Lỗi máy chủ' });
   }
 });
+
+// Update current workspace settings
+router.patch(
+  '/current',
+  workspaceMiddleware,
+  requireWorkspaceRole(['OWNER']),
+  async (req: WorkspaceRequest, res: Response): Promise<void> => {
+    try {
+      const workspaceId = req.workspaceId!;
+      const { name, companyName, websiteUrl } = req.body;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name.trim();
+      if (companyName !== undefined) updateData.companyName = companyName.trim();
+      if (websiteUrl !== undefined) updateData.websiteUrl = websiteUrl.trim() || null;
+
+      if (Object.keys(updateData).length === 0) {
+        res.status(400).json({ error: 'Không có thông tin thay đổi' });
+        return;
+      }
+
+      const updated = await prisma.workspace.update({
+        where: { id: workspaceId },
+        data: updateData
+      });
+
+      // Ghi audit log
+      await logActivity({
+        userId: req.user!.userId,
+        workspaceId,
+        action: 'UPDATE_WORKSPACE_SETTINGS',
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        details: updateData
+      });
+
+      res.json({
+        id: updated.id,
+        name: updated.name,
+        companyName: updated.companyName,
+        websiteUrl: updated.websiteUrl
+      });
+    } catch (error: any) {
+      console.error('[PATCH /workspaces/current] Error:', error);
+      res.status(500).json({ error: error.message || 'Lỗi cập nhật cấu hình Workspace' });
+    }
+  }
+);
 
 export default router;

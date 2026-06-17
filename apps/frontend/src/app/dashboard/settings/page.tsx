@@ -20,9 +20,72 @@ interface Connection {
 
 export default function SettingsPage() {
   const { t, locale } = useLocale();
-  const [activeTab, setActiveTab] = useState<'integrations' | 'security' | 'audit'>('integrations');
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations' | 'security' | 'audit'>('general');
   const [connections, setConnections] = useState<Connection[]>([]);
   const [fbBotStatus, setFbBotStatus] = useState<{ botReady: boolean } | null>(null);
+
+  // Workspace settings state
+  const [workspaceInfo, setWorkspaceInfo] = useState<{
+    id: number;
+    name: string;
+    companyName: string | null;
+    websiteUrl: string | null;
+    members: { id: number; email: string; name: string; role: string }[];
+  } | null>(null);
+
+  const [wsName, setWsName] = useState('');
+  const [wsCompanyName, setWsCompanyName] = useState('');
+  const [wsWebsiteUrl, setWsWebsiteUrl] = useState('');
+  const [wsSaveLoading, setWsSaveLoading] = useState(false);
+  const [wsMsg, setWsMsg] = useState('');
+  const [wsErr, setWsErr] = useState('');
+
+  const fetchWorkspaceInfo = useCallback(async () => {
+    try {
+      const data = await apiJson<{
+        id: number;
+        name: string;
+        companyName: string | null;
+        websiteUrl: string | null;
+        members: { id: number; email: string; name: string; role: string }[];
+      }>('/workspaces/current');
+      setWorkspaceInfo(data);
+      if (data) {
+        setWsName(data.name || '');
+        setWsCompanyName(data.companyName || '');
+        setWsWebsiteUrl(data.websiteUrl || '');
+      }
+    } catch (err) {
+      console.error('Error fetching workspace info:', err);
+    }
+  }, []);
+
+  const handleSaveWorkspace = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setWsSaveLoading(true);
+    setWsMsg('');
+    setWsErr('');
+    try {
+      const res = await apiJson<{ id: number; name: string; companyName: string; websiteUrl: string }>('/workspaces/current', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: wsName,
+          companyName: wsCompanyName,
+          websiteUrl: wsWebsiteUrl
+        })
+      });
+      setWsMsg(t('Đã cập nhật thông tin cấu hình thành công!'));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('workspaceName', res.name);
+        // Dispatch a custom event to notify Sidebar/Header of the workspace name change
+        window.dispatchEvent(new Event('workspace_changed'));
+      }
+      fetchWorkspaceInfo();
+    } catch (err: any) {
+      setWsErr(err.message || t('Lỗi lưu cấu hình'));
+    }
+    setWsSaveLoading(false);
+  };
 
   // Email state
   const [emailMode, setEmailMode] = useState<'idle' | 'form'>('idle');
@@ -133,11 +196,12 @@ export default function SettingsPage() {
     setTimeout(() => {
       fetchConnections();
       fetchGoogle();
+      fetchWorkspaceInfo();
       if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('google') === 'connected') {
         fetchGoogle();
       }
     }, 0);
-  }, [fetchConnections, fetchGoogle]);
+  }, [fetchConnections, fetchGoogle, fetchWorkspaceInfo]);
 
   const connectGoogle = async () => {
     const { url } = await apiJson<{ url: string }>('/google/auth-url');
@@ -372,6 +436,16 @@ export default function SettingsPage() {
       {/* ===== TAB SELECTOR ===== */}
       <div className="flex border-b border-slate-200 gap-6 mb-6">
         <button
+          onClick={() => setActiveTab('general')}
+          className={`pb-3 text-sm font-semibold border-b-2 transition-colors focus:outline-none ${
+            activeTab === 'general'
+              ? 'border-orange-500 text-orange-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          {t('Thông tin chung')}
+        </button>
+        <button
           onClick={() => setActiveTab('integrations')}
           className={`pb-3 text-sm font-semibold border-b-2 transition-colors focus:outline-none ${
             activeTab === 'integrations'
@@ -402,6 +476,112 @@ export default function SettingsPage() {
           {t('Nhật ký hoạt động')}
         </button>
       </div>
+
+      {activeTab === 'general' && (
+        <div className="space-y-6 animate-fade-in">
+          <form onSubmit={handleSaveWorkspace} className="card p-6 border-2 border-orange-100/40 bg-white rounded-2xl shadow-sm">
+            <h2 className="text-lg font-bold text-slate-900 mb-4">{t('Thông tin doanh nghiệp & Website')}</h2>
+            
+            {wsMsg && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-medium">
+                {wsMsg}
+              </div>
+            )}
+            {wsErr && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 font-medium">
+                {wsErr}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  {t('Tên Workspace')}
+                </label>
+                <input
+                  type="text"
+                  value={wsName}
+                  onChange={(e) => setWsName(e.target.value)}
+                  required
+                  placeholder="e.g. Workspace Be Traffic"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-brand/40 text-sm font-medium transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  {t('Tên doanh nghiệp / Thương hiệu')}
+                </label>
+                <input
+                  type="text"
+                  value={wsCompanyName}
+                  onChange={(e) => setWsCompanyName(e.target.value)}
+                  placeholder="e.g. Be Traffic JSC"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-brand/40 text-sm font-medium transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  {t('Địa chỉ Website (URL)')}
+                </label>
+                <input
+                  type="url"
+                  value={wsWebsiteUrl}
+                  onChange={(e) => setWsWebsiteUrl(e.target.value)}
+                  placeholder="e.g. https://yourcompany.com"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:border-brand/40 text-sm font-medium transition-all"
+                />
+                <p className="text-[10px] text-slate-400 mt-1.5 font-medium leading-relaxed">
+                  {t('Nhập URL đầy đủ bắt đầu bằng http:// hoặc https://. Website này sẽ được dùng để phân tích SEO và tối ưu hóa bài viết.')}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-slate-100 flex justify-end">
+              <button
+                type="submit"
+                disabled={wsSaveLoading}
+                className="btn-primary px-6 py-2.5 rounded-xl text-sm font-bold text-white shadow-lg shadow-brand/10 hover:shadow-brand/20 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {wsSaveLoading ? t('Đang lưu...') : t('Lưu cấu hình')}
+              </button>
+            </div>
+          </form>
+
+          {workspaceInfo && (
+            <div className="card p-6 border border-slate-200 bg-white rounded-2xl shadow-sm space-y-4">
+              <h3 className="text-base font-bold text-slate-900">{t('Thành viên trong Workspace')}</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 font-semibold uppercase tracking-wider bg-slate-50/50">
+                      <th className="py-2.5 px-4 font-bold">{t('Họ tên')}</th>
+                      <th className="py-2.5 px-4 font-bold">{t('Email')}</th>
+                      <th className="py-2.5 px-4 font-bold">{t('Vai trò')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {workspaceInfo.members.map((member) => (
+                      <tr key={member.id} className="hover:bg-slate-50/50 font-medium">
+                        <td className="py-3 px-4 font-bold text-slate-900">{member.name || '—'}</td>
+                        <td className="py-3 px-4 font-mono text-slate-600">{member.email}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            member.role === 'OWNER' ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {member.role}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {activeTab === 'integrations' && (
         <div className="space-y-6">

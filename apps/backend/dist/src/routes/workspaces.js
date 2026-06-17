@@ -78,6 +78,8 @@ router.get('/current', workspace_1.workspaceMiddleware, async (req, res) => {
         res.json({
             id: workspace.id,
             name: workspace.name,
+            companyName: workspace.companyName,
+            websiteUrl: workspace.websiteUrl,
             createdAt: workspace.createdAt,
             members: workspace.users.map(u => ({
                 id: u.user.id,
@@ -180,6 +182,47 @@ router.post('/', async (req, res) => {
     catch (error) {
         console.error('[POST /workspaces] Error:', error);
         res.status(500).json({ error: 'Lỗi máy chủ' });
+    }
+});
+// Update current workspace settings
+router.patch('/current', workspace_1.workspaceMiddleware, (0, rbacMiddleware_1.requireWorkspaceRole)(['OWNER']), async (req, res) => {
+    try {
+        const workspaceId = req.workspaceId;
+        const { name, companyName, websiteUrl } = req.body;
+        const updateData = {};
+        if (name !== undefined)
+            updateData.name = name.trim();
+        if (companyName !== undefined)
+            updateData.companyName = companyName.trim();
+        if (websiteUrl !== undefined)
+            updateData.websiteUrl = websiteUrl.trim() || null;
+        if (Object.keys(updateData).length === 0) {
+            res.status(400).json({ error: 'Không có thông tin thay đổi' });
+            return;
+        }
+        const updated = await prisma_1.default.workspace.update({
+            where: { id: workspaceId },
+            data: updateData
+        });
+        // Ghi audit log
+        await (0, auditLogger_1.logActivity)({
+            userId: req.user.userId,
+            workspaceId,
+            action: 'UPDATE_WORKSPACE_SETTINGS',
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            details: updateData
+        });
+        res.json({
+            id: updated.id,
+            name: updated.name,
+            companyName: updated.companyName,
+            websiteUrl: updated.websiteUrl
+        });
+    }
+    catch (error) {
+        console.error('[PATCH /workspaces/current] Error:', error);
+        res.status(500).json({ error: error.message || 'Lỗi cập nhật cấu hình Workspace' });
     }
 });
 exports.default = router;
