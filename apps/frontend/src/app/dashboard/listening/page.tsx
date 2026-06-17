@@ -1095,7 +1095,7 @@ export default function SocialListeningPage() {
                     </span>
                   </div>
 
-                  {workspaceTelegramConn && (
+                  {workspaceTelegramConn ? (
                     <div className="p-3.5 bg-emerald-50/60 border border-emerald-100 rounded-xl text-xs text-emerald-800 space-y-1">
                       <p className="font-bold flex items-center gap-1.5 text-emerald-700">
                         <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -1105,52 +1105,25 @@ export default function SocialListeningPage() {
                         {workspaceTelegramConn.pageName} (Chat ID: {workspaceTelegramConn.pageId})
                       </p>
                       <p className="text-[10px] text-slate-500 leading-normal">
-                        Bạn có thể để trống Token & Chat ID bên dưới để tự động sử dụng cấu hình này.
+                        Hệ thống sẽ tự động gửi thông báo về bot và cuộc trò chuyện này.
                       </p>
                     </div>
-                  )}
-
-                  {/* Custom Bot Option */}
-                  <div className="space-y-3 border-t border-slate-100 pt-3">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Sử dụng Telegram Bot riêng cho chiến dịch này (Tùy chọn)</p>
-                    
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-400 uppercase">Bot Token của bạn</label>
-                        <input
-                          type="text"
-                          placeholder="Nhập Token Bot từ @BotFather"
-                          className="input w-full text-xs font-mono"
-                          value={formState.telegramBotToken}
-                          onChange={(e) => setFormState(prev => ({ ...prev, telegramBotToken: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-400 uppercase">Chat ID của bạn</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            placeholder="Chọn từ danh sách quét hoặc nhập ID"
-                            className="input w-full text-xs font-mono"
-                            value={formState.telegramChatId}
-                            onChange={(e) => setFormState(prev => ({ ...prev, telegramChatId: e.target.value }))}
-                          />
-                          {formState.telegramBotToken.trim() && (
-                            <button
-                              type="button"
-                              disabled={loadingRecentChats}
-                              onClick={() => handleFetchRecentChats(false)}
-                              className="btn-secondary whitespace-nowrap text-[10px] px-3 font-bold flex items-center justify-center gap-1 cursor-pointer"
-                            >
-                              {loadingRecentChats ? (
-                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-brand"></div>
-                              ) : 'Quét Chat' }
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                  ) : (
+                    <div className="p-4 bg-amber-50/50 border border-amber-200/40 rounded-2xl space-y-2">
+                      <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                        Chưa cấu hình Telegram Bot
+                      </p>
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        Bạn chưa cấu hình kết nối Telegram Bot. Vui lòng vào mục <b>Cài đặt &rarr; Tích hợp</b> để kết nối Telegram Bot trước.
+                      </p>
+                      <a
+                        href="/dashboard/settings"
+                        className="inline-block text-[11px] text-brand hover:underline font-bold mt-1"
+                      >
+                        Đi tới phần Cài đặt &rarr;
+                      </a>
                     </div>
-                  </div>
+                  )}
 
                   {/* Recent Chats Selector Dropdown */}
                   {showRecentChatsList && (
