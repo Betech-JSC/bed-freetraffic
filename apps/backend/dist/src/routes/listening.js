@@ -229,7 +229,7 @@ router.post('/campaigns/:id/test-scan', auth_1.requireWrite, async (req, res) =>
 });
 /**
  * POST /api/listening/update-cookie
- * Updates cookies for a specific campaign or all campaigns in the workspace (from Bookmarklet)
+ * Updates cookies for a specific campaign or all campaigns in the workspace
  */
 router.post('/update-cookie', auth_1.requireWrite, async (req, res) => {
     const { cookie, campaignId } = req.body;

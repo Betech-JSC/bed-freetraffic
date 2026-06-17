@@ -58,16 +58,10 @@ export default function SocialListeningPage() {
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [cookieGuideTab, setCookieGuideTab] = useState<'manual' | 'bookmarklet'>('manual');
   
   // CRM Lead Convert State
   const [convertingLogIds, setConvertingLogIds] = useState<number[]>([]);
   const [savedLogIds, setSavedLogIds] = useState<number[]>([]);
-
-  // Bookmarklet Code
-  const [bookmarkletCode, setBookmarkletCode] = useState('');
-  const bookmarkletRef = useRef<HTMLAnchorElement>(null);
-  const [showManualCode, setShowManualCode] = useState(false);
 
   // Modal Campaign Form
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -105,19 +99,7 @@ export default function SocialListeningPage() {
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
   const [showRecentChatsList, setShowRecentChatsList] = useState(false);
 
-  // Generate dynamic Bookmarklet code on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const code = `javascript:(function(){var cookies=document.cookie;if(!cookies.includes('c_user')){alert('Vui lòng truy cập facebook.com và đăng nhập trước khi click!');return;}var targetUrl="${window.location.origin}/dashboard/listening#cookie="+encodeURIComponent(cookies);window.open(targetUrl,'_blank');})();`;
-      setBookmarkletCode(code);
-    }
-  }, []);
 
-  useEffect(() => {
-    if (bookmarkletRef.current && bookmarkletCode) {
-      bookmarkletRef.current.setAttribute('href', bookmarkletCode);
-    }
-  }, [bookmarkletCode]);
 
   // Fetch campaigns
   const loadCampaigns = async () => {
@@ -175,29 +157,7 @@ export default function SocialListeningPage() {
     }
   };
 
-  // Detect and handle cookie updates from Bookmarklet URL hash
   useEffect(() => {
-    const handleHashCheck = async () => {
-      if (typeof window !== 'undefined' && window.location.hash.startsWith('#cookie=')) {
-        const rawCookie = decodeURIComponent(window.location.hash.replace('#cookie=', ''));
-        // Clean URL immediately for security
-        window.history.replaceState(null, '', window.location.pathname);
-        
-        setError('');
-        setSuccess('Đang kết nối Facebook...');
-        try {
-          const res = await apiJson<any>('/listening/update-cookie', {
-            method: 'POST',
-            body: JSON.stringify({ cookie: rawCookie }),
-          });
-          setSuccess(res.message || 'Đã kết nối tài khoản Facebook thành công!');
-          await loadCampaigns();
-        } catch (err: any) {
-          setError(err.message || 'Không thể cập nhật cookie Facebook từ Bookmarklet.');
-          setSuccess('');
-        }
-      }
-    };
     const fetchSystemBotInfo = async () => {
       try {
         const info = await apiJson<any>('/listening/telegram/bot-info');
@@ -207,7 +167,6 @@ export default function SocialListeningPage() {
       }
     };
 
-    handleHashCheck();
     loadCampaigns();
     loadLogs();
     fetchSystemBotInfo();
@@ -404,181 +363,53 @@ export default function SocialListeningPage() {
         </div>
       )}
 
-      {/* Hero tutorial section and Bookmarklet Connect */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left: How it works info and Manual Cookie Guide Tabs */}
-        <div className="lg:col-span-2 bg-white rounded-3xl p-6 border border-orange-100/60 shadow-lg shadow-orange-950/5 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-brand/10 to-orange-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
-          
-          <div>
-            <div className="flex border-b border-slate-100 gap-6 mb-5">
-              <button
-                type="button"
-                onClick={() => setCookieGuideTab('manual')}
-                className={`pb-2.5 text-xs font-bold transition-all relative cursor-pointer ${
-                  cookieGuideTab === 'manual' ? 'text-brand font-black' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                🔑 Hướng dẫn lấy Cookie thủ công (Khuyên dùng - 100% Ổn định)
-                {cookieGuideTab === 'manual' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-full"></div>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCookieGuideTab('bookmarklet')}
-                className={`pb-2.5 text-xs font-bold transition-all relative cursor-pointer ${
-                  cookieGuideTab === 'bookmarklet' ? 'text-brand font-black' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                ⚡ Dùng Bookmarklet (Nhanh nhưng Dễ lỗi)
-                {cookieGuideTab === 'bookmarklet' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand rounded-full"></div>
-                )}
-              </button>
-            </div>
-
-            {cookieGuideTab === 'manual' ? (
-              <div className="space-y-3.5 text-xs text-slate-600">
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                    <span className="p-1 bg-orange-100 rounded text-brand">💡</span>
-                    Cách lấy Cookie đầy đủ chứa cả c_user và xs:
-                  </p>
-                </div>
-                
-                <div className="grid sm:grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-                  <div className="space-y-2">
-                    <p className="font-bold text-brand flex items-center gap-1">🌐 Cách 1: Dùng Extension "cURL & WS Capture" (Khuyên dùng)</p>
-                    <ul className="list-disc list-inside space-y-1.5 text-slate-500">
-                      <li>Cài extension <b>cURL & WS Capture</b> trên Chrome/Edge.</li>
-                      <li>Vào trang <b>facebook.com</b> để tải dữ liệu.</li>
-                      <li>Mở extension, copy request của Facebook (dạng chuỗi hoặc JSON block).</li>
-                      <li>Dán trực tiếp vào ô Cookie. Backend sẽ tự động phân tích JSON và trích xuất Cookie sạch.</li>
-                    </ul>
-                  </div>
-
-                  <div className="space-y-2 border-t sm:border-t-0 sm:border-l border-slate-100 pt-3 sm:pt-0 sm:pl-4">
-                    <p className="font-bold text-slate-800 flex items-center gap-1">💻 Cách 2: Sao chép từ DevTools (F12)</p>
-                    <ul className="list-disc list-inside space-y-1.5 text-slate-500">
-                      <li>Nhấn <b>F12</b> ở facebook.com, chuyển sang tab <b>Network</b>.</li>
-                      <li>Nhấn <b>F5</b> để load lại trang.</li>
-                      <li>Click dòng request đầu tiên (Type: <code>document</code>).</li>
-                      <li>Tìm phần <b>Request Headers</b> &rarr; copy giá trị của trường <b>Cookie</b> (chứa cả c_user và xs) và dán vào ô Cookie.</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 text-xs text-slate-600">
-                <div className="p-3.5 bg-amber-50 border border-amber-200/60 rounded-2xl text-amber-800 leading-relaxed font-semibold">
-                  ⚠️ <b>LƯU Ý:</b> Trình duyệt chặn mã JavaScript đọc cookie <code className="font-mono bg-white/60 px-1 py-0.5 rounded border border-amber-200">xs</code> (session secret) vì nó được đánh dấu là <b>HttpOnly</b>. Nếu bạn click Bookmarklet mà quét thử vẫn báo lỗi <b>COOKIE_EXPIRED</b>, vui lòng chuyển sang tab <b>Lấy Cookie thủ công</b> để copy đủ thông tin xác thực.
-                </div>
-                <div className="grid sm:grid-cols-3 gap-4 pt-1">
-                  <div className="p-3 bg-orange-50/30 rounded-2xl border border-orange-100/30 relative">
-                    <span className="absolute top-2 right-3 font-black text-brand/10 text-3xl">1</span>
-                    <p className="font-bold text-slate-800 mb-1">Kéo Bookmarklet</p>
-                    <p className="text-slate-500 text-[11px]">Kéo nút cam "Kết nối Facebook (Be)" bên phải thả lên thanh Dấu trang.</p>
-                  </div>
-                  <div className="p-3 bg-orange-50/30 rounded-2xl border border-orange-100/30 relative">
-                    <span className="absolute top-2 right-3 font-black text-brand/10 text-3xl">2</span>
-                    <p className="font-bold text-slate-800 mb-1">Click tại Facebook</p>
-                    <p className="text-slate-500 text-[11px]">Truy cập facebook.com đã đăng nhập, click vào Bookmarklet vừa kéo lên.</p>
-                  </div>
-                  <div className="p-3 bg-orange-50/30 rounded-2xl border border-orange-100/30 relative">
-                    <span className="absolute top-2 right-3 font-black text-brand/10 text-3xl">3</span>
-                    <p className="font-bold text-slate-800 mb-1">Lưu tự động</p>
-                    <p className="text-slate-500 text-[11px]">Hệ thống tự động chuyển hướng và cập nhật các cookie mà JavaScript được phép đọc.</p>
-                  </div>
-                </div>
-              </div>
-            )}
+      {/* Hero tutorial section */}
+      <div className="bg-white rounded-3xl p-6 border border-orange-100/60 shadow-lg shadow-orange-950/5 relative overflow-hidden mb-6">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-brand/10 to-orange-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
+        
+        <div>
+          <div className="flex border-b border-slate-100 gap-6 mb-5 pb-2.5">
+            <h3 className="text-sm font-extrabold text-brand flex items-center gap-1.5">
+              🔑 Hướng dẫn lấy Cookie thủ công (Khuyên dùng - 100% Ổn định)
+            </h3>
           </div>
 
-          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between gap-4 flex-wrap">
-            <span className="text-[11px] text-slate-400">
-              💡 Lưu ý: Tránh dùng tài khoản chính (cá nhân quan trọng) để chạy quét bài viết. Hãy sử dụng tài khoản Clone phụ để đảm bảo an toàn.
-            </span>
+          <div className="space-y-3.5 text-xs text-slate-600">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                <span className="p-1 bg-orange-100 rounded text-brand">💡</span>
+                Cách lấy Cookie đầy đủ chứa cả c_user và xs:
+              </p>
+            </div>
+            
+            <div className="grid sm:grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+              <div className="space-y-2">
+                <p className="font-bold text-brand flex items-center gap-1">🌐 Cách 1: Dùng Extension "cURL & WS Capture" (Khuyên dùng)</p>
+                <ul className="list-disc list-inside space-y-1.5 text-slate-500">
+                  <li>Cài extension <b>cURL & WS Capture</b> trên Chrome/Edge.</li>
+                  <li>Vào trang <b>facebook.com</b> để tải dữ liệu.</li>
+                  <li>Mở extension, copy request của Facebook (dạng chuỗi hoặc JSON block).</li>
+                  <li>Dán trực tiếp vào ô Cookie. Backend sẽ tự động phân tích JSON và trích xuất Cookie sạch.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-2 border-t sm:border-t-0 sm:border-l border-slate-100 pt-3 sm:pt-0 sm:pl-4">
+                <p className="font-bold text-slate-800 flex items-center gap-1">💻 Cách 2: Sao chép từ DevTools (F12)</p>
+                <ul className="list-disc list-inside space-y-1.5 text-slate-500">
+                  <li>Nhấn <b>F12</b> ở facebook.com, chuyển sang tab <b>Network</b>.</li>
+                  <li>Nhấn <b>F5</b> để load lại trang.</li>
+                  <li>Click dòng request đầu tiên (Type: <code>document</code>).</li>
+                  <li>Tìm phần <b>Request Headers</b> &rarr; copy giá trị của trường <b>Cookie</b> (chứa cả c_user và xs) và dán vào ô Cookie.</li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Right: Drag and drop bookmarklet */}
-        <div className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-brand/15 rounded-full blur-3xl -mr-10 -mt-10"></div>
-          
-          <div className="space-y-2">
-            <h3 className="font-bold text-base flex items-center gap-2">
-              <svg className="w-5 h-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-              Facebook Bookmarklet
-            </h3>
-            <p className="text-xs text-slate-300">
-              Kéo thả nút cam bên dưới lên thanh Bookmark của Chrome/Edge để kết nối Facebook trong 1 giây mà không cần copy tay.
-            </p>
-          </div>
-
-          <div className="my-5 flex flex-col items-center justify-center p-4 border border-dashed border-slate-700/80 rounded-2xl bg-slate-950/50">
-            {bookmarkletCode ? (
-              <a
-                ref={bookmarkletRef}
-                onClick={(e) => {
-                  e.preventDefault();
-                  alert('Vui lòng kéo nút này thả trực tiếp lên thanh Dấu trang (Bookmark Bar) của bạn, không click trực tiếp.');
-                }}
-                className="btn-primary select-none px-6 py-3 cursor-grab font-bold rounded-xl shadow-lg shadow-brand/20 hover:scale-105 active:scale-95 transition-all text-sm inline-flex items-center gap-2"
-                title="Kéo thả tôi lên thanh dấu trang"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                Kết nối Facebook (Be)
-              </a>
-            ) : (
-              <span className="text-xs text-slate-500">Đang khởi tạo Bookmarklet...</span>
-            )}
-            <p className="text-[10px] text-slate-400 mt-2.5 text-center">
-              (Truy cập facebook.com trước khi bấm Bookmarklet đã lưu)
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setShowManualCode(!showManualCode)}
-              className="text-[10px] text-slate-400 hover:text-white underline mt-2.5 cursor-pointer block"
-            >
-              {showManualCode ? 'Ẩn hướng dẫn cấu hình thủ công' : 'Hoặc tự tạo dấu trang thủ công'}
-            </button>
-
-            {showManualCode && (
-              <div className="w-full mt-3 p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-2 text-left">
-                <p className="text-[9px] text-slate-400 leading-normal">
-                  Nếu trình duyệt của bạn chặn kéo thả, hãy click chuột phải vào thanh dấu trang → chọn "Thêm trang" / "Thêm dấu trang". Đặt tên dấu trang là "Kết nối Facebook (Be)" và sao chép toàn bộ mã code sau dán vào ô "Địa chỉ/URL":
-                </p>
-                <textarea
-                  readOnly
-                  rows={3}
-                  className="w-full p-2 bg-slate-900 border border-slate-800 rounded-lg text-[10px] font-mono text-slate-300 select-all focus:outline-none"
-                  value={bookmarkletCode}
-                  onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(bookmarkletCode);
-                    alert('Đã sao chép mã Bookmarklet! Bạn hãy dán đoạn mã này vào URL của Bookmark.');
-                  }}
-                  className="w-full py-1.5 bg-brand hover:bg-brand-hover text-white rounded-lg text-[10px] font-bold transition-all"
-                >
-                  Sao chép mã Bookmarklet
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="text-[10px] text-slate-400 flex items-center justify-between">
-            <span>Phiên bản v1.2</span>
-            <span>Bảo mật dữ liệu 100%</span>
-          </div>
+        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between gap-4 flex-wrap">
+          <span className="text-[11px] text-slate-400">
+            💡 Lưu ý: Tránh dùng tài khoản chính (cá nhân quan trọng) để chạy quét bài viết. Hãy sử dụng tài khoản Clone phụ để đảm bảo an toàn.
+          </span>
         </div>
       </div>
 
@@ -836,7 +667,7 @@ export default function SocialListeningPage() {
                   <p className="font-mono">{testResult.data.error}</p>
                   {testResult.data.error === 'COOKIE_EXPIRED' && (
                     <p className="mt-1.5 text-[10px] text-red-300">
-                      → Giải thích: Cookie Facebook của bạn không hoạt động, bị Checkpoint, hoặc đã hết hạn. Hãy làm theo hướng dẫn kéo Bookmarklet ở trên, sang tab Facebook bấm vào Bookmarklet để cập nhật cookie mới.
+                      → Giải thích: Cookie Facebook của bạn không hoạt động, bị Checkpoint, hoặc đã hết hạn. Hãy làm theo hướng dẫn lấy Cookie thủ công ở trên đầu trang để cập nhật cookie mới.
                     </p>
                   )}
                 </div>
@@ -1130,7 +961,7 @@ export default function SocialListeningPage() {
                   onChange={(e) => setFormState(prev => ({ ...prev, facebookCookie: e.target.value }))}
                 />
                 <span className="text-[10px] text-slate-400 block leading-normal mt-1">
-                  💡 Bookmarklet tự động đôi khi không lấy được cookie <b>xs</b> do chế độ bảo mật HttpOnly của trình duyệt. Hãy lấy cookie bằng tay như hướng dẫn ở trên đầu trang nếu bị lỗi.
+                  💡 Hãy lấy cookie bằng tay như hướng dẫn ở trên đầu trang nếu gặp lỗi.
                 </span>
               </div>
 

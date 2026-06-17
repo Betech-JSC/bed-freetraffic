@@ -28,8 +28,8 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
 
     // Initialize credentials helper to fetch properties automatically
     const oauth2 = createOAuth2Client();
-    let ga4PropertyId = process.env.GA4_PROPERTY_ID || existing?.ga4PropertyId || null;
-    let gscSiteUrl = process.env.GSC_SITE_URL || existing?.gscSiteUrl || null;
+    let ga4PropertyId = existing?.ga4PropertyId || null;
+    let gscSiteUrl = existing?.gscSiteUrl || null;
 
     if (oauth2) {
       oauth2.setCredentials({
@@ -103,7 +103,7 @@ router.use(workspaceMiddleware);
 router.get('/status', async (req: AuthRequest, res: Response): Promise<void> => {
   const integration = await getGoogleTokensFromDb(req.workspaceId);
   res.json({
-    connected: integration?.syncStatus === 'CONNECTED',
+    connected: !!integration,
     ga4PropertyId: integration?.ga4PropertyId || process.env.GA4_PROPERTY_ID,
     gscSiteUrl: integration?.gscSiteUrl || process.env.GSC_SITE_URL,
     lastSyncAt: integration?.lastSyncAt,

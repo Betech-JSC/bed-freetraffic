@@ -328,7 +328,7 @@ async function executeCampaignScan(campaignId) {
                 // Notify user about expired cookie
                 const warningText = `⚠️ *Cảnh báo: Cookie Facebook Hết Hạn*\n\n` +
                     `Chiến dịch: *${campaign.name}*\n` +
-                    `Phiên quét facebook đã bị ngắt kết nối do Cookie hết hạn hoặc không hoạt động. Vui lòng kết nối lại tài khoản Facebook bằng công cụ Bookmarklet trên Dashboard Be Traffic.`;
+                    `Phiên quét facebook đã bị ngắt kết nối do Cookie hết hạn hoặc không hoạt động. Vui lòng kết nối lại tài khoản Facebook bằng cách nhập Cookie thủ công trên Dashboard Be Traffic.`;
                 try {
                     await (0, telegramService_1.sendTelegramAlert)(campaign.telegramBotToken, campaign.telegramChatId, warningText);
                 }

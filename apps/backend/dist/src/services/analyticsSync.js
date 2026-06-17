@@ -44,8 +44,11 @@ async function syncAnalyticsData(workspaceId) {
     try {
         const integration = await prisma_1.default.googleIntegration.findFirst({ where: { workspaceId } });
         const ga4 = await (0, google_1.getGa4Client)(workspaceId);
-        const propertyId = integration?.ga4PropertyId || (0, google_1.getGa4PropertyId)();
-        const gscSite = integration?.gscSiteUrl || (0, google_1.getGscSiteUrl)();
+        const propertyId = integration ? integration.ga4PropertyId : (0, google_1.getGa4PropertyId)();
+        const gscSite = integration ? integration.gscSiteUrl : (0, google_1.getGscSiteUrl)();
+        if (integration && !propertyId) {
+            return { success: false, message: 'Vui lòng cấu hình GA4 Property ID trong phần Cài đặt' };
+        }
         let sessionsTotal = 0;
         let usersTotal = 0;
         if (ga4) {

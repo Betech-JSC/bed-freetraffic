@@ -3,6 +3,8 @@
  * Handles API URL configuration, robust JSON parsing, and retry mechanics for LLM providers
  * (OpenAI, DeepSeek, Google Gemini, OpenRouter).
  */
+import prisma from './prisma';
+
 
 /**
  * Resolves the AI endpoint configuration based on environment variables and keys.
@@ -159,11 +161,44 @@ export function parseAiJson<T = any>(text: string): T {
  * @param delayMs Delay before retrying in milliseconds, defaults to 1200ms.
  * @returns Fetch Response object.
  */
+export async function logAiUsage({
+  model,
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  feature,
+  workspaceId
+}: {
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  feature?: string;
+  workspaceId?: number;
+}) {
+  try {
+    await prisma.aiUsage.create({
+      data: {
+        model,
+        promptTokens,
+        completionTokens,
+        totalTokens,
+        feature: feature || 'unknown',
+        workspaceId
+      }
+    });
+  } catch (err) {
+    console.error('[AI USAGE LOG ERROR]', err);
+  }
+}
+
 export async function fetchWithRetry(
   url: string,
   init: RequestInit,
   retries: number = 2,
-  delayMs: number = 1200
+  delayMs: number = 1200,
+  workspaceId?: number,
+  feature?: string
 ): Promise<Response> {
   let lastRes: Response | null = null;
 
@@ -178,6 +213,54 @@ export async function fetchWithRetry(
         await new Promise(resolve => setTimeout(resolve, retryDelay));
         continue;
       }
+
+      if (res.ok) {
+        const cloned = res.clone();
+        cloned.json().then(async (data: any) => {
+          try {
+            const usage = data.usage;
+            let modelName = data.model;
+            if (!modelName && init.body) {
+              try {
+                modelName = JSON.parse(init.body as string).model;
+              } catch {}
+            }
+            if (!modelName) modelName = 'unknown-model';
+
+            if (usage) {
+              const promptTokens = usage.prompt_tokens || 0;
+              const completionTokens = usage.completion_tokens || 0;
+              const totalTokens = usage.total_tokens || 0;
+
+              let wsId = workspaceId;
+              let feat = feature;
+
+              // Fallback to headers
+              if (!wsId && init.headers) {
+                const headersObj = new Headers(init.headers);
+                const hWsId = headersObj.get('x-workspace-id');
+                if (hWsId) wsId = parseInt(hWsId, 10);
+                const hFeat = headersObj.get('x-feature');
+                if (hFeat) feat = hFeat;
+              }
+
+              await logAiUsage({
+                model: modelName,
+                promptTokens,
+                completionTokens,
+                totalTokens,
+                feature: feat || 'unknown',
+                workspaceId: wsId,
+              });
+            }
+          } catch (err) {
+            console.error('Error logging AI usage in fetchWithRetry:', err);
+          }
+        }).catch(() => {
+          // ignore if response wasn't JSON
+        });
+      }
+
       return res;
     } catch (err: any) {
       if (i < retries) {

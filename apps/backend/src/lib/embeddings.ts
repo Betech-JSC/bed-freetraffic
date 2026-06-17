@@ -1,4 +1,4 @@
-import { getAiConfig } from './ai';
+import { getAiConfig, fetchWithRetry } from './ai';
 import prisma from './prisma';
 import { cache, invalidateWorkspaceCache } from './cache';
 
@@ -50,7 +50,7 @@ const MAX_CACHE_SIZE = 1000;
  * @param text Content to embed.
  * @returns Embeddings vector.
  */
-export async function getEmbedding(text: string, allowFallback: boolean = true): Promise<number[] | null> {
+export async function getEmbedding(text: string, allowFallback: boolean = true, workspaceId?: number): Promise<number[] | null> {
   const cacheKey = text.trim();
   if (embeddingCache.has(cacheKey)) {
     console.log('[Embedding Cache] Hit for:', cacheKey.slice(0, 40));
@@ -72,12 +72,12 @@ export async function getEmbedding(text: string, allowFallback: boolean = true):
         requestBody.dimensions = 1536;
       }
 
-      const res = await fetch(ai.url, {
+      const res = await fetchWithRetry(ai.url, {
         method: 'POST',
         headers: ai.headers,
         body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(10000),
-      });
+      }, 2, 1200, workspaceId, 'rag_embedding');
 
       if (res.ok) {
         const json = await res.json() as any;

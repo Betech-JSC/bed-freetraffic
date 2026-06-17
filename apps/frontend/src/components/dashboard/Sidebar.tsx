@@ -72,6 +72,7 @@ export function Sidebar() {
       items: [
         { href: '/dashboard/copilot', label: t('copilot') },
         { href: '/dashboard/cskh/knowledge', label: 'Tri thức RAG (AI)' },
+        { href: '/dashboard/ai-usage', label: 'Sử dụng Model AI' },
         { href: '/dashboard/content', label: t('Soạn thảo nội dung') },
         { href: '/dashboard/analytics', label: t('Phân tích Bot') },
         { href: '/dashboard/settings', label: t('settings') },

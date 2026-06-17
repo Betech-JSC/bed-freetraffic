@@ -187,7 +187,7 @@ Yêu cầu trả về kết quả định dạng JSON với các trường sau (
         response_format: { type: 'json_object' }
       }),
       signal: AbortSignal.timeout(25000),
-    });
+    }, 2, 1200, workspaceId, 'lead_qualifier');
 
     // Fallback model if primary failed (e.g. rate limit 429)
     if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
@@ -206,7 +206,7 @@ Yêu cầu trả về kết quả định dạng JSON với các trường sau (
           response_format: { type: 'json_object' }
         }),
         signal: AbortSignal.timeout(25000),
-      });
+      }, 2, 1200, workspaceId, 'lead_qualifier');
     }
 
     if (response.ok) {
@@ -961,7 +961,7 @@ Nhiệm vụ của bạn:
             max_tokens: 500,
           }),
           signal: AbortSignal.timeout(15000),
-        });
+        }, 2, 1200, workspaceId, 'chatbot');
 
         // Fallback model if primary failed (e.g. rate limit 429 or 502)
         if (!response.ok && ai.apiKey.startsWith('sk-or-')) {
@@ -979,7 +979,7 @@ Nhiệm vụ của bạn:
               max_tokens: 500,
             }),
             signal: AbortSignal.timeout(15000),
-          });
+          }, 2, 1200, workspaceId, 'chatbot');
         }
 
         if (response.ok) {

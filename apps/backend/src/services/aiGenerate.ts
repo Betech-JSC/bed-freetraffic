@@ -172,7 +172,7 @@ ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy 
         max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(60000),
-    });
+    }, 2, 1200, workspaceId, 'content_generation');
 
     if (!res.ok) {
       const errText = await res.text();
@@ -328,7 +328,7 @@ async function translateToEnglishImagePrompt(prompt: string): Promise<string> {
         max_tokens: 80
       }),
       signal: AbortSignal.timeout(8000)
-    });
+    }, 2, 1200, undefined, 'content_generation');
 
     if (res.ok) {
       const data = await res.json() as any;
@@ -771,7 +771,7 @@ Giọng điệu: ${tone}${ragContextText}`;
         max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(120000),
-    });
+    }, 2, 1200, workspaceId, 'content_generation');
 
     if (!res.ok) {
       const errText = await res.text();
@@ -800,7 +800,8 @@ export async function optimizeSeoContent(
   slug: string,
   metaDescription: string,
   content: string,
-  focusKeyword: string
+  focusKeyword: string,
+  workspaceId?: number
 ): Promise<{
   title: string;
   slug: string;
@@ -875,7 +876,7 @@ ${content}`;
         max_tokens: 4000,
       }),
       signal: AbortSignal.timeout(90000),
-    });
+    }, 2, 1200, workspaceId, 'content_generation');
 
     if (!res.ok) {
       const errText = await res.text();

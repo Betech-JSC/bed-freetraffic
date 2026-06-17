@@ -13,8 +13,12 @@ export async function syncAnalyticsData(workspaceId?: number): Promise<{ success
   try {
     const integration = await prisma.googleIntegration.findFirst({ where: { workspaceId } });
     const ga4 = await getGa4Client(workspaceId);
-    const propertyId = integration?.ga4PropertyId || getGa4PropertyId();
-    const gscSite = integration?.gscSiteUrl || getGscSiteUrl();
+    const propertyId = integration ? integration.ga4PropertyId : getGa4PropertyId();
+    const gscSite = integration ? integration.gscSiteUrl : getGscSiteUrl();
+
+    if (integration && !propertyId) {
+      return { success: false, message: 'Vui lòng cấu hình GA4 Property ID trong phần Cài đặt' };
+    }
 
     let sessionsTotal = 0;
     let usersTotal = 0;

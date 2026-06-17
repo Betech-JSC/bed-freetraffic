@@ -24,8 +24,8 @@ router.get('/callback', async (req, res) => {
         const existing = await prisma_1.default.googleIntegration.findFirst({ where: { workspaceId } });
         // Initialize credentials helper to fetch properties automatically
         const oauth2 = (0, google_1.createOAuth2Client)();
-        let ga4PropertyId = process.env.GA4_PROPERTY_ID || existing?.ga4PropertyId || null;
-        let gscSiteUrl = process.env.GSC_SITE_URL || existing?.gscSiteUrl || null;
+        let ga4PropertyId = existing?.ga4PropertyId || null;
+        let gscSiteUrl = existing?.gscSiteUrl || null;
         if (oauth2) {
             oauth2.setCredentials({
                 access_token: tokens.access_token || undefined,
@@ -92,7 +92,7 @@ router.use(workspace_1.workspaceMiddleware);
 router.get('/status', async (req, res) => {
     const integration = await (0, google_1.getGoogleTokensFromDb)(req.workspaceId);
     res.json({
-        connected: integration?.syncStatus === 'CONNECTED',
+        connected: !!integration,
         ga4PropertyId: integration?.ga4PropertyId || process.env.GA4_PROPERTY_ID,
         gscSiteUrl: integration?.gscSiteUrl || process.env.GSC_SITE_URL,
         lastSyncAt: integration?.lastSyncAt,

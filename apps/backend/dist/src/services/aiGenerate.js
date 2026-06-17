@@ -184,7 +184,7 @@ ${aiPrompt ? `Chủ đề/Yêu cầu viết bài: ${aiPrompt}` : 'Hãy tự suy 
                 max_tokens: 4000,
             }),
             signal: AbortSignal.timeout(60000),
-        });
+        }, 2, 1200, workspaceId, 'content_generation');
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`AI API returned status ${res.status}: ${errText}`);
@@ -333,7 +333,7 @@ async function translateToEnglishImagePrompt(prompt) {
                 max_tokens: 80
             }),
             signal: AbortSignal.timeout(8000)
-        });
+        }, 2, 1200, undefined, 'content_generation');
         if (res.ok) {
             const data = await res.json();
             let result = data.choices?.[0]?.message?.content?.trim();
@@ -715,7 +715,7 @@ Giọng điệu: ${tone}${ragContextText}`;
                 max_tokens: 4000,
             }),
             signal: AbortSignal.timeout(120000),
-        });
+        }, 2, 1200, workspaceId, 'content_generation');
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`OpenAI API returned status ${res.status}: ${errText}`);
@@ -735,7 +735,7 @@ Giọng điệu: ${tone}${ragContextText}`;
         throw err;
     }
 }
-async function optimizeSeoContent(title, slug, metaDescription, content, focusKeyword) {
+async function optimizeSeoContent(title, slug, metaDescription, content, focusKeyword, workspaceId) {
     const ai = (0, ai_1.getAiConfig)('/chat/completions');
     if (!ai.apiKey) {
         const cleanKw = focusKeyword.trim();
@@ -799,7 +799,7 @@ ${content}`;
                 max_tokens: 4000,
             }),
             signal: AbortSignal.timeout(90000),
-        });
+        }, 2, 1200, workspaceId, 'content_generation');
         if (!res.ok) {
             const errText = await res.text();
             throw new Error(`OpenAI API returned status ${res.status}: ${errText}`);

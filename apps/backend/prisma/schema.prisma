@@ -72,6 +72,7 @@ model Workspace {
   onboardingCompleted Boolean             @default(false)
   aiAuditReport       String?             @db.Text
   socialListeningCampaigns SocialListeningCampaign[]
+  aiUsages            AiUsage[]
 }
 
 model UserWorkspace {
@@ -222,6 +223,21 @@ model SocialConnection {
   updatedAt   DateTime   @updatedAt
 
   @@unique([platform, pageId, workspaceId])
+}
+
+model AiUsage {
+  id               Int        @id @default(autoincrement())
+  model            String
+  promptTokens     Int        @default(0)
+  completionTokens Int        @default(0)
+  totalTokens      Int        @default(0)
+  feature          String?    // e.g. "content_generation", "rag_embedding", "chatbot", "lead_qualifier"
+  workspaceId      Int?
+  workspace        Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt        DateTime   @default(now())
+
+  @@index([workspaceId])
+  @@index([createdAt])
 }
 
 model PostTemplate {

@@ -319,3 +319,29 @@ body {
   animation: pulse-slow 12s ease-in-out infinite;
 }
 
+/* Google Translate Styling Overrides to hide default widget banner and tooltips */
+iframe.goog-te-banner-frame {
+  display: none !important;
+}
+
+.goog-te-balloon-frame {
+  display: none !important;
+}
+
+.skiptranslate {
+  display: none !important;
+}
+
+body {
+  top: 0px !important;
+}
+
+font {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+#google_translate_element {
+  display: none !important;
+}
+

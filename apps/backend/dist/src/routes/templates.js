@@ -290,7 +290,7 @@ router.post('/optimize-seo', async (req, res) => {
         return;
     }
     try {
-        const optimized = await (0, aiGenerate_1.optimizeSeoContent)(title, slug || '', metaDescription || '', content, focusKeyword.trim());
+        const optimized = await (0, aiGenerate_1.optimizeSeoContent)(title, slug || '', metaDescription || '', content, focusKeyword.trim(), req.workspaceId);
         res.json({
             ...optimized,
             isDemo: !process.env.OPENAI_API_KEY

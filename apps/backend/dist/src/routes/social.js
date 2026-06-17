@@ -9,6 +9,8 @@ const crypto_1 = __importDefault(require("crypto"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const facebookPost_1 = require("../lib/facebookPost");
 const facebookConnect_1 = require("../services/facebookConnect");
+const auth_1 = require("../middleware/auth");
+const dispatch_1 = require("../lib/dispatch");
 const router = (0, express_1.Router)();
 /** Safe accessor — trả về workspaceId hoặc throw lỗi 400 nếu thiếu */
 function requireWorkspaceId(req, res) {
@@ -820,6 +822,86 @@ router.post('/tiktok/bind-page', async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: 'Lỗi máy chủ' });
+    }
+});
+// ==================== ĐĂNG BÀI MỘT CHẠM (ONE-CLICK AUTO-PUBLISHING) ====================
+router.post('/publish-now', auth_1.requireWrite, async (req, res) => {
+    try {
+        const { platform, connectionId, title, content, imageUrl, urlTarget } = req.body;
+        if (!platform) {
+            res.status(400).json({ error: 'Nền tảng đăng bài là bắt buộc' });
+            return;
+        }
+        if (!content) {
+            res.status(400).json({ error: 'Nội dung đăng bài là bắt buộc' });
+            return;
+        }
+        const workspaceId = req.workspaceId;
+        if (!workspaceId) {
+            res.status(400).json({ error: 'Không xác định được Workspace' });
+            return;
+        }
+        const connId = connectionId ? parseInt(String(connectionId), 10) : undefined;
+        // Lấy thông tin connection (để ghi log/pageName)
+        let pageName = '';
+        if (connId) {
+            const conn = await prisma_1.default.socialConnection.findUnique({
+                where: { id: connId, workspaceId }
+            });
+            if (conn) {
+                pageName = conn.pageName || '';
+            }
+        }
+        else {
+            const conn = await prisma_1.default.socialConnection.findFirst({
+                where: { platform: platform.trim().toLowerCase(), workspaceId, status: 'CONNECTED' }
+            });
+            if (conn) {
+                pageName = conn.pageName || '';
+            }
+        }
+        const result = await (0, dispatch_1.dispatchToPlatform)(platform, {
+            title: title || 'Bài viết mới',
+            content,
+            imageUrl,
+            urlTarget,
+            connectionId: connId,
+            workspaceId,
+        });
+        const at = new Date();
+        const channelResults = [
+            {
+                platform: pageName ? `${platform} (${pageName})` : platform,
+                success: result.success,
+                message: result.message,
+                at: at.toISOString(),
+            }
+        ];
+        // Tạo bản ghi ContentSchedule để lưu lịch sử bài đăng
+        await prisma_1.default.contentSchedule.create({
+            data: {
+                title: title || 'Bài viết đăng ngay',
+                content,
+                imageUrl: imageUrl || null,
+                platforms: platform,
+                targetConnectionsJson: connId ? JSON.stringify([{ connectionId: connId, platform, pageName }]) : null,
+                urlTarget: urlTarget || null,
+                scheduledAt: at,
+                publishedAt: result.success ? at : null,
+                status: result.success ? 'PUBLISHED' : 'FAILED',
+                errorMessage: result.success ? null : result.message,
+                channelResults: JSON.stringify(channelResults),
+                workspaceId,
+            }
+        });
+        if (!result.success) {
+            res.status(400).json({ success: false, error: result.message });
+            return;
+        }
+        res.json({ success: true, message: result.message });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi đăng bài trực tiếp' });
     }
 });
 exports.default = router;

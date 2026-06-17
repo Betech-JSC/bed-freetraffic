@@ -1,9 +1,18 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useLocale } from '@/context/LocaleContext';
-import { apiJson } from '@/lib/api';
+import { apiFetch, apiJson } from '@/lib/api';
+
+interface Connection {
+  id: number;
+  platform: string;
+  pageName: string | null;
+  pageId: string | null;
+  status: string;
+}
 
 interface CopilotPlanItem {
   day: string;
@@ -68,6 +77,64 @@ export default function CopilotPage() {
   const [autoWatermark, setAutoWatermark] = useState(false);
   const [watermarkText, setWatermarkText] = useState('');
   const [useKnowledgeBase, setUseKnowledgeBase] = useState(true);
+
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [publishingIndex, setPublishingIndex] = useState<number | null>(null);
+  const [selectedConnId, setSelectedConnId] = useState<number | null>(null);
+
+  useEffect(() => {
+    apiFetch('/social')
+      .then(res => {
+        if (res.ok) return res.json();
+        return [];
+      })
+      .then(data => {
+        setConnections(data.filter((c: any) => c.status === 'CONNECTED'));
+      })
+      .catch(err => console.error('Lỗi khi tải danh sách liên kết:', err));
+  }, []);
+
+  const handlePublishNow = async (index: number, connectionId: number) => {
+    const item = plan[index];
+    setPublishingIndex(index);
+    setSelectedConnId(connectionId);
+    setMessage(null);
+
+    const platform = item.platform.toLowerCase();
+    
+    try {
+      const res = await apiJson<{ success: boolean; message: string }>('/social/publish-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform,
+          connectionId,
+          title: item.title,
+          content: item.content,
+          imageUrl: item.imageUrl || null,
+          urlTarget: urlTarget.trim() || undefined,
+        }),
+      });
+
+      if (res.success) {
+        setMessage({
+          type: 'success',
+          text: `Đăng lên ${platform === 'facebook' ? 'Fanpage' : 'Zalo OA'} thành công!`,
+        });
+      } else {
+        throw new Error(res.message || 'Đăng bài thất bại.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessage({
+        type: 'error',
+        text: err?.message || 'Có lỗi xảy ra khi đăng bài nhanh.',
+      });
+    } finally {
+      setPublishingIndex(null);
+      setSelectedConnId(null);
+    }
+  };
 
   const handleCardChange = React.useCallback((index: number, field: keyof CopilotPlanItem, value: any) => {
     setPlan(prev => {
@@ -703,6 +770,41 @@ export default function CopilotPage() {
                                 className="w-full bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-brand focus:outline-none rounded-xl px-3 py-2.5 text-sm text-slate-700 transition-all font-mono leading-relaxed resize-y shadow-inner"
                               />
                             </div>
+
+                            {/* Publish Now Actions */}
+                            {['facebook', 'zalo'].includes(item.platform.toLowerCase()) && (
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pt-3 border-t border-slate-100">
+                                <span className="text-[10px] font-bold text-slate-450 uppercase">Đăng bài một chạm:</span>
+                                {connections.filter(c => c.platform === item.platform.toLowerCase()).length > 0 ? (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {connections
+                                      .filter(c => c.platform === item.platform.toLowerCase())
+                                      .map(conn => (
+                                        <button
+                                          key={conn.id}
+                                          type="button"
+                                          onClick={() => handlePublishNow(index, conn.id)}
+                                          disabled={publishingIndex === index}
+                                          className="px-2.5 py-1 rounded bg-brand/10 border border-brand/20 hover:bg-brand/20 text-brand text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                          {publishingIndex === index && selectedConnId === conn.id ? (
+                                            <>
+                                              <span className="w-3 h-3 border border-brand border-t-transparent rounded-full animate-spin" />
+                                              Đang đăng...
+                                            </>
+                                          ) : (
+                                            `Đăng lên ${conn.pageName || conn.platform}`
+                                          )}
+                                        </button>
+                                      ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-slate-505 italic">
+                                    Chưa có kết nối {item.platform === 'facebook' ? 'Fanpage' : 'Zalo OA'} hoạt động. <Link href="/dashboard/settings" className="text-brand hover:underline font-semibold">Kết nối ngay</Link>
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -809,6 +911,39 @@ export default function CopilotPage() {
                         </div>
 
                         <div className="space-y-2 mt-2 pt-3 border-t border-slate-100">
+                          {['facebook', 'zalo'].includes(item.platform.toLowerCase()) && (
+                            <div className="flex flex-col gap-1 pb-2 border-b border-slate-100/60 mb-2">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase">Đăng bài một chạm:</span>
+                              {connections.filter(c => c.platform === item.platform.toLowerCase()).length > 0 ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {connections
+                                    .filter(c => c.platform === item.platform.toLowerCase())
+                                    .map(conn => (
+                                      <button
+                                        key={conn.id}
+                                        type="button"
+                                        onClick={() => handlePublishNow(index, conn.id)}
+                                        disabled={publishingIndex === index}
+                                        className="px-2 py-0.5 rounded bg-brand/10 border border-brand/20 hover:bg-brand/20 text-brand text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                      >
+                                        {publishingIndex === index && selectedConnId === conn.id ? (
+                                          <>
+                                            <span className="w-2.5 h-2.5 border border-brand border-t-transparent rounded-full animate-spin" />
+                                            Đang đăng...
+                                          </>
+                                        ) : (
+                                          `Đăng lên ${conn.pageName || conn.platform}`
+                                        )}
+                                      </button>
+                                    ))}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-550 italic">
+                                  Chưa có kết nối {item.platform === 'facebook' ? 'Fanpage' : 'Zalo OA'} hoạt động. <Link href="/dashboard/settings" className="text-brand hover:underline font-semibold">Kết nối ngay</Link>
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex flex-col gap-1">
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Ngày giờ xuất bản:</span>
                             <input

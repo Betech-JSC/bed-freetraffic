@@ -76,8 +76,13 @@ export default function SettingsPage() {
     lastSyncAt?: string;
     syncStatus?: string;
     oauthAvailable?: boolean;
+    syncError?: string;
+    ga4PropertyId?: string;
+    gscSiteUrl?: string;
   } | null>(null);
   const [googleSyncMsg, setGoogleSyncMsg] = useState('');
+  const [ga4PropId, setGa4PropId] = useState('');
+  const [gscUrl, setGscUrl] = useState('');
 
   const fetchFbBotStatus = useCallback(async () => {
     try {
@@ -100,11 +105,29 @@ export default function SettingsPage() {
 
   const fetchGoogle = useCallback(async () => {
     try {
-      setGoogleStatus(await apiJson('/google/status'));
+      const data = await apiJson<{
+        connected: boolean;
+        ga4PropertyId?: string;
+        gscSiteUrl?: string;
+        lastSyncAt?: string;
+        syncStatus?: string;
+        oauthAvailable?: boolean;
+        syncError?: string;
+      }>('/google/status');
+      setGoogleStatus(data);
+      if (data) {
+        setGa4PropId(data.ga4PropertyId || '');
+        setGscUrl(data.gscSiteUrl || '');
+        if (data.syncError) {
+          setGoogleSyncMsg(`${t('Lỗi')}: ${data.syncError}`);
+        } else {
+          setGoogleSyncMsg('');
+        }
+      }
     } catch {
       setGoogleStatus(null);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     setTimeout(() => {
@@ -126,6 +149,22 @@ export default function SettingsPage() {
     const r = await apiJson<{ success: boolean; message: string }>('/google/sync', { method: 'POST' });
     setGoogleSyncMsg(r.message);
     fetchGoogle();
+  };
+
+  const saveGoogleConfig = async () => {
+    setGoogleSyncMsg(t('Đang lưu cấu hình...'));
+    try {
+      await apiJson('/google/config', {
+        method: 'PATCH',
+        body: JSON.stringify({ ga4PropertyId: ga4PropId, gscSiteUrl: gscUrl })
+      });
+      setGoogleSyncMsg(t('Đã lưu cấu hình! Đang đồng bộ dữ liệu...'));
+      const r = await apiJson<{ success: boolean; message: string }>('/google/sync', { method: 'POST' });
+      setGoogleSyncMsg(r.message);
+      fetchGoogle();
+    } catch (err: any) {
+      setGoogleSyncMsg(err.message || t('Lỗi cấu hình'));
+    }
   };
 
   const disconnectGoogle = async () => {
@@ -458,10 +497,12 @@ export default function SettingsPage() {
 
       <div className="card p-6 border-2 border-violet-100">
         <h2 className="font-bold text-slate-900 mb-2">Google Analytics &amp; Search Console</h2>
-        <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex flex-wrap gap-3 items-center mb-4">
           <span
-            className={`text-xs font-semibold px-2 py-1 rounded-full ${
-              googleStatus?.connected ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'
+            className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+              googleStatus?.connected 
+                ? (googleStatus?.syncStatus === 'CONNECTED' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700') 
+                : 'bg-slate-100 text-slate-600'
             }`}
           >
             {googleStatus?.syncStatus || 'DISCONNECTED'}
@@ -474,28 +515,82 @@ export default function SettingsPage() {
           {googleStatus?.oauthAvailable && (
             <button 
               type="button" 
-              className={googleStatus?.connected ? "btn-secondary text-sm" : "btn-primary text-sm"} 
+              className={googleStatus?.connected ? "btn-secondary text-xs px-3 py-1.5" : "btn-primary text-sm"} 
               onClick={connectGoogle}
             >
               {googleStatus?.connected ? t('Kết nối lại (Đổi tài khoản)') : t('Kết nối Google OAuth')}
             </button>
           )}
           {googleStatus?.connected && (
-            <>
-              <button type="button" className="btn-secondary text-sm" onClick={syncGoogle}>
-                {t('Đồng bộ ngay')}
+            <button 
+              type="button" 
+              className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors cursor-pointer" 
+              onClick={disconnectGoogle}
+            >
+              {t('Ngắt kết nối')}
+            </button>
+          )}
+        </div>
+
+        {googleStatus?.connected && (
+          <div className="mt-4 border-t border-slate-100 pt-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  GA4 Property ID
+                </label>
+                <input
+                  type="text"
+                  value={ga4PropId}
+                  onChange={(e) => setGa4PropId(e.target.value)}
+                  placeholder="e.g. 539718603"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-brand/40"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {t('ID tài sản Google Analytics 4 (chuỗi số từ trang quản trị GA4)')}
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">
+                  Search Console Site URL
+                </label>
+                <input
+                  type="text"
+                  value={gscUrl}
+                  onChange={(e) => setGscUrl(e.target.value)}
+                  placeholder="e.g. https://yourwebsite.com/ or sc-domain:yourwebsite.com"
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-brand/40"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {t('Đường dẫn website đã xác thực trong Google Search Console')}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2.5">
+              <button 
+                type="button" 
+                className="btn-primary text-xs px-3.5 py-2 cursor-pointer" 
+                onClick={saveGoogleConfig}
+              >
+                {t('Lưu & Đồng bộ dữ liệu')}
               </button>
               <button 
                 type="button" 
-                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors" 
-                onClick={disconnectGoogle}
+                className="btn-secondary text-xs px-3.5 py-2 cursor-pointer" 
+                onClick={syncGoogle}
               >
-                {t('Ngắt kết nối')}
+                {t('Chỉ đồng bộ ngay')}
               </button>
-            </>
-          )}
-        </div>
-        {googleSyncMsg && <p className="text-sm text-slate-600 mt-3">{googleSyncMsg}</p>}
+            </div>
+          </div>
+        )}
+
+        {googleSyncMsg && (
+          <div className="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs text-slate-700">
+            {googleSyncMsg}
+          </div>
+        )}
       </div>
 
       <FacebookConnectCard connection={fbConn} onConnectionChange={fetchConnections} />

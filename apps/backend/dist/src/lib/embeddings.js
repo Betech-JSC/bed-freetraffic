@@ -88,7 +88,7 @@ const MAX_CACHE_SIZE = 1000;
  * @param text Content to embed.
  * @returns Embeddings vector.
  */
-async function getEmbedding(text, allowFallback = true) {
+async function getEmbedding(text, allowFallback = true, workspaceId) {
     const cacheKey = text.trim();
     if (embeddingCache.has(cacheKey)) {
         console.log('[Embedding Cache] Hit for:', cacheKey.slice(0, 40));
@@ -106,12 +106,12 @@ async function getEmbedding(text, allowFallback = true) {
             if (ai.model === 'gemini-embedding-001' || ai.model === 'text-embedding-3-small') {
                 requestBody.dimensions = 1536;
             }
-            const res = await fetch(ai.url, {
+            const res = await (0, ai_1.fetchWithRetry)(ai.url, {
                 method: 'POST',
                 headers: ai.headers,
                 body: JSON.stringify(requestBody),
                 signal: AbortSignal.timeout(10000),
-            });
+            }, 2, 1200, workspaceId, 'rag_embedding');
             if (res.ok) {
                 const json = await res.json();
                 if (json.data && json.data[0] && json.data[0].embedding) {

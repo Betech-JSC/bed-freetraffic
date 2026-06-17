@@ -1,13 +1,18 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getAiConfig = getAiConfig;
+exports.parseAiJson = parseAiJson;
+exports.logAiUsage = logAiUsage;
+exports.fetchWithRetry = fetchWithRetry;
 /**
  * AI Service Utilities for Growth OS.
  * Handles API URL configuration, robust JSON parsing, and retry mechanics for LLM providers
  * (OpenAI, DeepSeek, Google Gemini, OpenRouter).
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAiConfig = getAiConfig;
-exports.parseAiJson = parseAiJson;
-exports.fetchWithRetry = fetchWithRetry;
+const prisma_1 = __importDefault(require("./prisma"));
 /**
  * Resolves the AI endpoint configuration based on environment variables and keys.
  *
@@ -159,7 +164,24 @@ function parseAiJson(text) {
  * @param delayMs Delay before retrying in milliseconds, defaults to 1200ms.
  * @returns Fetch Response object.
  */
-async function fetchWithRetry(url, init, retries = 2, delayMs = 1200) {
+async function logAiUsage({ model, promptTokens, completionTokens, totalTokens, feature, workspaceId }) {
+    try {
+        await prisma_1.default.aiUsage.create({
+            data: {
+                model,
+                promptTokens,
+                completionTokens,
+                totalTokens,
+                feature: feature || 'unknown',
+                workspaceId
+            }
+        });
+    }
+    catch (err) {
+        console.error('[AI USAGE LOG ERROR]', err);
+    }
+}
+async function fetchWithRetry(url, init, retries = 2, delayMs = 1200, workspaceId, feature) {
     let lastRes = null;
     for (let i = 0; i <= retries; i++) {
         try {
@@ -171,6 +193,53 @@ async function fetchWithRetry(url, init, retries = 2, delayMs = 1200) {
                 console.warn(`⚠️ [AI API ${res.status}] ${res.status === 429 ? 'Rate limited' : 'Model quá tải'}. Đang thử lại lần ${i + 1}/${retries} sau ${retryDelay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, retryDelay));
                 continue;
+            }
+            if (res.ok) {
+                const cloned = res.clone();
+                cloned.json().then(async (data) => {
+                    try {
+                        const usage = data.usage;
+                        let modelName = data.model;
+                        if (!modelName && init.body) {
+                            try {
+                                modelName = JSON.parse(init.body).model;
+                            }
+                            catch { }
+                        }
+                        if (!modelName)
+                            modelName = 'unknown-model';
+                        if (usage) {
+                            const promptTokens = usage.prompt_tokens || 0;
+                            const completionTokens = usage.completion_tokens || 0;
+                            const totalTokens = usage.total_tokens || 0;
+                            let wsId = workspaceId;
+                            let feat = feature;
+                            // Fallback to headers
+                            if (!wsId && init.headers) {
+                                const headersObj = new Headers(init.headers);
+                                const hWsId = headersObj.get('x-workspace-id');
+                                if (hWsId)
+                                    wsId = parseInt(hWsId, 10);
+                                const hFeat = headersObj.get('x-feature');
+                                if (hFeat)
+                                    feat = hFeat;
+                            }
+                            await logAiUsage({
+                                model: modelName,
+                                promptTokens,
+                                completionTokens,
+                                totalTokens,
+                                feature: feat || 'unknown',
+                                workspaceId: wsId,
+                            });
+                        }
+                    }
+                    catch (err) {
+                        console.error('Error logging AI usage in fetchWithRetry:', err);
+                    }
+                }).catch(() => {
+                    // ignore if response wasn't JSON
+                });
             }
             return res;
         }

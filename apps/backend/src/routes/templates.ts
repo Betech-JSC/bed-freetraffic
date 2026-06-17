@@ -310,7 +310,8 @@ router.post('/optimize-seo', async (req: AuthRequest, res: Response): Promise<vo
       slug || '',
       metaDescription || '',
       content,
-      focusKeyword.trim()
+      focusKeyword.trim(),
+      req.workspaceId
     );
     res.json({
       ...optimized,
