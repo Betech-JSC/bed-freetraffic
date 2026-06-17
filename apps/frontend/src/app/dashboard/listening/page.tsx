@@ -94,7 +94,6 @@ export default function SocialListeningPage() {
   const [detectSuccess, setDetectSuccess] = useState('');
 
   // Telegram System Bot & Recent Chats
-  const [systemBotInfo, setSystemBotInfo] = useState<{ systemBotEnabled: boolean; systemBotUsername?: string } | null>(null);
   const [recentChats, setRecentChats] = useState<Array<{ chatId: string; chatTitle: string; chatType: string }>>([]);
   const [loadingRecentChats, setLoadingRecentChats] = useState(false);
   const [showRecentChatsList, setShowRecentChatsList] = useState(false);
@@ -157,15 +156,6 @@ export default function SocialListeningPage() {
   };
 
   useEffect(() => {
-    const fetchSystemBotInfo = async () => {
-      try {
-        const info = await apiJson<any>('/listening/telegram/bot-info');
-        setSystemBotInfo(info);
-      } catch (err) {
-        console.warn('Failed to load system bot info', err);
-      }
-    };
-
     const fetchWorkspaceTelegramConn = async () => {
       try {
         const conns = await apiJson<any[]>('/social');
@@ -183,7 +173,6 @@ export default function SocialListeningPage() {
 
     loadCampaigns();
     loadLogs();
-    fetchSystemBotInfo();
     fetchWorkspaceTelegramConn();
   }, []);
 
@@ -1121,43 +1110,9 @@ export default function SocialListeningPage() {
                     </div>
                   )}
 
-                  {/* 1. System Bot Option (if configured in backend) */}
-                  {systemBotInfo && systemBotInfo.systemBotEnabled ? (
-                    <div className="space-y-3 bg-white p-3.5 rounded-xl border border-orange-100/30">
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <span className="text-xs font-bold text-slate-700 block">🤖 Sử dụng Bot Be Traffic (Khuyên dùng)</span>
-                          <span className="text-[10px] text-slate-400 block">
-                            Nhận thông báo qua Bot hệ thống: <a href={`https://t.me/${systemBotInfo.systemBotUsername}`} target="_blank" rel="noreferrer" className="text-brand font-bold underline">@{systemBotInfo.systemBotUsername}</a>
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={loadingRecentChats}
-                          onClick={() => {
-                            setFormState(prev => ({ ...prev, telegramBotToken: '' })); // Clear custom bot to use system bot
-                            handleFetchRecentChats(true);
-                          }}
-                          className="btn-primary whitespace-nowrap text-[10px] px-3 py-1.5 rounded-lg font-bold flex items-center justify-center gap-1 cursor-pointer"
-                        >
-                          {loadingRecentChats ? (
-                            <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
-                          ) : 'Quét Chat' }
-                        </button>
-                      </div>
-                      <p className="text-[9px] text-slate-400">
-                        *Cách hoạt động: Click link <a href={`https://t.me/${systemBotInfo.systemBotUsername}`} target="_blank" rel="noreferrer" className="text-brand underline">@{systemBotInfo.systemBotUsername}</a> → Bấm <b>Start</b> → Quay lại đây nhấn <b>Quét Chat</b> để chọn tên bạn.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="p-3.5 bg-slate-50 border border-slate-200/60 rounded-xl text-[10px] text-slate-500 leading-normal">
-                      ℹ️ Để sử dụng phương thức 1-click bằng Bot hệ thống, vui lòng cấu hình biến <code>TELEGRAM_BOT_TOKEN</code> trong file <code>.env</code> trên máy chủ.
-                    </div>
-                  )}
-
-                  {/* 2. Custom Bot Option */}
+                  {/* Custom Bot Option */}
                   <div className="space-y-3 border-t border-slate-100 pt-3">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Hoặc sử dụng Telegram Bot riêng của bạn</p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">Sử dụng Telegram Bot riêng cho chiến dịch này (Tùy chọn)</p>
                     
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-1">
