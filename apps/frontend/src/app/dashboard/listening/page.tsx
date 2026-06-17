@@ -307,16 +307,22 @@ export default function SocialListeningPage() {
     setError('');
     setSuccess('');
     try {
+      const payload = {
+        ...formState,
+        autopilotDelayMin: formState.autopilotDelayMin || 3,
+        autopilotDelayMax: formState.autopilotDelayMax || 7,
+      };
+
       if (editingCampaign) {
         await apiJson(`/listening/campaigns/${editingCampaign.id}`, {
           method: 'PUT',
-          body: JSON.stringify(formState),
+          body: JSON.stringify(payload),
         });
         setSuccess('Cập nhật chiến dịch thành công.');
       } else {
         await apiJson('/listening/campaigns', {
           method: 'POST',
-          body: JSON.stringify(formState),
+          body: JSON.stringify(payload),
         });
         setSuccess('Tạo chiến dịch lắng nghe mới thành công.');
       }
@@ -1324,8 +1330,11 @@ export default function SocialListeningPage() {
                         max={120}
                         required
                         className="input w-full bg-white py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200"
-                        value={formState.autopilotDelayMin}
-                        onChange={(e) => setFormState(prev => ({ ...prev, autopilotDelayMin: Math.max(1, parseInt(e.target.value, 10)) }))}
+                        value={formState.autopilotDelayMin || ''}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setFormState(prev => ({ ...prev, autopilotDelayMin: isNaN(val) ? 0 : val }));
+                        }}
                       />
                     </div>
                     <div className="space-y-2.5">
@@ -1336,8 +1345,11 @@ export default function SocialListeningPage() {
                         max={120}
                         required
                         className="input w-full bg-white py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200"
-                        value={formState.autopilotDelayMax}
-                        onChange={(e) => setFormState(prev => ({ ...prev, autopilotDelayMax: Math.max(1, parseInt(e.target.value, 10)) }))}
+                        value={formState.autopilotDelayMax || ''}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setFormState(prev => ({ ...prev, autopilotDelayMax: isNaN(val) ? 0 : val }));
+                        }}
                       />
                     </div>
                   </div>
