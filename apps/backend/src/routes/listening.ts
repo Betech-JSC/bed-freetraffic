@@ -7,22 +7,15 @@ import { normalizeCookie } from '../services/socialListeningScraper';
 const router = Router();
 router.use(authenticate);
 
-/**
- * GET /api/listening/campaigns
- * Retrieves all social listening campaigns under the active workspace
- */
 router.get('/campaigns', async (req: AuthRequest, res: Response): Promise<void> => {
   const campaigns = await prisma.socialListeningCampaign.findMany({
     where: { workspaceId: req.workspaceId },
+    include: { knowledgeSources: true },
     orderBy: { createdAt: 'desc' },
   });
   res.json(campaigns);
 });
 
-/**
- * POST /api/listening/campaigns
- * Creates a new social listening campaign
- */
 router.post('/campaigns', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
   const {
     name,
@@ -39,7 +32,12 @@ router.post('/campaigns', requireWrite, async (req: AuthRequest, res: Response):
     enableSemanticFilter,
     semanticThreshold,
     targetAudience,
-    scrapeComments
+    scrapeComments,
+    autopilot,
+    autopilotDelayMin,
+    autopilotDelayMax,
+    maxPostAgeHours,
+    knowledgeSourceIds
   } = req.body;
 
   if (!name || !keywords || !groupUrls) {
@@ -74,7 +72,15 @@ router.post('/campaigns', requireWrite, async (req: AuthRequest, res: Response):
       semanticThreshold: semanticThreshold !== undefined ? parseFloat(semanticThreshold as string) : 0.70,
       targetAudience: targetAudience || null,
       scrapeComments: scrapeComments === true,
+      autopilot: autopilot === true,
+      autopilotDelayMin: autopilotDelayMin ? parseInt(autopilotDelayMin as string, 10) : 3,
+      autopilotDelayMax: autopilotDelayMax ? parseInt(autopilotDelayMax as string, 10) : 7,
+      maxPostAgeHours: maxPostAgeHours ? parseInt(maxPostAgeHours as string, 10) : 0,
+      knowledgeSources: knowledgeSourceIds && Array.isArray(knowledgeSourceIds) ? {
+        connect: knowledgeSourceIds.map((id: number) => ({ id }))
+      } : undefined
     },
+    include: { knowledgeSources: true }
   });
 
   res.status(201).json(campaign);
@@ -111,7 +117,12 @@ router.put('/campaigns/:id', requireWrite, async (req: AuthRequest, res: Respons
     enableSemanticFilter,
     semanticThreshold,
     targetAudience,
-    scrapeComments
+    scrapeComments,
+    autopilot,
+    autopilotDelayMin,
+    autopilotDelayMax,
+    maxPostAgeHours,
+    knowledgeSourceIds
   } = req.body;
 
   let cookieStatus = existing.cookieStatus;
@@ -152,7 +163,15 @@ router.put('/campaigns/:id', requireWrite, async (req: AuthRequest, res: Respons
       semanticThreshold: semanticThreshold === undefined ? existing.semanticThreshold : parseFloat(semanticThreshold as string),
       targetAudience: targetAudience === undefined ? existing.targetAudience : (targetAudience || null),
       scrapeComments: scrapeComments === undefined ? existing.scrapeComments : (scrapeComments === true),
+      autopilot: autopilot === undefined ? existing.autopilot : (autopilot === true),
+      autopilotDelayMin: autopilotDelayMin === undefined ? existing.autopilotDelayMin : parseInt(autopilotDelayMin as string, 10),
+      autopilotDelayMax: autopilotDelayMax === undefined ? existing.autopilotDelayMax : parseInt(autopilotDelayMax as string, 10),
+      maxPostAgeHours: maxPostAgeHours === undefined ? existing.maxPostAgeHours : parseInt(maxPostAgeHours as string, 10),
+      knowledgeSources: knowledgeSourceIds && Array.isArray(knowledgeSourceIds) ? {
+        set: knowledgeSourceIds.map((id: number) => ({ id }))
+      } : undefined
     },
+    include: { knowledgeSources: true }
   });
 
   res.json(campaign);
@@ -194,7 +213,7 @@ router.get('/logs', async (req: AuthRequest, res: Response): Promise<void> => {
   const logs = campaignIds.length > 0
     ? await prisma.socialListeningLog.findMany({
         where: { campaignId: { in: campaignIds } },
-        include: { campaign: { select: { name: true } } },
+        include: { campaign: { select: { name: true, autopilot: true } } },
         orderBy: { createdAt: 'desc' },
         take: 200,
       })
@@ -555,6 +574,105 @@ router.post('/logs/:id/convert-to-customer', requireWrite, async (req: AuthReque
   } catch (err: any) {
     console.error('Failed to convert log to customer:', err);
     res.status(500).json({ error: err.message || 'Lỗi hệ thống khi lưu khách hàng vào CRM.' });
+  }
+});
+
+/**
+ * POST /api/listening/logs/:id/toggle-autopilot
+ * Toggles (cancels or reactivates) autopilot for a specific log/lead
+ */
+router.post('/logs/:id/toggle-autopilot', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+  const logId = parseInt(req.params.id as string, 10);
+  const { cancel } = req.body;
+
+  const log = await prisma.socialListeningLog.findFirst({
+    where: { id: logId, campaign: { workspaceId: req.workspaceId } },
+  });
+
+  if (!log) {
+    res.status(404).json({ error: 'Không tìm thấy nhật ký bài viết này.' });
+    return;
+  }
+
+  try {
+    const updated = await prisma.socialListeningLog.update({
+      where: { id: logId },
+      data: {
+        autopilotCancelled: cancel === true
+      }
+    });
+
+    res.json({
+      success: true,
+      autopilotCancelled: updated.autopilotCancelled,
+      message: updated.autopilotCancelled 
+        ? 'Đã hủy tự động phản hồi (Autopilot) cho bài viết này.' 
+        : 'Đã kích hoạt lại tự động phản hồi (Autopilot) cho bài viết này.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Lỗi hệ thống khi cập nhật trạng thái Autopilot.' });
+  }
+});
+
+/**
+ * POST /api/listening/logs/:id/reply
+ * Posts a simulated Facebook comment reply using the campaign's cookie
+ */
+router.post('/logs/:id/reply', requireWrite, async (req: AuthRequest, res: Response): Promise<void> => {
+  const logId = parseInt(req.params.id as string, 10);
+  const { replyText } = req.body;
+
+  if (!replyText || !replyText.trim()) {
+    res.status(400).json({ error: 'Nội dung phản hồi không được để trống.' });
+    return;
+  }
+
+  const log = await prisma.socialListeningLog.findFirst({
+    where: { id: logId, campaign: { workspaceId: req.workspaceId } },
+    include: { campaign: true }
+  });
+
+  if (!log) {
+    res.status(404).json({ error: 'Không tìm thấy nhật ký bài viết này.' });
+    return;
+  }
+
+  const cookie = log.campaign.facebookCookie;
+  if (!cookie) {
+    res.status(400).json({ error: 'Chiến dịch này chưa được cấu hình Facebook Cookie để gửi bình luận.' });
+    return;
+  }
+
+  try {
+    const { postFacebookComment } = await import('../services/facebookReply');
+    // If it is a comment, pass log.commentId, otherwise pass null
+    const success = await postFacebookComment(cookie, log.postUrl, replyText, log.isComment ? log.commentId : null);
+    
+    if (success) {
+      await prisma.socialListeningLog.update({
+        where: { id: logId },
+        data: {
+          repliedContent: replyText,
+          repliedAt: new Date(),
+          status: 'NOTIFIED' // Mark as notified/replied
+        }
+      });
+      res.json({ success: true, message: 'Đã gửi bình luận phản hồi thành công lên Facebook!' });
+    } else {
+      res.status(500).json({ error: 'Gửi bình luận phản hồi thất bại.' });
+    }
+  } catch (err: any) {
+    console.error('❌ Failed to post Facebook reply comment:', err);
+    if (err.message === 'COOKIE_EXPIRED') {
+      // Mark campaign cookie as EXPIRED
+      await prisma.socialListeningCampaign.update({
+        where: { id: log.campaignId },
+        data: { cookieStatus: 'EXPIRED' }
+      });
+      res.status(400).json({ error: 'Cookie Facebook đã hết hạn. Vui lòng kết nối lại tài khoản Facebook trong trang cấu hình chiến dịch.' });
+    } else {
+      res.status(500).json({ error: err.message || 'Lỗi khi gửi bình luận lên Facebook.' });
+    }
   }
 });
 

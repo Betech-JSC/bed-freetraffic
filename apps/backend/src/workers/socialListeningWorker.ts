@@ -122,6 +122,19 @@ export async function executeCampaignScan(campaignId: number): Promise<{ success
       }
 
       for (const post of posts) {
+        // Filter by maxPostAgeHours if set (greater than 0)
+        if (campaign.maxPostAgeHours && campaign.maxPostAgeHours > 0) {
+          const maxAgeMs = campaign.maxPostAgeHours * 60 * 60 * 1000;
+          const postTimeMs = post.creationTime
+            ? post.creationTime * 1000
+            : post.createdAtText ? new Date(post.createdAtText).getTime() : null;
+
+          if (postTimeMs && (Date.now() - postTimeMs > maxAgeMs)) {
+            console.log(`[Social Listening] Post ${post.postId} ignored: age (${Math.round((Date.now() - postTimeMs) / 3600000)}h) exceeds limit of ${campaign.maxPostAgeHours} hours.`);
+            continue;
+          }
+        }
+
         // ----------------------------------------------------
         // A. PROCESS MAIN POST
         // ----------------------------------------------------
@@ -229,6 +242,50 @@ export async function executeCampaignScan(campaignId: number): Promise<{ success
                 where: { id: log.id },
                 data: { status: 'ERROR', errorMessage: teleErr.message },
               });
+            }
+
+            // Autopilot comment reply trigger for post
+            if (campaign.autopilot && aiResult.draftMsg) {
+              const minDelay = campaign.autopilotDelayMin || 3;
+              const maxDelay = campaign.autopilotDelayMax || 7;
+              const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay) * 60;
+              console.log(`[Social Listening Autopilot] Scheduling comment reply for post ${post.postUrl} in ${delaySeconds} seconds...`);
+              
+              setTimeout(async () => {
+                try {
+                  // Fetch the latest state of the log to ensure it wasn't cancelled
+                  const currentLog = await prisma.socialListeningLog.findUnique({
+                    where: { id: log.id }
+                  });
+
+                  if (!currentLog || currentLog.autopilotCancelled || currentLog.repliedContent) {
+                    console.log(`[Social Listening Autopilot] Comment reply skipped for log #${log.id} (cancelled or already replied)`);
+                    return;
+                  }
+
+                  const { postFacebookComment } = await import('../services/facebookReply');
+                  if (campaign.facebookCookie) {
+                    const success = await postFacebookComment(
+                      campaign.facebookCookie,
+                      post.postUrl,
+                      aiResult.draftMsg
+                    );
+                    if (success) {
+                      await prisma.socialListeningLog.update({
+                        where: { id: log.id },
+                        data: {
+                          repliedContent: aiResult.draftMsg,
+                          repliedAt: new Date(),
+                          status: 'NOTIFIED'
+                        }
+                      });
+                      console.log(`[Social Listening Autopilot] Comment reply sent successfully for log #${log.id}`);
+                    }
+                  }
+                } catch (autoErr: any) {
+                  console.error(`❌ [Social Listening Autopilot Error] Failed to send comment reply for log #${log.id}:`, autoErr.message);
+                }
+              }, delaySeconds * 1000);
             }
           } else {
             // Qualification is COLD, SPAM or below minScore threshold, mark ignored
@@ -353,6 +410,51 @@ export async function executeCampaignScan(campaignId: number): Promise<{ success
                     where: { id: log.id },
                     data: { status: 'ERROR', errorMessage: teleErr.message },
                   });
+                }
+
+                // Autopilot comment reply trigger for comment
+                if (campaign.autopilot && aiResult.draftMsg) {
+                  const minDelay = campaign.autopilotDelayMin || 3;
+                  const maxDelay = campaign.autopilotDelayMax || 7;
+                  const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay) * 60;
+                  console.log(`[Social Listening Autopilot] Scheduling reply for comment ${comment.commentId} in ${delaySeconds} seconds...`);
+                  
+                  setTimeout(async () => {
+                    try {
+                      // Fetch the latest state of the log to ensure it wasn't cancelled
+                      const currentLog = await prisma.socialListeningLog.findUnique({
+                        where: { id: log.id }
+                      });
+
+                      if (!currentLog || currentLog.autopilotCancelled || currentLog.repliedContent) {
+                        console.log(`[Social Listening Autopilot] Comment reply skipped for comment log #${log.id} (cancelled or already replied)`);
+                        return;
+                      }
+
+                      const { postFacebookComment } = await import('../services/facebookReply');
+                      if (campaign.facebookCookie) {
+                        const success = await postFacebookComment(
+                          campaign.facebookCookie,
+                          post.postUrl,
+                          aiResult.draftMsg,
+                          comment.commentId
+                        );
+                        if (success) {
+                          await prisma.socialListeningLog.update({
+                            where: { id: log.id },
+                            data: {
+                              repliedContent: aiResult.draftMsg,
+                              repliedAt: new Date(),
+                              status: 'NOTIFIED'
+                            }
+                          });
+                          console.log(`[Social Listening Autopilot] Reply sent successfully for comment log #${log.id}`);
+                        }
+                      }
+                    } catch (autoErr: any) {
+                      console.error(`❌ [Social Listening Autopilot Error] Failed to send reply for comment log #${log.id}:`, autoErr.message);
+                    }
+                  }, delaySeconds * 1000);
                 }
               } else {
                 // Qualification is COLD, SPAM or below minScore threshold, mark ignored

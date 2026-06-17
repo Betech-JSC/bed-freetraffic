@@ -5,6 +5,20 @@ import { apiJson } from '@/lib/api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useLocale } from '@/context/LocaleContext';
 
+interface KnowledgeSource {
+  id: number;
+  name: string;
+  type: 'FILE' | 'URL' | 'TEXT';
+  status: 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  fileSize: number | null;
+  url: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  _count?: {
+    chunks: number;
+  };
+}
+
 interface Campaign {
   id: number;
   name: string;
@@ -25,12 +39,17 @@ interface Campaign {
   semanticThreshold: number;
   targetAudience: string | null;
   scrapeComments: boolean;
+  autopilot: boolean;
+  autopilotDelayMin: number;
+  autopilotDelayMax: number;
+  maxPostAgeHours: number;
+  knowledgeSources?: KnowledgeSource[];
 }
 
 interface SocialListeningLog {
   id: number;
   campaignId: number;
-  campaign: { name: string };
+  campaign: { name: string; autopilot?: boolean };
   postUrl: string;
   postAuthor: string;
   authorAvatar: string | null;
@@ -46,6 +65,9 @@ interface SocialListeningLog {
   isComment?: boolean;
   commentId?: string | null;
   parentPostAuthor?: string | null;
+  repliedContent?: string | null;
+  repliedAt?: string | null;
+  autopilotCancelled?: boolean;
 }
 
 export default function SocialListeningPage() {
@@ -82,7 +104,20 @@ export default function SocialListeningPage() {
     semanticThreshold: 0.70,
     targetAudience: '',
     scrapeComments: false,
+    autopilot: false,
+    autopilotDelayMin: 3,
+    autopilotDelayMax: 7,
+    maxPostAgeHours: 0,
+    knowledgeSourceIds: [] as number[],
   });
+
+  // Knowledge sources list for campaign linking
+  const [knowledgeSources, setKnowledgeSources] = useState<KnowledgeSource[]>([]);
+
+  // Fast Reply Modal State
+  const [replyingLog, setReplyingLog] = useState<SocialListeningLog | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
 
   // Test Scan Status
   const [scanningId, setScanningId] = useState<number | null>(null);
@@ -171,9 +206,19 @@ export default function SocialListeningPage() {
       }
     };
 
+    const fetchKnowledgeSources = async () => {
+      try {
+        const data = await apiJson<KnowledgeSource[]>('/cskh/knowledge/sources');
+        setKnowledgeSources(data || []);
+      } catch (err) {
+        console.warn('Failed to load knowledge sources', err);
+      }
+    };
+
     loadCampaigns();
     loadLogs();
     fetchWorkspaceTelegramConn();
+    fetchKnowledgeSources();
   }, []);
 
   const openCreateModal = () => {
@@ -194,6 +239,11 @@ export default function SocialListeningPage() {
       semanticThreshold: 0.70,
       targetAudience: '',
       scrapeComments: false,
+      autopilot: false,
+      autopilotDelayMin: 3,
+      autopilotDelayMax: 7,
+      maxPostAgeHours: 0,
+      knowledgeSourceIds: [],
     });
     setIsModalOpen(true);
   };
@@ -216,6 +266,11 @@ export default function SocialListeningPage() {
       semanticThreshold: campaign.semanticThreshold || 0.70,
       targetAudience: campaign.targetAudience || '',
       scrapeComments: campaign.scrapeComments || false,
+      autopilot: campaign.autopilot || false,
+      autopilotDelayMin: campaign.autopilotDelayMin || 3,
+      autopilotDelayMax: campaign.autopilotDelayMax || 7,
+      maxPostAgeHours: campaign.maxPostAgeHours || 0,
+      knowledgeSourceIds: campaign.knowledgeSources ? campaign.knowledgeSources.map(s => s.id) : [],
     });
     setIsModalOpen(true);
   };
@@ -339,6 +394,53 @@ export default function SocialListeningPage() {
   const handleCopyText = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Đã sao chép tin nhắn nháp thành công!');
+  };
+
+  const handleSendReply = async () => {
+    if (!replyingLog || !replyText.trim() || sendingReply) return;
+    setError('');
+    setSuccess('');
+    setSendingReply(true);
+    try {
+      const res = await apiJson<{ success: boolean; message: string }>(
+        `/listening/logs/${replyingLog.id}/reply`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ replyText: replyText.trim() })
+        }
+      );
+      if (res.success) {
+        setSuccess(res.message || 'Đã gửi bình luận phản hồi thành công lên Facebook!');
+        setReplyingLog(null);
+        loadLogs();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Không thể gửi bình luận phản hồi.');
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const handleToggleAutopilot = async (logId: number, cancel: boolean) => {
+    setError('');
+    setSuccess('');
+    try {
+      const res = await apiJson<{ success: boolean; autopilotCancelled: boolean; message: string }>(
+        `/listening/logs/${logId}/toggle-autopilot`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ cancel })
+        }
+      );
+      if (res.success) {
+        setSuccess(res.message);
+        setLogs(prev => prev.map(log => 
+          log.id === logId ? { ...log, autopilotCancelled: res.autopilotCancelled } : log
+        ));
+      }
+    } catch (err: any) {
+      setError(err.message || 'Không thể cập nhật trạng thái Autopilot.');
+    }
   };
 
   return (
@@ -534,35 +636,69 @@ export default function SocialListeningPage() {
                       </div>
                     </div>
 
+                    {/* Linked Knowledge Sources */}
+                    {campaign.knowledgeSources && campaign.knowledgeSources.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                          Nguồn tri thức liên kết ({campaign.knowledgeSources.length})
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {campaign.knowledgeSources.map((ks) => (
+                            <span key={ks.id} className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-semibold rounded-lg border border-blue-100/40 truncate max-w-[200px]" title={ks.name}>
+                              📄 {ks.name}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Status row */}
-                    <div className="grid grid-cols-4 gap-2 py-2.5 border-y border-slate-50 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 py-2.5 border-y border-slate-50 text-[11px]">
                       <div>
                         <p className="text-[9px] font-bold text-slate-400 uppercase">Cookie FB</p>
                         {campaign.cookieStatus === 'ACTIVE' ? (
-                          <span className="text-green-600 font-bold flex items-center gap-1 mt-0.5 text-[11px]">
+                          <span className="text-green-600 font-bold flex items-center gap-1 mt-0.5">
                             ● Kết nối
                           </span>
                         ) : (
-                          <span className="text-red-500 font-bold flex items-center gap-1 mt-0.5 text-[11px]">
+                          <span className="text-red-500 font-bold flex items-center gap-1 mt-0.5">
                             ▲ Lỗi/Hết hạn
                           </span>
                         )}
                       </div>
                       <div>
                         <p className="text-[9px] font-bold text-slate-400 uppercase">Phân loại AI</p>
-                        <span className="font-semibold text-slate-700 block mt-0.5 text-[11px]" title={campaign.enableSemanticFilter ? `Lọc ngữ nghĩa độ nhạy: ${campaign.semanticThreshold}` : ''}>
+                        <span className="font-semibold text-slate-700 block mt-0.5" title={campaign.enableSemanticFilter ? `Lọc ngữ nghĩa độ nhạy: ${campaign.semanticThreshold}` : ''}>
                           {campaign.useAi ? (campaign.enableSemanticFilter ? `Ngữ nghĩa (>=${campaign.semanticThreshold})` : 'Từ khóa') : 'Tắt'}
                         </span>
                       </div>
                       <div>
                         <p className="text-[9px] font-bold text-slate-400 uppercase">Telegram Alert</p>
-                        <span className="font-semibold text-slate-700 block mt-0.5 text-[11px]">
+                        <span className="font-semibold text-slate-700 block mt-0.5">
                           {campaign.telegramEnabled ? `Bật (>=${campaign.minScore || 50}đ)` : 'Tắt'}
                         </span>
                       </div>
                       <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Autopilot</p>
+                        <span className="font-semibold text-slate-700 block mt-0.5">
+                          {campaign.autopilot ? `Bật (${campaign.autopilotDelayMin}-${campaign.autopilotDelayMax}m)` : 'Tắt'}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Thời gian quét</p>
+                        <span className="font-semibold text-slate-700 block mt-0.5">
+                          {campaign.maxPostAgeHours === 0 
+                            ? 'Không giới hạn' 
+                            : campaign.maxPostAgeHours === 24 
+                            ? 'Trong 24 giờ' 
+                            : campaign.maxPostAgeHours === 48 
+                            ? 'Trong 48 giờ' 
+                            : `Trong ${campaign.maxPostAgeHours / 24} ngày`}
+                        </span>
+                      </div>
+                      <div>
                         <p className="text-[9px] font-bold text-slate-400 uppercase">Quét & Tần suất</p>
-                        <span className="font-semibold text-slate-700 block mt-0.5 text-[11px]">
+                        <span className="font-semibold text-slate-700 block mt-0.5">
                           {campaign.scanInterval ? `${campaign.scanInterval}m` : '15m'}{campaign.scrapeComments ? ' (+Bình luận)' : ''}
                         </span>
                       </div>
@@ -778,7 +914,7 @@ export default function SocialListeningPage() {
                         {log.aiDraftMsg && (
                           <div className="space-y-2 border-t border-orange-100/40 pt-4">
                             <div className="flex justify-between items-center">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kịch bản nhắn tin/inbox nháp</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kịch bản bình luận nháp</p>
                               <button
                                 onClick={() => handleCopyText(log.aiDraftMsg!)}
                                 className="text-[10px] text-brand hover:text-brand-hover font-bold"
@@ -794,22 +930,71 @@ export default function SocialListeningPage() {
                       </div>
                     )}
 
+                    {/* Replied Content box */}
+                    {log.repliedContent && (
+                      <div className="bg-emerald-50/30 border border-emerald-100/50 rounded-2xl p-5 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">
+                            Nội dung đã bình luận phản hồi trên Facebook
+                          </p>
+                          {log.repliedAt && (
+                            <span className="text-[10px] text-slate-400">
+                              {new Date(log.repliedAt).toLocaleString('vi-VN')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-700 font-semibold leading-relaxed bg-white p-3 rounded-xl border border-emerald-100/30">
+                          {log.repliedContent}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Links and trigger statuses */}
                     <div className="flex justify-between items-center gap-4 text-xs pt-2">
-                      <div className="text-slate-400 flex items-center gap-1.5">
-                        <span>Trạng thái:</span>
-                        {log.status === 'NOTIFIED' ? (
-                          <span className="text-green-600 font-bold">✓ Đã gửi Telegram</span>
-                        ) : log.status === 'ERROR' ? (
-                          <span className="text-red-500 font-bold" title={log.errorMessage || ''}>⚠️ Gửi Telegram lỗi</span>
-                        ) : log.status === 'IGNORED' ? (
-                          <span className="text-slate-500">Lưu trữ (Cold/Spam)</span>
-                        ) : (
-                          <span className="text-slate-500">Chưa xử lý</span>
+                      <div className="text-slate-400 flex flex-col gap-1 items-start">
+                        <div className="flex items-center gap-1.5">
+                          <span>Trạng thái:</span>
+                          {log.status === 'NOTIFIED' ? (
+                            <span className="text-green-600 font-bold">✓ Đã thông báo</span>
+                          ) : log.status === 'ERROR' ? (
+                            <span className="text-red-500 font-bold" title={log.errorMessage || ''}>⚠️ Gửi Telegram lỗi</span>
+                          ) : log.status === 'IGNORED' ? (
+                            <span className="text-slate-500">Lưu trữ (Cold/Spam)</span>
+                          ) : (
+                            <span className="text-slate-500">Chưa xử lý</span>
+                          )}
+                        </div>
+                        {log.repliedContent && (
+                          <span className="text-emerald-600 font-bold text-[10px]">
+                            💬 Đã phản hồi Facebook
+                          </span>
+                        )}
+                        {log.campaign?.autopilot && (isHot || isWarm) && !log.repliedContent && (
+                          <span className={`text-[10px] font-bold ${log.autopilotCancelled ? 'text-slate-400' : 'text-orange-500 animate-pulse'}`}>
+                            {log.autopilotCancelled 
+                              ? '🚫 Đã tắt tự động phản hồi (Autopilot)' 
+                              : '⌛ Đang chờ Autopilot tự động bình luận...'}
+                          </span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {(isHot || isWarm) && (
+                          <button
+                            onClick={() => {
+                              setReplyingLog(log);
+                              setReplyText(log.aiDraftMsg || '');
+                            }}
+                            className={`text-xs py-2 px-4 rounded-xl font-bold flex items-center gap-1 transition-all ${
+                              log.repliedContent
+                                ? 'bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100 hover:text-slate-600 cursor-pointer'
+                                : 'bg-brand/10 text-brand border border-brand/20 hover:bg-brand/20 cursor-pointer active:scale-95'
+                            }`}
+                          >
+                            💬 {log.repliedContent ? 'Phản hồi lại' : 'Phản hồi AI'}
+                          </button>
+                        )}
+
                         {(isHot || isWarm) && (
                           <button
                             onClick={() => handleConvertToCustomer(log.id)}
@@ -832,6 +1017,19 @@ export default function SocialListeningPage() {
                             ) : (
                               '📥 Lưu vào CRM'
                             )}
+                          </button>
+                        )}
+
+                        {log.campaign?.autopilot && (isHot || isWarm) && !log.repliedContent && (
+                          <button
+                            onClick={() => handleToggleAutopilot(log.id, !log.autopilotCancelled)}
+                            className={`text-xs py-2 px-4 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer active:scale-95 ${
+                              log.autopilotCancelled
+                                ? 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100'
+                                : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                            }`}
+                          >
+                            {log.autopilotCancelled ? '⚡ Bật Autopilot' : '🚫 Hủy Autopilot'}
                           </button>
                         )}
 
@@ -859,122 +1057,122 @@ export default function SocialListeningPage() {
       {/* Modal: Create/Edit Campaign */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
-          <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-slate-700 overflow-y-auto max-h-[90vh]">
+          <div className="relative w-full max-w-[1200px] bg-white border border-slate-200 rounded-[32px] p-10 shadow-2xl text-slate-700 overflow-y-auto max-h-[94vh] custom-scrollbar">
             {/* Header stripe */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand to-orange-500"></div>
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-brand to-orange-500"></div>
             
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-black text-slate-800">
-                {editingCampaign ? 'Chỉnh sửa chiến dịch' : 'Tạo chiến dịch lắng nghe mới'}
+            <div className="flex justify-between items-center mb-8 border-b border-slate-100 pb-5">
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+                {editingCampaign ? '🛠️ Chỉnh sửa chiến dịch lắng nghe' : '🚀 Tạo chiến dịch lắng nghe mới'}
               </h3>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 text-lg font-bold p-1"
+                className="text-slate-400 hover:text-slate-700 text-2xl font-bold p-1 cursor-pointer transition-all hover:scale-110"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveCampaign} className="space-y-5">
+            <form onSubmit={handleSaveCampaign} className="space-y-8">
               {/* Campaign Name */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase">Tên chiến dịch</label>
+              <div className="space-y-2.5">
+                <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider block">Tên chiến dịch</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: Tìm Khách Hàng Web Freelance"
-                  className="input w-full"
+                  className="input w-full py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200 focus:border-brand/55 focus:ring-brand/10"
                   value={formState.name}
                   onChange={(e) => setFormState(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
 
               {/* Group URLs */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
+              <div className="space-y-2.5">
+                <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                   <span>Danh sách Nhóm Facebook (URL hoặc ID)</span>
-                  <span className="text-slate-400 font-normal normal-case">Cách nhau bằng dấu phẩy</span>
+                  <span className="text-slate-400 font-medium normal-case text-sm">Cách nhau bằng dấu phẩy</span>
                 </label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: https://www.facebook.com/groups/12345678, my-target-group"
-                  className="input w-full"
+                  className="input w-full py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200 focus:border-brand/55 focus:ring-brand/10"
                   value={formState.groupUrls}
                   onChange={(e) => setFormState(prev => ({ ...prev, groupUrls: e.target.value }))}
                 />
               </div>
 
               {/* Keywords */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
+              <div className="grid md:grid-cols-2 gap-8">
+                <div className="space-y-2.5">
+                  <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                     <span>Từ khóa lọc tìm kiếm</span>
-                    <span className="text-slate-400 font-normal normal-case">phẩy</span>
+                    <span className="text-slate-400 font-medium normal-case text-sm">Cách nhau bằng dấu phẩy</span>
                   </label>
                   <input
                     type="text"
                     required
                     placeholder="cần làm web, thiết kế web, tuyển code"
-                    className="input w-full"
+                    className="input w-full py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200 focus:border-brand/55 focus:ring-brand/10"
                     value={formState.keywords}
                     onChange={(e) => setFormState(prev => ({ ...prev, keywords: e.target.value }))}
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
+                <div className="space-y-2.5">
+                  <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                     <span>Từ khóa phủ định (loại trừ)</span>
-                    <span className="text-slate-400 font-normal normal-case">phẩy</span>
+                    <span className="text-slate-400 font-medium normal-case text-sm">Cách nhau bằng dấu phẩy</span>
                   </label>
                   <input
                     type="text"
                     placeholder="học, khóa học, chia sẻ tài liệu"
-                    className="input w-full"
+                    className="input w-full py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200 focus:border-brand/55 focus:ring-brand/10"
                     value={formState.excludeKeywords}
                     onChange={(e) => setFormState(prev => ({ ...prev, excludeKeywords: e.target.value }))}
                   />
                 </div>
               </div>
 
-              {/* FB Cookie manually (Highly recommended to copy full cookie manually) */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
+              {/* FB Cookie manually */}
+              <div className="space-y-2.5">
+                <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                   <span>Facebook Cookie (Full Cookie)</span>
-                  <span className="text-brand font-bold normal-case">Khuyên dùng copy bằng tay từ F12 Network tab</span>
+                  <span className="text-brand font-extrabold normal-case text-sm">Khuyên dùng copy bằng tay từ F12 Network tab</span>
                 </label>
                 <textarea
-                  rows={3}
+                  rows={6}
                   placeholder="Dán toàn bộ chuỗi Cookie lấy từ Network tab (phải có cả c_user=... và xs=... để không bị lỗi COOKIE_EXPIRED)"
-                  className="input w-full font-mono text-xs border-orange-100 focus:border-brand"
+                  className="input w-full font-mono text-sm border-orange-200 focus:border-brand py-4 px-6 rounded-2xl shadow-sm"
                   value={formState.facebookCookie}
                   onChange={(e) => setFormState(prev => ({ ...prev, facebookCookie: e.target.value }))}
                 />
-                <span className="text-[10px] text-slate-400 block leading-normal mt-1">
+                <span className="text-sm text-slate-400 block leading-normal mt-1.5">
                   💡 Hãy lấy cookie bằng tay như hướng dẫn ở trên đầu trang nếu gặp lỗi.
                 </span>
               </div>
 
               {/* Chân dung khách hàng mục tiêu & Sản phẩm */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
+              <div className="space-y-2.5">
+                <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                   <span>Chân dung khách hàng mục tiêu & Sản phẩm của bạn</span>
-                  <span className="text-brand font-bold normal-case">Dùng làm bối cảnh để AI lọc chính xác hơn</span>
+                  <span className="text-brand font-extrabold normal-case text-sm">Dùng làm bối cảnh để AI lọc chính xác hơn</span>
                 </label>
                 <textarea
-                  rows={2}
+                  rows={4}
                   placeholder="Ví dụ: Chúng tôi cung cấp dịch vụ SEO cho các local brand thời trang nhỏ tại Việt Nam với giá từ 5 triệu."
-                  className="input w-full border-orange-100 focus:border-brand"
+                  className="input w-full border-orange-200 focus:border-brand py-4 px-6 text-base font-semibold rounded-2xl shadow-sm"
                   value={formState.targetAudience}
                   onChange={(e) => setFormState(prev => ({ ...prev, targetAudience: e.target.value }))}
                 />
               </div>
 
               {/* Tần suất quét & Ngưỡng điểm thông báo */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Tần suất quét tự động</label>
+              <div className="grid md:grid-cols-3 gap-8">
+                <div className="space-y-2.5">
+                  <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider">Tần suất quét tự động</label>
                   <select
-                    className="input w-full bg-white cursor-pointer"
+                    className="input w-full bg-white cursor-pointer py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200"
                     value={formState.scanInterval}
                     onChange={(e) => setFormState(prev => ({ ...prev, scanInterval: parseInt(e.target.value, 10) }))}
                   >
@@ -989,10 +1187,10 @@ export default function SocialListeningPage() {
                   </select>
                 </div>
                 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">Điểm AI tối thiểu nhận báo</label>
+                <div className="space-y-2.5">
+                  <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider">Điểm AI tối thiểu nhận báo</label>
                   <select
-                    className="input w-full bg-white cursor-pointer"
+                    className="input w-full bg-white cursor-pointer py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200"
                     value={formState.minScore}
                     onChange={(e) => setFormState(prev => ({ ...prev, minScore: parseInt(e.target.value, 10) }))}
                   >
@@ -1002,123 +1200,238 @@ export default function SocialListeningPage() {
                     <option value={80}>80 điểm (Chỉ cơ hội cực kỳ rõ ràng/HOT)</option>
                   </select>
                 </div>
+
+                <div className="space-y-2.5">
+                  <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider">Thời gian bài viết tối đa</label>
+                  <select
+                    className="input w-full bg-white cursor-pointer py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200"
+                    value={formState.maxPostAgeHours}
+                    onChange={(e) => setFormState(prev => ({ ...prev, maxPostAgeHours: parseInt(e.target.value, 10) }))}
+                  >
+                    <option value={0}>Không giới hạn (Toàn bộ)</option>
+                    <option value={24}>Trong vòng 24 giờ (1 ngày)</option>
+                    <option value={48}>Trong vòng 48 giờ (2 ngày)</option>
+                    <option value={72}>Trong vòng 3 ngày</option>
+                    <option value={168}>Trong vòng 7 ngày (1 tuần)</option>
+                  </select>
+                </div>
               </div>
-              <span className="text-[10px] text-slate-400 block mt-1">
-                💡 Cấu hình thời gian giãn cách quét và ngưỡng điểm số đánh giá từ AI để lọc thông tin đẩy về Telegram.
-              </span>
 
               {/* Switches logic */}
-              <div className="grid sm:grid-cols-2 gap-4 py-2 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div className="grid sm:grid-cols-2 gap-8 py-6 bg-slate-50/50 p-8 rounded-[28px] border border-slate-100/80">
+                <label className="flex items-start gap-4 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={formState.useAi}
                     onChange={(e) => setFormState(prev => ({ ...prev, useAi: e.target.checked }))}
-                    className="w-4 h-4 rounded text-brand border-slate-300 focus:ring-brand accent-brand"
+                    className="w-6 h-6 mt-0.5 rounded text-brand border-slate-300 focus:ring-brand accent-brand cursor-pointer"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-700 block">Chạy chấm điểm Lead bằng AI</span>
-                    <span className="text-[10px] text-slate-400 block">Dùng LLM qualify nội dung và soạn kịch bản nháp.</span>
+                    <span className="text-base font-extrabold text-slate-800 block">Chạy chấm điểm Lead bằng AI</span>
+                    <span className="text-sm text-slate-400 block mt-1">Dùng LLM qualify nội dung và soạn kịch bản nháp.</span>
                   </div>
                 </label>
 
-                <label className="flex items-center gap-3 cursor-pointer select-none">
+                <label className="flex items-start gap-4 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={formState.telegramEnabled}
                     onChange={(e) => setFormState(prev => ({ ...prev, telegramEnabled: e.target.checked }))}
-                    className="w-4 h-4 rounded text-brand border-slate-300 focus:ring-brand accent-brand"
+                    className="w-6 h-6 mt-0.5 rounded text-brand border-slate-300 focus:ring-brand accent-brand cursor-pointer"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-700 block">Thông báo Telegram</span>
-                    <span className="text-[10px] text-slate-400 block">Gửi tin nhắn thông báo về Telegram khi có Lead HOT/WARM.</span>
+                    <span className="text-base font-extrabold text-slate-800 block">Thông báo Telegram</span>
+                    <span className="text-sm text-slate-400 block mt-1">Gửi tin nhắn thông báo về Telegram khi có Lead HOT/WARM.</span>
                   </div>
                 </label>
 
-                <label className="flex items-center gap-3 cursor-pointer select-none">
+                <label className="flex items-start gap-4 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={formState.enableSemanticFilter}
                     onChange={(e) => setFormState(prev => ({ ...prev, enableSemanticFilter: e.target.checked }))}
-                    className="w-4 h-4 rounded text-brand border-slate-300 focus:ring-brand accent-brand"
+                    className="w-6 h-6 mt-0.5 rounded text-brand border-slate-300 focus:ring-brand accent-brand cursor-pointer"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-700 block">Bộ lọc Ngữ nghĩa (Semantic Filter)</span>
-                    <span className="text-[10px] text-slate-400 block">Dùng AI Embeddings tự nhận biết các cụm từ đồng nghĩa.</span>
+                    <span className="text-base font-extrabold text-slate-800 block">Bộ lọc Ngữ nghĩa (Semantic Filter)</span>
+                    <span className="text-sm text-slate-400 block mt-1">Dùng AI Embeddings tự nhận biết các cụm từ đồng nghĩa.</span>
                   </div>
                 </label>
 
-                <label className="flex items-center gap-3 cursor-pointer select-none">
+                <label className="flex items-start gap-4 cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={formState.scrapeComments}
                     onChange={(e) => setFormState(prev => ({ ...prev, scrapeComments: e.target.checked }))}
-                    className="w-4 h-4 rounded text-brand border-slate-300 focus:ring-brand accent-brand"
+                    className="w-6 h-6 mt-0.5 rounded text-brand border-slate-300 focus:ring-brand accent-brand cursor-pointer"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-700 block">Quét Bình luận (Comment Scraping)</span>
-                    <span className="text-[10px] text-slate-400 block">Tìm kiếm lead tiềm năng xuất hiện trong bình luận bài đăng.</span>
+                    <span className="text-base font-extrabold text-slate-800 block">Quét Bình luận (Comment Scraping)</span>
+                    <span className="text-sm text-slate-400 block mt-1">Tìm kiếm lead tiềm năng xuất hiện trong bình luận bài đăng.</span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-4 cursor-pointer select-none col-span-2 border-t border-slate-150/60 pt-6 mt-3">
+                  <input
+                    type="checkbox"
+                    checked={formState.autopilot}
+                    onChange={(e) => setFormState(prev => ({ ...prev, autopilot: e.target.checked }))}
+                    className="w-6 h-6 mt-0.5 rounded text-brand border-slate-300 focus:ring-brand accent-brand cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-base font-extrabold text-slate-800 block">Đại lý tự động phản hồi (Autopilot)</span>
+                    <span className="text-sm text-slate-400 block mt-1">Tự động bình luận phản hồi Facebook khi phát hiện Lead HOT/WARM.</span>
                   </div>
                 </label>
               </div>
 
               {/* Semantic Threshold Slider */}
               {formState.enableSemanticFilter && (
-                <div className="space-y-1.5 p-4 bg-orange-50/20 border border-orange-100/40 rounded-2xl">
-                  <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                <div className="space-y-3 p-6 bg-orange-50/20 border border-orange-100/40 rounded-[24px]">
+                  <div className="flex justify-between items-center text-base font-extrabold text-slate-800">
                     <span>Độ nhạy ngữ nghĩa (Semantic Similarity Threshold)</span>
-                    <span className="text-brand font-mono">{formState.semanticThreshold.toFixed(2)}</span>
+                    <span className="text-brand font-mono text-lg">{formState.semanticThreshold.toFixed(2)}</span>
                   </div>
                   <input
                     type="range"
                     min="0.50"
                     max="0.90"
                     step="0.05"
-                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand"
+                    className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand"
                     value={formState.semanticThreshold}
                     onChange={(e) => setFormState(prev => ({ ...prev, semanticThreshold: parseFloat(e.target.value) }))}
                   />
-                  <div className="flex justify-between text-[10px] text-slate-400">
+                  <div className="flex justify-between text-sm text-slate-400">
                     <span>Thấp (Bắt rộng - Đồng nghĩa nhiều)</span>
                     <span>Cao (Chính xác tuyệt đối)</span>
                   </div>
                 </div>
               )}
 
+              {/* Autopilot Config */}
+              {formState.autopilot && (
+                <div className="bg-orange-50/25 border border-orange-100/40 rounded-[24px] p-6 space-y-4">
+                  <div className="flex justify-between items-center border-b border-orange-100/20 pb-2.5">
+                    <p className="text-sm font-extrabold text-slate-700 uppercase tracking-wide">Cấu hình giãn cách tự động phản hồi</p>
+                    <span className="text-sm text-slate-450">Tránh spam & checkpoint Facebook</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-2.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Trễ tối thiểu (phút)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        required
+                        className="input w-full bg-white py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200"
+                        value={formState.autopilotDelayMin}
+                        onChange={(e) => setFormState(prev => ({ ...prev, autopilotDelayMin: Math.max(1, parseInt(e.target.value, 10)) }))}
+                      />
+                    </div>
+                    <div className="space-y-2.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase">Trễ tối đa (phút)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={120}
+                        required
+                        className="input w-full bg-white py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200"
+                        value={formState.autopilotDelayMax}
+                        onChange={(e) => setFormState(prev => ({ ...prev, autopilotDelayMax: Math.max(1, parseInt(e.target.value, 10)) }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* RAG Knowledge Sources */}
+              <div className="space-y-3">
+                <label className="text-sm font-extrabold text-slate-700 uppercase block tracking-wide">
+                  Liên kết tài liệu tri thức RAG (Knowledge Base)
+                </label>
+                {knowledgeSources.length === 0 ? (
+                  <div className="p-5 bg-slate-50 border border-slate-200 rounded-[24px] text-sm text-slate-500">
+                    Chưa có tài liệu nào trong thư viện tri thức. Bạn có thể vào{' '}
+                    <a href="/dashboard/cskh/knowledge" target="_blank" className="text-brand hover:underline font-bold">
+                      Trang tri thức RAG (AI)
+                    </a>{' '}
+                    để tải lên tài liệu (PDF, URL, v.v.).
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-[24px] p-6 bg-slate-50/50 max-h-[240px] overflow-y-auto space-y-3 custom-scrollbar">
+                    {knowledgeSources.map((source) => {
+                      const isChecked = formState.knowledgeSourceIds.includes(source.id);
+                      return (
+                        <label key={source.id} className="flex items-start gap-3.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormState(prev => ({
+                                  ...prev,
+                                  knowledgeSourceIds: [...prev.knowledgeSourceIds, source.id]
+                                }));
+                              } else {
+                                setFormState(prev => ({
+                                  ...prev,
+                                  knowledgeSourceIds: prev.knowledgeSourceIds.filter(id => id !== source.id)
+                                }));
+                              }
+                            }}
+                            className="w-5 h-5 mt-0.5 rounded text-brand border-slate-300 focus:ring-brand accent-brand cursor-pointer"
+                          />
+                          <div className="text-base">
+                            <span className="font-extrabold text-slate-700 block">{source.name}</span>
+                            <span className="text-sm text-slate-400 block mt-1">
+                              Loại: {source.type === 'FILE' ? 'Tệp PDF/Docx' : source.type === 'URL' ? 'Địa chỉ Web' : 'Văn bản thủ công'} 
+                              {source._count?.chunks ? ` • ${source._count.chunks} đoạn tri thức` : ''}
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <span className="text-sm text-slate-405 block">
+                  💡 AI sẽ chỉ đối chiếu nội dung bài quét với các tài liệu được chọn ở đây để tìm câu trả lời & tư vấn cho chiến dịch này. Nếu không chọn, AI sẽ đối chiếu với toàn bộ nguồn tri thức.
+                </span>
+              </div>
+
               {/* Telegram Config */}
               {formState.telegramEnabled && (
-                <div className="bg-orange-50/25 border border-orange-100/40 p-4 rounded-2xl space-y-3.5">
-                  <div className="flex justify-between items-center border-b border-orange-100/20 pb-2">
-                    <p className="text-xs font-bold text-slate-600 uppercase">Cấu hình Telegram Bot</p>
-                    <span className="text-[9px] text-slate-400 font-semibold bg-orange-100/40 px-2 py-0.5 rounded">
+                <div className="bg-orange-50/25 border border-orange-100/40 p-6 rounded-[24px] space-y-5">
+                  <div className="flex justify-between items-center border-b border-orange-100/20 pb-3">
+                    <p className="text-sm font-extrabold text-slate-700 uppercase tracking-wide">Cấu hình Telegram Bot</p>
+                    <span className="text-sm font-semibold bg-orange-100/40 px-3.5 py-1.5 rounded-xl">
                       Kết nối nhanh 1-Click
                     </span>
                   </div>
 
                   {workspaceTelegramConn ? (
-                    <div className="p-3.5 bg-emerald-50/60 border border-emerald-100 rounded-xl text-xs text-emerald-800 space-y-1">
-                      <p className="font-bold flex items-center gap-1.5 text-emerald-700">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                    <div className="p-5 bg-emerald-50/60 border border-emerald-100 rounded-2xl text-base text-emerald-850 space-y-1.5">
+                      <p className="font-bold flex items-center gap-2.5 text-emerald-700 text-base">
+                        <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
                         Đã kết nối từ Cài đặt chung:
                       </p>
-                      <p className="text-[11px] text-emerald-600 font-mono">
+                      <p className="text-sm text-emerald-600 font-mono">
                         {workspaceTelegramConn.pageName} (Chat ID: {workspaceTelegramConn.pageId})
                       </p>
-                      <p className="text-[10px] text-slate-500 leading-normal">
+                      <p className="text-sm text-slate-500 leading-normal mt-1.5">
                         Hệ thống sẽ tự động gửi thông báo về bot và cuộc trò chuyện này.
                       </p>
                     </div>
                   ) : (
-                    <div className="p-4 bg-amber-50/50 border border-amber-200/40 rounded-2xl space-y-2">
-                      <p className="text-xs font-bold text-amber-800 flex items-center gap-1.5">
+                    <div className="p-6 bg-amber-50/50 border border-amber-200/40 rounded-2xl space-y-3">
+                      <p className="text-base font-extrabold text-amber-800 flex items-center gap-1.5">
                         Chưa cấu hình Telegram Bot
                       </p>
-                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                      <p className="text-sm text-slate-600 leading-relaxed">
                         Bạn chưa cấu hình kết nối Telegram Bot. Vui lòng vào mục <b>Cài đặt &rarr; Tích hợp</b> để kết nối Telegram Bot trước.
                       </p>
                       <a
                         href="/dashboard/settings"
-                        className="inline-block text-[11px] text-brand hover:underline font-bold mt-1"
+                        className="inline-block text-sm text-brand hover:underline font-bold mt-2"
                       >
                         Đi tới phần Cài đặt &rarr;
                       </a>
@@ -1127,39 +1440,39 @@ export default function SocialListeningPage() {
 
                   {/* Recent Chats Selector Dropdown */}
                   {showRecentChatsList && (
-                    <div className="bg-slate-900 text-slate-200 p-3.5 rounded-xl border border-slate-800 space-y-2 mt-2">
-                      <div className="flex justify-between items-center border-b border-slate-850 pb-1">
-                        <span className="text-[10px] font-bold text-slate-400">Chọn cuộc trò chuyện để liên kết:</span>
+                    <div className="bg-slate-900 text-slate-200 p-5 rounded-xl border border-slate-800 space-y-3 mt-2.5">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-1.5">
+                        <span className="text-sm font-bold text-slate-450">Chọn cuộc trò chuyện để liên kết:</span>
                         <button
                           type="button"
                           onClick={() => setShowRecentChatsList(false)}
-                          className="text-[9px] text-slate-500 hover:text-slate-200"
+                          className="text-xs text-slate-550 hover:text-slate-200"
                         >
                           Đóng
                         </button>
                       </div>
                       {loadingRecentChats ? (
-                        <div className="flex items-center gap-2 text-[10px] text-slate-400 justify-center py-2">
-                          <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-brand"></div>
+                        <div className="flex items-center gap-2.5 text-sm text-slate-400 justify-center py-2.5">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand"></div>
                           Đang dò tìm tương tác gần đây...
                         </div>
                       ) : recentChats.length === 0 ? (
-                        <p className="text-[10px] text-slate-500 text-center py-2">
+                        <p className="text-sm text-slate-550 text-center py-2.5">
                           Không tìm thấy tương tác mới nào. Vui lòng mở Telegram nhấn Bắt đầu (Start) hoặc gửi tin nhắn cho Bot trước rồi quét lại.
                         </p>
                       ) : (
-                        <div className="space-y-1.5 max-h-[150px] overflow-y-auto custom-scrollbar">
+                        <div className="space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar">
                           {recentChats.map((c) => (
                             <button
                               key={c.chatId}
                               type="button"
                               onClick={() => handleSelectRecentChat(c, !formState.telegramBotToken.trim())}
-                              className="w-full text-left p-2 hover:bg-slate-800 active:bg-slate-700 rounded-lg text-xs flex items-center justify-between border border-slate-800/40 transition-colors cursor-pointer"
+                              className="w-full text-left p-2.5 hover:bg-slate-800 active:bg-slate-700 rounded-lg text-sm flex items-center justify-between border border-slate-800/40 transition-colors cursor-pointer"
                             >
                               <span>
                                 {c.chatType === 'Cá nhân' ? '👤' : '👥'} <span className="font-bold text-white">{c.chatTitle}</span> ({c.chatType})
                               </span>
-                              <span className="text-[10px] font-mono text-brand">ID: {c.chatId} → Kết nối</span>
+                              <span className="text-sm font-mono text-brand">ID: {c.chatId} → Kết nối</span>
                             </button>
                           ))}
                         </div>
@@ -1169,12 +1482,12 @@ export default function SocialListeningPage() {
 
                   {/* Alert messages */}
                   {detectError && (
-                    <p className="text-[10px] text-red-500 font-bold bg-red-50 p-2.5 rounded-xl border border-red-100/50 leading-relaxed">
+                    <p className="text-xs text-red-500 font-bold bg-red-50 p-2.5 rounded-xl border border-red-100/50 leading-relaxed">
                       ⚠️ {detectError}
                     </p>
                   )}
                   {detectSuccess && (
-                    <p className="text-[10px] text-green-600 font-bold bg-green-50 p-2.5 rounded-xl border border-green-100/50 leading-relaxed">
+                    <p className="text-xs text-green-600 font-bold bg-green-50 p-2.5 rounded-xl border border-green-100/50 leading-relaxed">
                       ✓ {detectSuccess}
                     </p>
                   )}
@@ -1182,22 +1495,102 @@ export default function SocialListeningPage() {
               )}
 
               {/* Modal footer actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 font-bold px-4 py-2.5 rounded-xl transition-all"
+                  className="text-sm text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 font-bold px-5 py-3 rounded-xl transition-all cursor-pointer"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-brand/10 font-bold"
+                  className="btn-primary text-sm px-6 py-3 rounded-xl shadow-lg shadow-brand/10 font-bold"
                 >
-                  {editingCampaign ? 'Cập nhật' : 'Tạo chiến dịch'}
+                  {editingCampaign ? 'Cập nhật chiến dịch' : 'Tạo chiến dịch'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Fast Reply Review & Send */}
+      {replyingLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="relative w-full max-w-xl bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-slate-700">
+            {/* Header stripe */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand to-orange-500"></div>
+
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-base font-black text-slate-800 flex items-center gap-2">
+                💬 Soạn phản hồi bình luận Facebook
+              </h3>
+              <button
+                onClick={() => setReplyingLog(null)}
+                className="text-slate-400 hover:text-slate-700 text-lg font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Original Post context */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs space-y-1.5">
+                <span className="font-bold text-slate-500 block uppercase">Nội dung gốc của @{replyingLog.postAuthor}:</span>
+                <p className="text-slate-700 max-h-[100px] overflow-y-auto italic font-medium leading-relaxed">
+                  "{replyingLog.postContent}"
+                </p>
+              </div>
+
+              {/* Reply Text input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
+                  <span>Nội dung bình luận phản hồi</span>
+                  <span className="text-slate-400 font-normal normal-case">Bạn có thể chỉnh sửa lại trước khi gửi</span>
+                </label>
+                <textarea
+                  rows={6}
+                  placeholder="Nhập nội dung phản hồi bình luận..."
+                  className="input w-full font-sans text-xs border-orange-100 focus:border-brand"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                />
+              </div>
+
+              <div className="text-[10px] text-slate-400 leading-normal flex items-start gap-1">
+                <span>💡</span>
+                <span>
+                  Bình luận này sẽ được gửi trực tiếp lên bài viết/bình luận Facebook bằng tài khoản đã cấu hình Cookie của chiến dịch. Quá trình này mô phỏng trình duyệt mbasic nên cực kỳ an toàn.
+                </span>
+              </div>
+
+              {/* Modal footer actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReplyingLog(null)}
+                  className="text-xs text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 font-bold px-4 py-2.5 rounded-xl transition-all"
+                  disabled={sendingReply}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  onClick={handleSendReply}
+                  disabled={sendingReply || !replyText.trim()}
+                  className="btn-primary text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-brand/10 font-bold flex items-center gap-1.5"
+                >
+                  {sendingReply ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                      Đang gửi bình luận...
+                    </>
+                  ) : (
+                    'Gửi bình luận ngay'
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

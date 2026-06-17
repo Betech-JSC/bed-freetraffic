@@ -14,6 +14,7 @@ export interface ScrapedPost {
   authorAvatar: string | null;
   content: string;
   createdAtText?: string;
+  creationTime?: number | null;
   comments?: ScrapedComment[];
 }
 
@@ -348,6 +349,13 @@ export async function scrapeFacebookGroup(
           }
         }
 
+        // Extract creation time
+        let creationTime: number | null = null;
+        const timeMatch = context.match(/"creation_time"\s*:\s*(\d+)/);
+        if (timeMatch) {
+          creationTime = parseInt(timeMatch[1], 10);
+        }
+
         const postComments = extractCommentsFromContext(context);
 
         posts.push({
@@ -356,6 +364,7 @@ export async function scrapeFacebookGroup(
           authorName,
           authorAvatar,
           content,
+          creationTime,
           comments: postComments,
         });
         seenPostIds.add(postId);

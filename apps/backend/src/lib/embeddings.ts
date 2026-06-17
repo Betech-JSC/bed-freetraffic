@@ -291,17 +291,16 @@ export interface StructuredChunk {
   sourceId: number | null;
 }
 
-/**
- * Queries pgvector matching top N closest chunks for semantic search.
- */
 export async function retrieveRelevantChunksStructured(
   workspaceId: number,
   query: string,
-  topN: number = 5
+  topN: number = 5,
+  sourceIds?: number[]
 ): Promise<StructuredChunk[]> {
   const normalizedQuery = query.trim().toLowerCase();
   const base64Query = Buffer.from(normalizedQuery).toString('base64').slice(0, 100);
-  const cacheKey = `ws:${workspaceId}:rag:q:${base64Query}:top:${topN}`;
+  const sourceIdsKey = sourceIds && sourceIds.length > 0 ? `:src:${sourceIds.sort().join(',')}` : '';
+  const cacheKey = `ws:${workspaceId}:rag:q:${base64Query}:top:${topN}${sourceIdsKey}`;
 
   try {
     const cached = await cache.get<StructuredChunk[]>(cacheKey);
@@ -311,6 +310,15 @@ export async function retrieveRelevantChunksStructured(
     }
   } catch (cacheErr) {
     console.warn('[RAG Semantic Cache] Lỗi đọc cache:', cacheErr);
+  }
+
+  // Construct sourceFilter SQL snippet safely
+  let sourceFilter = '';
+  if (sourceIds && sourceIds.length > 0) {
+    const idsJoined = sourceIds.map(id => parseInt(id as any, 10)).filter(id => !isNaN(id)).join(',');
+    if (idsJoined) {
+      sourceFilter = `AND "sourceId" IN (${idsJoined})`;
+    }
   }
 
   try {
@@ -327,12 +335,12 @@ export async function retrieveRelevantChunksStructured(
     let existResult;
     if (workspaceId === systemWorkspaceId) {
       existResult = await prisma.$queryRawUnsafe<any[]>(
-        'SELECT 1 FROM "KnowledgeChunk" WHERE "workspaceId" = $1 LIMIT 1',
+        `SELECT 1 FROM "KnowledgeChunk" WHERE "workspaceId" = $1 ${sourceFilter} LIMIT 1`,
         workspaceId
       );
     } else {
       existResult = await prisma.$queryRawUnsafe<any[]>(
-        'SELECT 1 FROM "KnowledgeChunk" WHERE "workspaceId" = $1 OR "workspaceId" = $2 LIMIT 1',
+        `SELECT 1 FROM "KnowledgeChunk" WHERE ("workspaceId" = $1 OR "workspaceId" = $2) ${sourceFilter} LIMIT 1`,
         workspaceId,
         systemWorkspaceId
       );
@@ -361,7 +369,7 @@ export async function retrieveRelevantChunksStructured(
           results = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "source", "sourceId", "content"
              FROM "KnowledgeChunk"
-             WHERE "workspaceId" = $1
+             WHERE "workspaceId" = $1 ${sourceFilter}
              LIMIT $2`,
             workspaceId,
             topN
@@ -370,7 +378,7 @@ export async function retrieveRelevantChunksStructured(
           results = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "source", "sourceId", "content"
              FROM "KnowledgeChunk"
-             WHERE "workspaceId" = $1 OR "workspaceId" = $2
+             WHERE ("workspaceId" = $1 OR "workspaceId" = $2) ${sourceFilter}
              LIMIT $3`,
             workspaceId,
             systemWorkspaceId,
@@ -392,7 +400,7 @@ export async function retrieveRelevantChunksStructured(
         sql = `
           SELECT "source", "sourceId", "content"
           FROM "KnowledgeChunk"
-          WHERE "workspaceId" = $1 AND (${clauses.join(' OR ')})
+          WHERE "workspaceId" = $1 ${sourceFilter} AND (${clauses.join(' OR ')})
         `;
         params = [workspaceId, ...queryTerms.map(t => `%${t}%`)];
       } else {
@@ -400,7 +408,7 @@ export async function retrieveRelevantChunksStructured(
         sql = `
           SELECT "source", "sourceId", "content"
           FROM "KnowledgeChunk"
-          WHERE ("workspaceId" = $1 OR "workspaceId" = $2) AND (${clauses.join(' OR ')})
+          WHERE ("workspaceId" = $1 OR "workspaceId" = $2) ${sourceFilter} AND (${clauses.join(' OR ')})
         `;
         params = [workspaceId, systemWorkspaceId, ...queryTerms.map(t => `%${t}%`)];
       }
@@ -461,7 +469,7 @@ export async function retrieveRelevantChunksStructured(
           anyChunks = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "source", "sourceId", "content"
              FROM "KnowledgeChunk"
-             WHERE "workspaceId" = $1
+             WHERE "workspaceId" = $1 ${sourceFilter}
              LIMIT $2`,
             workspaceId,
             topN
@@ -470,7 +478,7 @@ export async function retrieveRelevantChunksStructured(
           anyChunks = await prisma.$queryRawUnsafe<any[]>(
             `SELECT "source", "sourceId", "content"
              FROM "KnowledgeChunk"
-             WHERE "workspaceId" = $1 OR "workspaceId" = $2
+             WHERE ("workspaceId" = $1 OR "workspaceId" = $2) ${sourceFilter}
              LIMIT $3`,
             workspaceId,
             systemWorkspaceId,
@@ -498,7 +506,7 @@ export async function retrieveRelevantChunksStructured(
       results = await prisma.$queryRawUnsafe<any[]>(
         `SELECT "source", "sourceId", "content", ("embedding" <=> CAST($1 AS vector)) as distance
          FROM "KnowledgeChunk"
-         WHERE "workspaceId" = $2
+         WHERE "workspaceId" = $2 ${sourceFilter}
          ORDER BY distance ASC
          LIMIT $3`,
         vectorString,
@@ -509,7 +517,7 @@ export async function retrieveRelevantChunksStructured(
       results = await prisma.$queryRawUnsafe<any[]>(
         `SELECT "source", "sourceId", "content", ("embedding" <=> CAST($1 AS vector)) as distance
          FROM "KnowledgeChunk"
-         WHERE "workspaceId" = $2 OR "workspaceId" = $3
+         WHERE ("workspaceId" = $2 OR "workspaceId" = $3) ${sourceFilter}
          ORDER BY distance ASC
          LIMIT $4`,
         vectorString,

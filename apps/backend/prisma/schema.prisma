@@ -749,6 +749,7 @@ model KnowledgeSource {
   extractedText String?          @db.Text
   errorMessage  String?          @db.Text
   chunks        KnowledgeChunk[]
+  campaigns     SocialListeningCampaign[] @relation("CampaignKnowledgeSources")
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
@@ -874,6 +875,11 @@ model SocialListeningCampaign {
   semanticThreshold   Float               @default(0.70)
   targetAudience      String?             @db.Text
   scrapeComments      Boolean             @default(false)
+  autopilot        Boolean               @default(false)
+  autopilotDelayMin Int                   @default(3)
+  autopilotDelayMax Int                   @default(7)
+  maxPostAgeHours   Int                   @default(0)
+  knowledgeSources KnowledgeSource[]     @relation("CampaignKnowledgeSources")
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
   logs             SocialListeningLog[]
@@ -898,6 +904,9 @@ model SocialListeningLog {
   isComment   Boolean                 @default(false)
   commentId   String?
   parentPostAuthor String?
+  repliedContent String?               @db.Text
+  repliedAt      DateTime?
+  autopilotCancelled Boolean             @default(false)
   createdAt   DateTime                @default(now())
 
   @@index([campaignId])

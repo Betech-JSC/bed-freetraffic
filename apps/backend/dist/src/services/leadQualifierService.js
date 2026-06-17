@@ -63,8 +63,19 @@ async function qualifyLead(workspaceId, postContent, keywords, excludeKeywords, 
     let ragContextText = '';
     try {
         const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+        // Resolve campaign knowledge sources if campaignId is provided
+        let sourceIds = undefined;
+        if (campaignId) {
+            const campaignWithSources = await prisma_1.default.socialListeningCampaign.findUnique({
+                where: { id: campaignId },
+                include: { knowledgeSources: { select: { id: true } } }
+            });
+            if (campaignWithSources && campaignWithSources.knowledgeSources.length > 0) {
+                sourceIds = campaignWithSources.knowledgeSources.map(s => s.id);
+            }
+        }
         // We use the post content or keywords to query relevant chunks
-        const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, postContent.slice(0, 300), 4);
+        const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, postContent.slice(0, 300), 4, sourceIds);
         const config = await prisma_1.default.cskhConfig.findUnique({
             where: { workspaceId }
         });
@@ -149,15 +160,20 @@ async function qualifyLead(workspaceId, postContent, keywords, excludeKeywords, 
     const systemPrompt = `Bạn là một chuyên gia AI Social Listening & Phân loại Khách hàng Tiềm năng (Lead Qualifier).
 Nhiệm vụ của bạn là phân tích nội dung bài viết thu thập từ mạng xã hội để đánh giá mức độ tiềm năng mua hàng/sử dụng dịch vụ của tác giả bài viết đối với doanh nghiệp.
 
-Quy tắc phân loại (decision):
+Quy tắc phân loại (decision) & phân biệt người bán/người mua:
 - HOT: Bài viết thể hiện nhu cầu mua/thuê/sử dụng sản phẩm/dịch vụ cực kỳ rõ ràng, khẩn cấp (Ví dụ: "Cần tìm nguồn sỉ...", "Ai nhận làm web...", "Cần mua gấp...").
-- WARM: Bài viết thể hiện nỗi đau, khó khăn hoặc đang tìm giải pháp, lời khuyên liên quan mà doanh nghiệp có thể giải quyết được (Ví dụ: "Làm sao để tăng traffic...", "Facebook ads đắt quá...", "Mọi người hay dùng tool gì...").
+- WARM: Bài viết thể hiện nỗi đau, khó khăn, câu hỏi thảo luận, xin lời khuyên hoặc đang tìm giải pháp liên quan mà doanh nghiệp có thể giải quyết được (Ví dụ: "Làm sao để tăng traffic...", "Facebook ads đắt quá...", "Mọi người hay dùng tool gì...").
 - COLD: Bài viết chỉ chia sẻ thông tin chung, không thể hiện rõ nhu cầu hoặc liên quan rất ít.
-- SPAM: Bài viết tự quảng cáo, tin rác, tuyển dụng hoặc bot tự động viết bài bán hàng.
+- SPAM: Bài viết tự quảng cáo dịch vụ/sản phẩm của họ, tin rác, tuyển dụng hoặc bot tự động viết bài bán hàng.
+
+⚠️ QUAN TRỌNG VỀ SỰ LINH HOẠT VÀ ĐỘ CHÍNH XÁC THEO NGƯỠNG ĐIỂM:
+1. ĐỐI VỚI WARM (50 - 79 điểm): Hãy đánh giá thật rộng rãi và linh hoạt để tìm được CÀNG NHIỀU bài viết có liên quan CÀNG TỐT. Chỉ cần bài viết có nhắc đến khó khăn, câu hỏi thảo luận, chia sẻ kinh nghiệm hoặc bất cứ mối quan tâm nào liên quan đến chủ đề/từ khóa, hãy cho điểm từ 50 - 79 (WARM). Đừng đánh giá quá khắt khe ở khoảng điểm này để tránh bỏ sót các lead thảo luận có thể tiếp cận gián tiếp.
+2. ĐỐI VỚI HOT (80 - 100 điểm): Hãy đánh giá CỰC KỲ khắt khe và chuẩn xác tuyệt đối. Bài đăng phải thể hiện rõ ràng, trực tiếp 100% nhu cầu tìm mua, thuê dịch vụ hoặc cần hỗ trợ gấp thì mới được cho điểm từ 80 trở lên.
+3. PHÂN BIỆT NGƯỜI BÁN & NGƯỜI MUA: Bạn PHẢI phân biệt người BÁN (cung cấp dịch vụ/sản phẩm) và người MUA (đang tìm kiếm/có nhu cầu thực tế). Nếu người viết bài viết quảng cáo hoặc tự chào mời dịch vụ của họ (Ví dụ: 'Em nhận thiết kế logo...', 'Bên mình cung cấp dịch vụ SEO chuyên nghiệp...', 'Em là freelancer nhận dự án...'), bạn phải phân loại là SPAM hoặc COLD với điểm số dưới 50 (vì họ là người bán hoặc đối thủ cạnh tranh, không phải khách hàng tiềm năng mua hàng).
 
 Yêu cầu chấm điểm (score):
-- HOT: 80 - 100 điểm.
-- WARM: 50 - 79 điểm.
+- HOT: 80 - 100 điểm (Yêu cầu chính xác cao, nhu cầu mua/thuê trực tiếp).
+- WARM: 50 - 79 điểm (Rộng rãi, bao dung, gom mọi bài thảo luận/nỗi đau/câu hỏi liên quan để bắt được nhiều lead nhất).
 - COLD: 10 - 49 điểm.
 - SPAM: 0 - 9 điểm.
 

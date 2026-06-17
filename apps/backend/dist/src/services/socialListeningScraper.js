@@ -339,6 +339,12 @@ async function scrapeFacebookGroup(groupIdOrUrl, cookie) {
                         postUrl = matchedUrl;
                     }
                 }
+                // Extract creation time
+                let creationTime = null;
+                const timeMatch = context.match(/"creation_time"\s*:\s*(\d+)/);
+                if (timeMatch) {
+                    creationTime = parseInt(timeMatch[1], 10);
+                }
                 const postComments = extractCommentsFromContext(context);
                 posts.push({
                     postId,
@@ -346,6 +352,7 @@ async function scrapeFacebookGroup(groupIdOrUrl, cookie) {
                     authorName,
                     authorAvatar,
                     content,
+                    creationTime,
                     comments: postComments,
                 });
                 seenPostIds.add(postId);

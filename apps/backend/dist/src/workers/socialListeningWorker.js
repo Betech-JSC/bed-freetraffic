@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -25,6 +58,24 @@ async function executeCampaignScan(campaignId) {
     }
     if (!campaign.facebookCookie) {
         return { success: false, postsCount: 0, leadsFound: 0, error: 'Facebook Cookie not configured.' };
+    }
+    // Resolve Telegram Credentials: use campaign level or fallback to workspace connection settings
+    let finalBotToken = campaign.telegramBotToken;
+    let finalChatId = campaign.telegramChatId;
+    if (campaign.telegramEnabled && (!finalBotToken || !finalChatId)) {
+        const defaultTgConn = await prisma_1.default.socialConnection.findFirst({
+            where: {
+                platform: 'telegram',
+                workspaceId: campaign.workspaceId,
+                status: 'CONNECTED',
+            },
+        });
+        if (defaultTgConn) {
+            if (!finalBotToken)
+                finalBotToken = defaultTgConn.accessToken;
+            if (!finalChatId)
+                finalChatId = defaultTgConn.pageId;
+        }
     }
     const groupUrlsList = campaign.groupUrls
         .split(',')
@@ -100,6 +151,17 @@ async function executeCampaignScan(campaignId) {
                 queryEmbedding = await (0, embeddings_1.getEmbedding)(campaign.keywords);
             }
             for (const post of posts) {
+                // Filter by maxPostAgeHours if set (greater than 0)
+                if (campaign.maxPostAgeHours && campaign.maxPostAgeHours > 0) {
+                    const maxAgeMs = campaign.maxPostAgeHours * 60 * 60 * 1000;
+                    const postTimeMs = post.creationTime
+                        ? post.creationTime * 1000
+                        : post.createdAtText ? new Date(post.createdAtText).getTime() : null;
+                    if (postTimeMs && (Date.now() - postTimeMs > maxAgeMs)) {
+                        console.log(`[Social Listening] Post ${post.postId} ignored: age (${Math.round((Date.now() - postTimeMs) / 3600000)}h) exceeds limit of ${campaign.maxPostAgeHours} hours.`);
+                        continue;
+                    }
+                }
                 // ----------------------------------------------------
                 // A. PROCESS MAIN POST
                 // ----------------------------------------------------
@@ -181,7 +243,7 @@ async function executeCampaignScan(campaignId) {
                             ]
                         };
                         try {
-                            await (0, telegramService_1.sendTelegramAlert)(campaign.telegramBotToken, campaign.telegramChatId, alertText, replyMarkup);
+                            await (0, telegramService_1.sendTelegramAlert)(finalBotToken, finalChatId, alertText, replyMarkup);
                             await prisma_1.default.socialListeningLog.update({
                                 where: { id: log.id },
                                 data: { status: 'NOTIFIED' },
@@ -193,6 +255,43 @@ async function executeCampaignScan(campaignId) {
                                 where: { id: log.id },
                                 data: { status: 'ERROR', errorMessage: teleErr.message },
                             });
+                        }
+                        // Autopilot comment reply trigger for post
+                        if (campaign.autopilot && aiResult.draftMsg) {
+                            const minDelay = campaign.autopilotDelayMin || 3;
+                            const maxDelay = campaign.autopilotDelayMax || 7;
+                            const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay) * 60;
+                            console.log(`[Social Listening Autopilot] Scheduling comment reply for post ${post.postUrl} in ${delaySeconds} seconds...`);
+                            setTimeout(async () => {
+                                try {
+                                    // Fetch the latest state of the log to ensure it wasn't cancelled
+                                    const currentLog = await prisma_1.default.socialListeningLog.findUnique({
+                                        where: { id: log.id }
+                                    });
+                                    if (!currentLog || currentLog.autopilotCancelled || currentLog.repliedContent) {
+                                        console.log(`[Social Listening Autopilot] Comment reply skipped for log #${log.id} (cancelled or already replied)`);
+                                        return;
+                                    }
+                                    const { postFacebookComment } = await Promise.resolve().then(() => __importStar(require('../services/facebookReply')));
+                                    if (campaign.facebookCookie) {
+                                        const success = await postFacebookComment(campaign.facebookCookie, post.postUrl, aiResult.draftMsg);
+                                        if (success) {
+                                            await prisma_1.default.socialListeningLog.update({
+                                                where: { id: log.id },
+                                                data: {
+                                                    repliedContent: aiResult.draftMsg,
+                                                    repliedAt: new Date(),
+                                                    status: 'NOTIFIED'
+                                                }
+                                            });
+                                            console.log(`[Social Listening Autopilot] Comment reply sent successfully for log #${log.id}`);
+                                        }
+                                    }
+                                }
+                                catch (autoErr) {
+                                    console.error(`❌ [Social Listening Autopilot Error] Failed to send comment reply for log #${log.id}:`, autoErr.message);
+                                }
+                            }, delaySeconds * 1000);
                         }
                     }
                     else {
@@ -290,7 +389,7 @@ async function executeCampaignScan(campaignId) {
                                     ]
                                 };
                                 try {
-                                    await (0, telegramService_1.sendTelegramAlert)(campaign.telegramBotToken, campaign.telegramChatId, alertText, replyMarkup);
+                                    await (0, telegramService_1.sendTelegramAlert)(finalBotToken, finalChatId, alertText, replyMarkup);
                                     await prisma_1.default.socialListeningLog.update({
                                         where: { id: log.id },
                                         data: { status: 'NOTIFIED' },
@@ -302,6 +401,43 @@ async function executeCampaignScan(campaignId) {
                                         where: { id: log.id },
                                         data: { status: 'ERROR', errorMessage: teleErr.message },
                                     });
+                                }
+                                // Autopilot comment reply trigger for comment
+                                if (campaign.autopilot && aiResult.draftMsg) {
+                                    const minDelay = campaign.autopilotDelayMin || 3;
+                                    const maxDelay = campaign.autopilotDelayMax || 7;
+                                    const delaySeconds = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay) * 60;
+                                    console.log(`[Social Listening Autopilot] Scheduling reply for comment ${comment.commentId} in ${delaySeconds} seconds...`);
+                                    setTimeout(async () => {
+                                        try {
+                                            // Fetch the latest state of the log to ensure it wasn't cancelled
+                                            const currentLog = await prisma_1.default.socialListeningLog.findUnique({
+                                                where: { id: log.id }
+                                            });
+                                            if (!currentLog || currentLog.autopilotCancelled || currentLog.repliedContent) {
+                                                console.log(`[Social Listening Autopilot] Comment reply skipped for comment log #${log.id} (cancelled or already replied)`);
+                                                return;
+                                            }
+                                            const { postFacebookComment } = await Promise.resolve().then(() => __importStar(require('../services/facebookReply')));
+                                            if (campaign.facebookCookie) {
+                                                const success = await postFacebookComment(campaign.facebookCookie, post.postUrl, aiResult.draftMsg, comment.commentId);
+                                                if (success) {
+                                                    await prisma_1.default.socialListeningLog.update({
+                                                        where: { id: log.id },
+                                                        data: {
+                                                            repliedContent: aiResult.draftMsg,
+                                                            repliedAt: new Date(),
+                                                            status: 'NOTIFIED'
+                                                        }
+                                                    });
+                                                    console.log(`[Social Listening Autopilot] Reply sent successfully for comment log #${log.id}`);
+                                                }
+                                            }
+                                        }
+                                        catch (autoErr) {
+                                            console.error(`❌ [Social Listening Autopilot Error] Failed to send reply for comment log #${log.id}:`, autoErr.message);
+                                        }
+                                    }, delaySeconds * 1000);
                                 }
                             }
                             else {
@@ -330,7 +466,7 @@ async function executeCampaignScan(campaignId) {
                     `Chiến dịch: *${campaign.name}*\n` +
                     `Phiên quét facebook đã bị ngắt kết nối do Cookie hết hạn hoặc không hoạt động. Vui lòng kết nối lại tài khoản Facebook bằng cách nhập Cookie thủ công trên Dashboard Be Traffic.`;
                 try {
-                    await (0, telegramService_1.sendTelegramAlert)(campaign.telegramBotToken, campaign.telegramChatId, warningText);
+                    await (0, telegramService_1.sendTelegramAlert)(finalBotToken, finalChatId, warningText);
                 }
                 catch (teleErr) {
                     console.error(`Failed to send Telegram cookie warning: ${teleErr.message}`);
