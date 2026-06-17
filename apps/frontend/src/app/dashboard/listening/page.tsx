@@ -368,47 +368,32 @@ export default function SocialListeningPage() {
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-brand/10 to-orange-500/10 rounded-full blur-2xl -mr-6 -mt-6"></div>
         
         <div>
-          <div className="flex border-b border-slate-100 gap-6 mb-5 pb-2.5">
-            <h3 className="text-sm font-extrabold text-brand flex items-center gap-1.5">
-              🔑 Hướng dẫn lấy Cookie thủ công (Khuyên dùng - 100% Ổn định)
+          <div className="flex border-b border-slate-100 gap-6 mb-4 pb-2.5">
+            <h3 className="text-sm font-extrabold text-brand">
+              Hướng dẫn lấy Cookie tài khoản Facebook
             </h3>
           </div>
 
           <div className="space-y-3.5 text-xs text-slate-600">
-            <div className="flex items-center justify-between">
-              <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                <span className="p-1 bg-orange-100 rounded text-brand">💡</span>
-                Cách lấy Cookie đầy đủ chứa cả c_user và xs:
-              </p>
-            </div>
+            <p className="font-bold text-slate-800 text-sm">
+              Cách lấy Cookie tự động sử dụng Extension (Khuyên dùng - 100% Ổn định):
+            </p>
             
-            <div className="grid sm:grid-cols-2 gap-4 bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-              <div className="space-y-2">
-                <p className="font-bold text-brand flex items-center gap-1">🌐 Cách 1: Dùng Extension "cURL & WS Capture" (Khuyên dùng)</p>
-                <ul className="list-disc list-inside space-y-1.5 text-slate-500">
-                  <li>Cài extension <b>cURL & WS Capture</b> trên Chrome/Edge.</li>
-                  <li>Vào trang <b>facebook.com</b> để tải dữ liệu.</li>
-                  <li>Mở extension, copy request của Facebook (dạng chuỗi hoặc JSON block).</li>
-                  <li>Dán trực tiếp vào ô Cookie. Backend sẽ tự động phân tích JSON và trích xuất Cookie sạch.</li>
-                </ul>
-              </div>
-
-              <div className="space-y-2 border-t sm:border-t-0 sm:border-l border-slate-100 pt-3 sm:pt-0 sm:pl-4">
-                <p className="font-bold text-slate-800 flex items-center gap-1">💻 Cách 2: Sao chép từ DevTools (F12)</p>
-                <ul className="list-disc list-inside space-y-1.5 text-slate-500">
-                  <li>Nhấn <b>F12</b> ở facebook.com, chuyển sang tab <b>Network</b>.</li>
-                  <li>Nhấn <b>F5</b> để load lại trang.</li>
-                  <li>Click dòng request đầu tiên (Type: <code>document</code>).</li>
-                  <li>Tìm phần <b>Request Headers</b> &rarr; copy giá trị của trường <b>Cookie</b> (chứa cả c_user và xs) và dán vào ô Cookie.</li>
-                </ul>
-              </div>
+            <div className="bg-slate-50/50 p-5 rounded-2xl border border-slate-100 space-y-2.5">
+              <p className="font-bold text-brand">Sử dụng Extension "cURL & WS Capture":</p>
+              <ul className="list-disc list-inside space-y-1.5 text-slate-500">
+                <li>Cài đặt extension <b>cURL & WS Capture</b> từ cửa hàng Chrome/Edge.</li>
+                <li>Vào trang <b>facebook.com</b> để load bảng tin của bạn.</li>
+                <li>Mở extension, sao chép request bất kỳ của Facebook (dạng chuỗi cURL hoặc đối tượng JSON).</li>
+                <li>Dán trực tiếp dữ liệu vừa sao chép vào ô nhập Cookie. Hệ thống sẽ tự động phân tích và trích xuất cookie chính xác.</li>
+              </ul>
             </div>
           </div>
         </div>
 
         <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between gap-4 flex-wrap">
-          <span className="text-[11px] text-slate-400">
-            💡 Lưu ý: Tránh dùng tài khoản chính (cá nhân quan trọng) để chạy quét bài viết. Hãy sử dụng tài khoản Clone phụ để đảm bảo an toàn.
+          <span className="text-[11px] text-slate-400 font-medium">
+            Lưu ý: Không nên dùng tài khoản cá nhân chính để chạy quét bài viết. Hãy sử dụng tài khoản phụ (clone) để tránh ảnh hưởng bảo mật.
           </span>
         </div>
       </div>
@@ -538,7 +523,7 @@ export default function SocialListeningPage() {
                           const display = cleanUrl.includes('/') ? cleanUrl.split('/').pop() || cleanUrl : cleanUrl;
                           return (
                             <span key={idx} className="px-2.5 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-medium rounded-lg truncate max-w-[200px]" title={cleanUrl}>
-                              👥 {display}
+                              {display}
                             </span>
                           );
                         })}
@@ -732,7 +717,7 @@ export default function SocialListeningPage() {
                             {log.postAuthor}
                             {log.isComment && (
                               <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 border border-blue-100 rounded text-[9px] font-black uppercase flex items-center gap-0.5">
-                                💬 Bình luận
+                                Bình luận
                               </span>
                             )}
                           </p>
@@ -750,12 +735,12 @@ export default function SocialListeningPage() {
                       <div className="flex items-center gap-2">
                         {isHot && (
                           <span className="px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 text-xs font-black rounded-lg flex items-center gap-1">
-                            🔥 HOT - {log.aiScore}/100
+                            HOT - {log.aiScore}/100
                           </span>
                         )}
                         {isWarm && (
                           <span className="px-2.5 py-1 bg-amber-50 text-amber-600 border border-amber-200 text-xs font-black rounded-lg flex items-center gap-1">
-                            💡 WARM - {log.aiScore}/100
+                            WARM - {log.aiScore}/100
                           </span>
                         )}
                         {isCold && (
@@ -794,7 +779,7 @@ export default function SocialListeningPage() {
                                 onClick={() => handleCopyText(log.aiDraftMsg!)}
                                 className="text-[10px] text-brand hover:text-brand-hover font-bold"
                               >
-                                📋 Sao chép nháp
+                                Sao chép nháp
                               </button>
                             </div>
                             <div className="text-xs text-slate-600 italic bg-white p-3 rounded-xl border border-orange-100/30 leading-relaxed relative">
