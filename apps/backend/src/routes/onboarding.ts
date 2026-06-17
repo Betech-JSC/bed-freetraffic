@@ -101,7 +101,12 @@ ${issuesList || 'Không phát hiện lỗi nghiêm trọng.'}
       EMAIL_DRIP: 'Tiếp thị qua Email thông minh (AI RAG tự động sinh email chào mừng, chăm sóc cá nhân hóa)',
       SEO_TRAFFIC: 'Tối ưu hóa SEO & Traffic (Phân tích SEO, nghiên cứu từ khóa, tối ưu trang đích kéo traffic)',
     };
-    const selectedGoalLabel = goalLabels[onboardingGoal] || onboardingGoal;
+    const selectedGoalLabel = onboardingGoal.split(',')
+      .map((g: string) => {
+        const trimmed = g.trim();
+        return goalLabels[trimmed] || trimmed;
+      })
+      .join(', ');
 
     // 3. Gọi AI để đề xuất chiến lược tăng trưởng
     let aiAuditReport = '';

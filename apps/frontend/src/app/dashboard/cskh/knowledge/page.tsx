@@ -118,10 +118,49 @@ export default function KnowledgeBasePage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Admin and System Workspace Mode State
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [systemWorkspaceId, setSystemWorkspaceId] = useState<number>(1);
+  const [isSystemMode, setIsSystemMode] = useState(false);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(null);
+
+  // Check user role and fetch system workspace ID
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.role === 'ADMIN') {
+          setIsAdmin(true);
+          apiJson<{ systemWorkspaceId: number }>('/cskh/system-workspace-id')
+            .then(res => {
+              if (res && res.systemWorkspaceId) {
+                setSystemWorkspaceId(res.systemWorkspaceId);
+              }
+            })
+            .catch(err => console.error('Lỗi lấy ID workspace hệ thống:', err));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // Sync activeWorkspaceId based on system mode toggle
+  useEffect(() => {
+    if (isSystemMode && isAdmin) {
+      setActiveWorkspaceId(systemWorkspaceId);
+    } else {
+      const wsId = localStorage.getItem('workspaceId');
+      setActiveWorkspaceId(wsId ? parseInt(wsId, 10) : null);
+    }
+  }, [isSystemMode, isAdmin, systemWorkspaceId]);
+
   const loadConfig = useCallback(async () => {
     try {
       setLoadingConfig(true);
-      const data = await apiJson<CskhConfig>('/cskh/config');
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
+      const data = await apiJson<CskhConfig>('/cskh/config', { headers });
       if (data) {
         setConfig(data);
         setKnowledgeBaseText(data.knowledgeBaseText || '');
@@ -131,12 +170,13 @@ export default function KnowledgeBasePage() {
     } finally {
       setLoadingConfig(false);
     }
-  }, []);
+  }, [activeWorkspaceId]);
 
   const loadSources = useCallback(async () => {
     try {
       setLoadingSources(true);
-      const data = await apiJson<KnowledgeSource[]>('/cskh/knowledge/sources');
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
+      const data = await apiJson<KnowledgeSource[]>('/cskh/knowledge/sources', { headers });
       if (data) {
         setSources(data);
       }
@@ -145,7 +185,7 @@ export default function KnowledgeBasePage() {
     } finally {
       setLoadingSources(false);
     }
-  }, []);
+  }, [activeWorkspaceId]);
 
   useEffect(() => {
     loadConfig();
@@ -188,8 +228,10 @@ export default function KnowledgeBasePage() {
       setError('');
       setSuccess('');
       
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
       await apiJson('/cskh/config', {
         method: 'POST',
+        headers,
         body: JSON.stringify({
           ...config,
           knowledgeBaseText: knowledgeBaseText.trim()
@@ -224,14 +266,14 @@ export default function KnowledgeBasePage() {
       formData.append('file', file);
 
       const token = getAuthToken();
-      const workspaceId = localStorage.getItem('workspaceId');
+      const uploadWsId = activeWorkspaceId ? String(activeWorkspaceId) : (localStorage.getItem('workspaceId') || '');
       
       const baseUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `${window.location.origin.replace(':3000', ':4000')}/api` : 'http://localhost:4000/api');
       const res = await fetch(`${baseUrl}/cskh/knowledge/upload`, {
         method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
-          'x-workspace-id': workspaceId || '',
+          'x-workspace-id': uploadWsId,
         },
         body: formData,
       });
@@ -260,8 +302,10 @@ export default function KnowledgeBasePage() {
     setSuccess('');
 
     try {
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
       const result = await apiJson<any>('/cskh/knowledge/crawl', {
         method: 'POST',
+        headers,
         body: JSON.stringify({ url: urlInput.trim() }),
       });
 
@@ -280,7 +324,11 @@ export default function KnowledgeBasePage() {
     setError('');
     setSuccess('');
     try {
-      await apiJson(`/cskh/knowledge/sources/${id}`, { method: 'DELETE' });
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
+      await apiJson(`/cskh/knowledge/sources/${id}`, { 
+        method: 'DELETE',
+        headers
+      });
       setSuccess(`Đã xóa thành công tài liệu: ${name}`);
       loadSources();
     } catch (err: any) {
@@ -293,7 +341,11 @@ export default function KnowledgeBasePage() {
     setSuccess('');
     try {
       setSyncingSourceId(id);
-      await apiJson(`/cskh/knowledge/sources/${id}/re-sync`, { method: 'POST' });
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
+      await apiJson(`/cskh/knowledge/sources/${id}/re-sync`, { 
+        method: 'POST',
+        headers
+      });
       setSuccess('Đang cập nhật lại tài liệu...');
       loadSources();
     } catch (err: any) {
@@ -309,7 +361,10 @@ export default function KnowledgeBasePage() {
     try {
       setPreviewingSource(source);
       setPreviewText('Đang giải nén văn bản tri thức...');
-      const res = await apiJson<{ extractedText: string }>(`/cskh/knowledge/sources/${source.id}/preview`);
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
+      const res = await apiJson<{ extractedText: string }>(`/cskh/knowledge/sources/${source.id}/preview`, {
+        headers
+      });
       if (res) {
         setPreviewText(res.extractedText);
       }
@@ -327,7 +382,11 @@ export default function KnowledgeBasePage() {
     setSuccess('');
 
     try {
-      await apiJson('/cskh/knowledge/reset', { method: 'POST' });
+      const headers = activeWorkspaceId ? { 'x-workspace-id': String(activeWorkspaceId) } : undefined;
+      await apiJson('/cskh/knowledge/reset', { 
+        method: 'POST',
+        headers
+      });
       setSuccess('Đã đặt lại và dọn sạch hệ thống tri thức doanh nghiệp.');
       setSources([]);
     } catch (err: any) {
@@ -370,6 +429,43 @@ export default function KnowledgeBasePage() {
           <button onClick={() => setError('')} className="text-rose-500 hover:text-rose-800 transition">
             <CloseIcon className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent border border-orange-500/25 rounded-2xl p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm animate-in slide-in-from-top-4 duration-300">
+          <div className="space-y-1">
+            <h4 className="text-xs font-black uppercase tracking-wider text-orange-600 flex items-center gap-1.5">
+              🛡️ Chế độ Quản trị viên Be Traffic
+            </h4>
+            <p className="text-slate-600 text-[11px] font-medium leading-relaxed">
+              Bạn có quyền cấu hình tri thức nền tảng. Khi kích hoạt chế độ <b>Tri thức hệ thống</b>, dữ liệu nạp vào sẽ được sử dụng để trả lời các câu hỏi về chức năng, cách dùng Be Traffic cho <b>tất cả người dùng</b> thông qua Widget hỗ trợ.
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 bg-white border border-slate-200/60 p-1 rounded-xl shadow-sm self-stretch sm:self-auto justify-between sm:justify-start">
+            <button
+              type="button"
+              onClick={() => setIsSystemMode(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                !isSystemMode 
+                  ? 'bg-slate-800 text-white shadow-sm' 
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              Tri thức của tôi
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsSystemMode(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                isSystemMode 
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm' 
+                  : 'text-slate-500 hover:bg-slate-100'
+              }`}
+            >
+              Tri thức hệ thống (Support Widget)
+            </button>
+          </div>
         </div>
       )}
 

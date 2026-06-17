@@ -92,6 +92,13 @@ export async function workspaceMiddleware(
     if (headerWsId) {
       const parsedId = parseInt(headerWsId as string, 10);
       if (!isNaN(parsedId)) {
+        // Nếu là ADMIN, cho phép truy cập bất kỳ workspace nào mà không cần thuộc workspace đó
+        if (req.user.role === 'ADMIN') {
+          req.workspaceId = parsedId;
+          next();
+          return;
+        }
+
         // Verify user belongs to this workspace
         const hasAccess = await prisma.userWorkspace.findUnique({
           where: {

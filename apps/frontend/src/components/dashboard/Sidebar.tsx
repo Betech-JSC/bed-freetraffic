@@ -14,6 +14,22 @@ function isActive(pathname: string, href: string, exact?: boolean) {
 export function Sidebar() {
   const pathname = usePathname();
   const { t } = useLocale();
+  const [role, setRole] = useState<string>('MEMBER');
+
+  // Load user role on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.role) {
+          setRole(parsed.role);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const navGroups = [
     {
@@ -59,7 +75,7 @@ export function Sidebar() {
         { href: '/dashboard/content', label: t('Soạn thảo nội dung') },
         { href: '/dashboard/analytics', label: t('Phân tích Bot') },
         { href: '/dashboard/settings', label: t('settings') },
-        { href: '/dashboard/users', label: t('Người dùng') },
+        ...(role === 'ADMIN' ? [{ href: '/dashboard/users', label: t('Người dùng') }] : []),
         { href: '/dashboard/guide', label: 'Hướng dẫn sử dụng' },
       ]
     }

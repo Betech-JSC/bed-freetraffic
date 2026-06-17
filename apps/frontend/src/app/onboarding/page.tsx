@@ -9,7 +9,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1); // 1: Business info, 2: Goals, 3: Processing, 4: Results
   const [companyName, setCompanyName] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
-  const [onboardingGoal, setOnboardingGoal] = useState('');
+  const [onboardingGoals, setOnboardingGoals] = useState<string[]>([]);
   
   // Processing steps states
   const [currentProgressText, setCurrentProgressText] = useState('Đang khởi tạo cấu hình...');
@@ -71,11 +71,15 @@ export default function OnboardingPage() {
   };
 
   const handleSelectGoal = (goalId: string) => {
-    setOnboardingGoal(goalId);
+    setOnboardingGoals(prev => 
+      prev.includes(goalId) 
+        ? prev.filter(id => id !== goalId) 
+        : [...prev, goalId]
+    );
   };
 
   const handleStartOnboarding = async () => {
-    if (!onboardingGoal) return;
+    if (onboardingGoals.length === 0) return;
     setStep(3);
     setLoading(true);
 
@@ -102,7 +106,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           companyName,
           websiteUrl: websiteUrl || null,
-          onboardingGoal
+          onboardingGoal: onboardingGoals.join(',')
         })
       });
 
@@ -222,7 +226,7 @@ export default function OnboardingPage() {
 
             <div className="grid sm:grid-cols-2 gap-4 pt-4">
               {goals.map((g) => {
-                const isSelected = onboardingGoal === g.id;
+                const isSelected = onboardingGoals.includes(g.id);
                 return (
                   <div
                     key={g.id}
@@ -254,7 +258,7 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={handleStartOnboarding}
-                disabled={!onboardingGoal}
+                disabled={onboardingGoals.length === 0}
                 className="px-6 py-2.5 bg-brand hover:bg-brand-hover text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-[0.98] disabled:opacity-55 disabled:pointer-events-none"
               >
                 Khởi chạy AI lập chiến lược
@@ -338,15 +342,21 @@ export default function OnboardingPage() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200/60 rounded-3xl p-5 space-y-3.5">
+                <div className="bg-white border border-slate-200/60 rounded-3xl p-5 space-y-3">
                   <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Mục tiêu được ưu tiên</h4>
-                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                    <span className="text-2xl">{goals.find(g => g.id === onboardingGoal)?.icon}</span>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">{goals.find(g => g.id === onboardingGoal)?.title}</p>
-                      <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Be Traffic AI OS</p>
-                    </div>
-                  </div>
+                  {onboardingGoals.map(goalId => {
+                    const goal = goals.find(g => g.id === goalId);
+                    if (!goal) return null;
+                    return (
+                      <div key={goal.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                        <span className="text-2xl select-none">{goal.icon}</span>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{goal.title}</p>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase mt-0.5">Be Traffic AI OS</p>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

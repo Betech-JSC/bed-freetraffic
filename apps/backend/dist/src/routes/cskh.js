@@ -52,6 +52,18 @@ const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
 });
+// Lấy ID Workspace hệ thống (dùng cho Admin quản lý tri thức support toàn hệ thống)
+router.get('/system-workspace-id', auth_1.authenticate, async (req, res) => {
+    try {
+        const firstWs = await prisma_1.default.workspace.findFirst({
+            orderBy: { id: 'asc' }
+        });
+        res.json({ systemWorkspaceId: firstWs?.id || 1 });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Lỗi lấy ID workspace hệ thống' });
+    }
+});
 // Load CSKH Config (Real-time Config)
 router.get('/config', auth_1.authenticate, async (req, res) => {
     const cacheKey = `ws:${req.workspaceId}:cskh-config`;

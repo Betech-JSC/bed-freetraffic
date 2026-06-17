@@ -20,6 +20,18 @@ const upload = multer({
 });
 
 
+// Lấy ID Workspace hệ thống (dùng cho Admin quản lý tri thức support toàn hệ thống)
+router.get('/system-workspace-id', authenticate, async (req: WorkspaceRequest, res: Response): Promise<void> => {
+  try {
+    const firstWs = await prisma.workspace.findFirst({
+      orderBy: { id: 'asc' }
+    });
+    res.json({ systemWorkspaceId: firstWs?.id || 1 });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Lỗi lấy ID workspace hệ thống' });
+  }
+});
+
 // Load CSKH Config (Real-time Config)
 router.get('/config', authenticate, async (req: WorkspaceRequest, res: Response): Promise<void> => {
   const cacheKey = `ws:${req.workspaceId}:cskh-config`;

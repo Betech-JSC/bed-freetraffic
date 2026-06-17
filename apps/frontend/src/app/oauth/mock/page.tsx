@@ -47,6 +47,18 @@ function MockOAuthSandboxInner() {
     tiktok: [
       { id: '1', name: 'TikTok Creator Channel A', email: 'creatorA.tiktok@gmail.com', avatarLetter: 'TC1' },
       { id: '2', name: 'TikTok Creator Channel B', email: 'creatorB.tiktok@gmail.com', avatarLetter: 'TC2' }
+    ],
+    mailchimp: [
+      { id: '1', name: 'Mailchimp Marketing Account A', email: 'mailchimpA@company.com', avatarLetter: 'MC' }
+    ],
+    telegram: [
+      { id: '1', name: 'Telegram Bot Manager A', email: 'botmanagerA@telegram.org', avatarLetter: 'TG' }
+    ],
+    reddit: [
+      { id: '1', name: 'Reddit Bot Script Account', email: 'redditA@gmail.com', avatarLetter: 'RD' }
+    ],
+    moz: [
+      { id: '1', name: 'Moz API Professional Suite', email: 'mozsuite@company.com', avatarLetter: 'MZ' }
     ]
   };
 
@@ -105,6 +117,38 @@ function MockOAuthSandboxInner() {
           bgColor: 'bg-[#010101]',
           logo: '🎵',
           scopes: ['user.info.profile', 'video.upload']
+        };
+      case 'mailchimp':
+        return {
+          name: 'Mailchimp',
+          color: '#007C89',
+          bgColor: 'bg-[#007C89]',
+          logo: '🐵',
+          scopes: ['lists.read', 'campaigns.write']
+        };
+      case 'telegram':
+        return {
+          name: 'Telegram Bot',
+          color: '#26A5E4',
+          bgColor: 'bg-[#26A5E4]',
+          logo: '✈️',
+          scopes: ['bot.send_message', 'bot.read_updates']
+        };
+      case 'reddit':
+        return {
+          name: 'Reddit',
+          color: '#FF4500',
+          bgColor: 'bg-[#FF4500]',
+          logo: '🤖',
+          scopes: ['identity', 'submit', 'read']
+        };
+      case 'moz':
+        return {
+          name: 'Moz API Explorer',
+          color: '#00A3E0',
+          bgColor: 'bg-[#00A3E0]',
+          logo: '🦎',
+          scopes: ['url_metrics.read']
         };
       default:
         return {
