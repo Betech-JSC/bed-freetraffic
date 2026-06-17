@@ -42,6 +42,8 @@ import ordersRoutes from './routes/orders';
 import cskhRoutes from './routes/cskh';
 import socialAuthRoutes from './routes/socialAuth';
 import listeningRoutes from './routes/listening';
+import onboardingRoutes from './routes/onboarding';
+import systemSupportRoutes from './routes/systemSupport';
 import { workspaceMiddleware } from './middleware/workspace';
 import { authenticate } from './middleware/auth';
 import { API_FEATURES, API_VERSION } from './lib/apiMeta';
@@ -120,6 +122,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/social', socialAuthRoutes);
 app.use('/api/workspaces', workspacesRoutes);
+app.use('/api/workspaces', onboardingRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/email-campaigns', emailCampaignsRoutes);
 
@@ -157,6 +160,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/payments', paymentsRoutes); // auth handled internally per-route (webhooks are public)
 app.use('/api/orders', authenticate, workspaceMiddleware, ordersRoutes);
 app.use('/api/cskh', authenticate, workspaceMiddleware, cskhRoutes);
+app.use('/api/cskh/system-support', systemSupportRoutes);
 app.use('/api/listening', authenticate, workspaceMiddleware, listeningRoutes);
 
 // Fallback 404 for any unregistered /api routes

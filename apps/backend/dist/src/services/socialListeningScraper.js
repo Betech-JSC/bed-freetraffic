@@ -334,7 +334,10 @@ async function scrapeFacebookGroup(groupIdOrUrl, cookie) {
                 let postUrl = `https://www.facebook.com/groups/${groupId}/permalink/${postId}/`;
                 const urlMatch = context.match(/"url"\s*:\s*"((?:[^"\\]|\\.)*)"/);
                 if (urlMatch) {
-                    postUrl = urlMatch[1].replace(/\\/g, '');
+                    const matchedUrl = urlMatch[1].replace(/\\/g, '');
+                    if (matchedUrl.includes('/groups/') && (matchedUrl.includes('/posts/') || matchedUrl.includes('/permalink/'))) {
+                        postUrl = matchedUrl;
+                    }
                 }
                 const postComments = extractCommentsFromContext(context);
                 posts.push({

@@ -387,16 +387,9 @@ router.get('/:platform/callback', async (req: Request, res: Response): Promise<v
       let user = await prisma.user.findUnique({ where: { email: userProfile.email } });
       
       if (!user) {
-        // Tự động tạo user mới (Social registration)
-        const dummyPassword = await bcrypt.hash(`social_${Math.random()}_key`, 10);
-        user = await prisma.user.create({
-          data: {
-            email: userProfile.email,
-            name: userProfile.name,
-            password: dummyPassword,
-            role: 'EDITOR' // EDITOR là mặc định, an toàn
-          }
-        });
+        // KHÔNG tự động đăng nhập khi chưa có tài khoản, chuyển hướng qua bước đăng ký để lấy thông tin cơ bản
+        res.redirect(`${frontendUrl}/register?socialEmail=${encodeURIComponent(userProfile.email)}&socialName=${encodeURIComponent(userProfile.name)}&platform=${platform}`);
+        return;
       }
 
       // Tạo JWT Token cho user

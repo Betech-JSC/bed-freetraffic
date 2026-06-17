@@ -66,6 +66,11 @@ model Workspace {
   shortLinks        ShortLink[]
   popupWidgets      PopupWidget[]
   marketingWidgets  MarketingWidget[]
+  companyName         String?
+  websiteUrl          String?
+  onboardingGoal      String?
+  onboardingCompleted Boolean             @default(false)
+  aiAuditReport       String?             @db.Text
   socialListeningCampaigns SocialListeningCampaign[]
 }
 

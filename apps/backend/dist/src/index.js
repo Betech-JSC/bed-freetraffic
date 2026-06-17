@@ -80,6 +80,8 @@ const orders_1 = __importDefault(require("./routes/orders"));
 const cskh_1 = __importDefault(require("./routes/cskh"));
 const socialAuth_1 = __importDefault(require("./routes/socialAuth"));
 const listening_1 = __importDefault(require("./routes/listening"));
+const onboarding_1 = __importDefault(require("./routes/onboarding"));
+const systemSupport_1 = __importDefault(require("./routes/systemSupport"));
 const workspace_1 = require("./middleware/workspace");
 const auth_3 = require("./middleware/auth");
 const apiMeta_1 = require("./lib/apiMeta");
@@ -150,6 +152,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', auth_1.default);
 app.use('/api/auth/social', socialAuth_1.default);
 app.use('/api/workspaces', workspaces_1.default);
+app.use('/api/workspaces', onboarding_1.default);
 app.use('/api/google', google_1.default);
 app.use('/api/email-campaigns', emailCampaigns_1.default);
 app.use('/api/channels', auth_3.authenticate, workspace_1.workspaceMiddleware, channel_1.default);
@@ -185,6 +188,7 @@ app.use('/api/public', public_1.default);
 app.use('/api/payments', payments_1.default); // auth handled internally per-route (webhooks are public)
 app.use('/api/orders', auth_3.authenticate, workspace_1.workspaceMiddleware, orders_1.default);
 app.use('/api/cskh', auth_3.authenticate, workspace_1.workspaceMiddleware, cskh_1.default);
+app.use('/api/cskh/system-support', systemSupport_1.default);
 app.use('/api/listening', auth_3.authenticate, workspace_1.workspaceMiddleware, listening_1.default);
 // Fallback 404 for any unregistered /api routes
 app.use('/api', errorHandler_1.notFoundHandler);

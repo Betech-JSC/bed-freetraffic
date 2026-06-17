@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const zaloCrypto_1 = require("../lib/zaloCrypto");
@@ -360,16 +359,9 @@ router.get('/:platform/callback', async (req, res) => {
             // Kiểm tra user có tồn tại chưa
             let user = await prisma_1.default.user.findUnique({ where: { email: userProfile.email } });
             if (!user) {
-                // Tự động tạo user mới (Social registration)
-                const dummyPassword = await bcryptjs_1.default.hash(`social_${Math.random()}_key`, 10);
-                user = await prisma_1.default.user.create({
-                    data: {
-                        email: userProfile.email,
-                        name: userProfile.name,
-                        password: dummyPassword,
-                        role: 'EDITOR' // EDITOR là mặc định, an toàn
-                    }
-                });
+                // KHÔNG tự động đăng nhập khi chưa có tài khoản, chuyển hướng qua bước đăng ký để lấy thông tin cơ bản
+                res.redirect(`${frontendUrl}/register?socialEmail=${encodeURIComponent(userProfile.email)}&socialName=${encodeURIComponent(userProfile.name)}&platform=${platform}`);
+                return;
             }
             // Tạo JWT Token cho user
             const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -14,8 +47,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-free-traffic-key';
 // Đăng ký (Register)
 router.post('/register', async (req, res) => {
     try {
-        const { email, password, name } = req.body;
-        if (!email || !password) {
+        const { email, password, name, isSocial } = req.body;
+        if (!email || (!password && !isSocial)) {
             res.status(400).json({ error: 'Vui lòng cung cấp email và mật khẩu' });
             return;
         }
@@ -24,16 +57,36 @@ router.post('/register', async (req, res) => {
             res.status(400).json({ error: 'Email đã được sử dụng' });
             return;
         }
-        const hashedPassword = await bcryptjs_1.default.hash(password, 10);
+        const rawPassword = password || `social_${Math.random()}_key`;
+        const hashedPassword = await bcryptjs_1.default.hash(rawPassword, 10);
         const user = await prisma_1.default.user.create({
             data: {
                 email,
                 password: hashedPassword,
                 name: name || 'Admin User',
-                role: 'ADMIN' // Tạm thời set mặc định là ADMIN cho bản MVP
+                role: 'EDITOR' // EDITOR làm mặc định cho đăng ký thường/social
             }
         });
-        res.status(201).json({ message: 'Đăng ký thành công', userId: user.id });
+        // Kích hoạt gửi email chào mừng cho quản trị viên mới
+        const { triggerEmailEvent } = await Promise.resolve().then(() => __importStar(require('../services/emailEventTrigger')));
+        void triggerEmailEvent('WELCOME', {
+            email: user.email,
+            customerName: user.name || 'Thành viên mới',
+            customMessage: 'Chào mừng bạn đến với Growth OS! Chúc bạn có trải nghiệm tuyệt vời khi quản lý website và SEO.'
+        }).catch(e => console.error('Error triggering user welcome email:', e));
+        // Tạo JWT Token cho user vừa đăng ký thành công
+        const token = jsonwebtoken_1.default.sign({ userId: user.id, email: user.email, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+        res.status(201).json({
+            message: 'Đăng ký thành công',
+            userId: user.id,
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role
+            }
+        });
     }
     catch (error) {
         console.error('Lỗi đăng ký:', error);

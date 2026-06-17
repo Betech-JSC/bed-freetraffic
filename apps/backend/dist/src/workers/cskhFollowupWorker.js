@@ -1,14 +1,48 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dispatchDueCskhFollowUps = dispatchDueCskhFollowUps;
 exports.dispatchDueCskhAutoCare = dispatchDueCskhAutoCare;
+exports.dispatchDueAbandonedCarts = dispatchDueAbandonedCarts;
+exports.dispatchDueInactiveCustomers = dispatchDueInactiveCustomers;
 exports.startCskhFollowupWorker = startCskhFollowupWorker;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const smtp_1 = require("../lib/smtp");
-const ai_1 = require("../lib/ai");
 const cskhFollowupQueue_1 = require("../queues/cskhFollowupQueue");
 const connection_1 = require("../queues/connection");
 const TICK_MS = 60_000; // Quét mỗi 60 giây
@@ -43,62 +77,17 @@ async function processSession(session) {
     const conversationText = session.messages
         .map((m) => `${m.sender === 'visitor' ? 'Khách hàng' : 'Trợ lý ảo AI'}: ${m.content}`)
         .join('\n');
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
-    let emailBody = '';
-    // 4. Gọi OpenAI soạn thảo thư cá nhân hóa (nếu có API Key)
-    if (ai.apiKey) {
-        const systemPrompt = `Bạn là chuyên viên chăm sóc khách hàng bằng tiếng Việt.
-Nhiệm vụ của bạn là viết một email hỏi han thân thiện, chu đáo gửi tới khách hàng dựa trên lịch sử cuộc trò chuyện trực tuyến của họ với chatbot hỗ trợ của chúng tôi.
-Dưới đây là định hướng phong cách và nội dung thư của quản trị viên:
----
-${cskhConfig.followUpEmailBody || 'Hỏi thăm khách hàng xem họ có cần hỗ trợ thêm thông tin gì từ cuộc trò chuyện trước không.'}
----
-Chi tiết cuộc hội thoại của khách hàng với chatbot:
-${conversationText}
-
-Quy tắc:
-1. Viết email lịch sự, chân thành, tự nhiên, không sáo rỗng. Hãy xưng hô thân mật phù hợp (ví dụ: chào anh/chị, xưng em hoặc tên thương hiệu).
-2. Email cần tóm tắt ngắn gọn mối quan tâm hoặc thắc mắc trước đó của khách hàng, hỏi han xem họ đã giải quyết được vấn đề chưa, hoặc có cần hỗ trợ thêm thông tin gì không.
-3. Hãy đưa ra giải pháp/định hướng rõ ràng và mời họ phản hồi lại thư này nếu cần hỗ trợ trực tiếp.
-4. Chỉ trả về NỘI DUNG EMAIL DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
-        try {
-            const response = await (0, ai_1.fetchWithRetry)(ai.url, {
-                method: 'POST',
-                headers: ai.headers,
-                body: JSON.stringify({
-                    model: ai.model,
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        { role: 'user', content: `Hãy viết email chăm sóc gửi đến khách hàng ${session.customer.name || 'Quý khách'}.` }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 800,
-                }),
-                signal: AbortSignal.timeout(15000),
-            });
-            if (response.ok) {
-                const data = await response.json();
-                emailBody = data.choices?.[0]?.message?.content?.trim() || '';
-            }
-            else {
-                const errorText = await response.text();
-                console.error('[CskhFollowupWorker] Lỗi OpenAI API:', response.status, errorText);
-            }
-        }
-        catch (err) {
-            console.error('[CskhFollowupWorker] Lỗi kết nối OpenAI:', err);
-        }
-    }
-    // 5. Thư mẫu dự phòng nếu không dùng/không gọi được AI
-    if (!emailBody) {
-        emailBody = `<p>Chào ${session.customer.name || 'quý khách'},</p>
-<p>Cảm ơn bạn đã liên hệ và trò chuyện với chatbot của chúng tôi gần đây.</p>
-<p>Chúng tôi gửi thư này để hỏi xem bạn đã giải quyết được thắc mắc của mình chưa? Nếu bạn cần bất kỳ sự hỗ trợ trực tiếp nào từ chuyên viên của chúng tôi, vui lòng phản hồi lại email này nhé!</p>
-<p>Trân trọng,<br>Đội ngũ hỗ trợ khách hàng</p>`;
-    }
-    // 6. Xử lý tiêu đề thư
-    let subject = cskhConfig.followUpEmailSubject || 'Cảm ơn quý khách đã quan tâm hỗ trợ từ chúng tôi';
-    subject = subject.replace(/{{name}}/g, session.customer.name || 'Quý khách');
+    // 4. Sinh email AI RAG chăm sóc
+    const { generateEmailWithRag } = await Promise.resolve().then(() => __importStar(require('../services/ragEmailService')));
+    const emailResult = await generateEmailWithRag(workspaceId, 'FOLLOWUP', {
+        customerId: session.customer.id,
+        customerName: session.customer.name,
+        customerEmail: session.customer.email,
+        chatHistory: conversationText,
+        customMessage: cskhConfig.followUpEmailBody || ''
+    });
+    const subject = emailResult.subject;
+    const htmlBody = emailResult.htmlContent;
     // 7. Gửi email qua SMTP
     const transporter = await (0, smtp_1.createSmtpTransporter)(workspaceId);
     const smtpConfig = await (0, smtp_1.getSmtpConfig)(workspaceId);
@@ -107,14 +96,14 @@ Quy tắc:
             from: `"${smtpConfig.email.split('@')[0]}" <${smtpConfig.email}>`,
             to: session.customer.email,
             subject,
-            html: emailBody,
+            html: htmlBody,
         });
         // Lưu nhật ký vào CRM
         await prisma_1.default.customerEmailLog.create({
             data: {
                 customerId: session.customer.id,
                 subject,
-                body: emailBody,
+                body: htmlBody,
                 status: 'SENT',
                 sentAt: new Date(),
             },
@@ -277,87 +266,30 @@ async function dispatchDueCskhAutoCare() {
                             continue;
                         if (channel === 'zalo' && !customer.zaloUserId && !customer.phone)
                             continue;
-                        // 4. Tạo prompt cá nhân hóa dựa trên dữ liệu khách hàng
-                        const notesText = customer.notes.map((n) => `- Ghi chú lúc ${n.createdAt.toLocaleDateString('vi-VN')}: ${n.content}`).join('\n');
-                        const ordersText = customer.orders.map((o) => `- Đơn hàng ${o.orderNumber}: ${o.totalAmount} VND (Trạng thái: ${o.status})`).join('\n');
-                        const ai = (0, ai_1.getAiConfig)('/chat/completions');
-                        let messageBody = '';
-                        if (ai.apiKey) {
-                            const systemPrompt = `Bạn là trợ lý ảo AI chăm sóc khách hàng tự động thông minh bằng tiếng Việt.
-Nhiệm vụ của bạn là viết một tin nhắn chăm sóc khách hàng cá nhân hóa dựa trên hồ sơ khách hàng dưới đây.
-
-Hồ sơ khách hàng:
-- Họ tên: ${customer.name}
-- Email: ${customer.email || 'Chưa cung cấp'}
-- Số điện thoại: ${customer.phone || 'Chưa cung cấp'}
-- Công ty: ${customer.company || 'Chưa cung cấp'}
-- Trạng thái chăm sóc hiện tại: ${customer.status}
-
-Lịch sử ghi chú chăm sóc của nhân viên:
-${notesText || '(Chưa có ghi chú nào)'}
-
-Lịch sử đơn hàng:
-${ordersText || '(Chưa có đơn hàng nào)'}
-
-Định hướng nội dung từ Quản trị viên:
----
-${config.autoCareEmailBody || 'Hỏi thăm khách hàng xem họ có cần hỗ trợ thêm thông tin gì không.'}
----
-
-Quy tắc:
-1. Viết tin nhắn lịch sự, chân thành, tự nhiên, không sáo rỗng. Cá nhân hóa theo thông tin công ty, ghi chú hoặc đơn hàng của họ.
-2. Xưng hô thân mật phù hợp (ví dụ: chào anh/chị, xưng em hoặc tên thương hiệu).
-3. Chỉ trả về NỘI DUNG DƯỚI DẠNG HTML (sử dụng các thẻ cơ bản như <p>, <strong>, <br>, <ul>, <li> để định dạng, KHÔNG dùng markdown hay thẻ html/head/body toàn trang). KHÔNG bao bọc bằng thẻ \`\`\`html.`;
-                            try {
-                                const response = await (0, ai_1.fetchWithRetry)(ai.url, {
-                                    method: 'POST',
-                                    headers: ai.headers,
-                                    body: JSON.stringify({
-                                        model: ai.model,
-                                        messages: [
-                                            { role: 'system', content: systemPrompt },
-                                            { role: 'user', content: `Hãy viết tin nhắn chăm sóc gửi qua kênh ${channel} cho khách hàng ${customer.name}.` }
-                                        ],
-                                        temperature: 0.7,
-                                        max_tokens: 800,
-                                    }),
-                                    signal: AbortSignal.timeout(15000),
-                                });
-                                if (response.ok) {
-                                    const data = await response.json();
-                                    messageBody = data.choices?.[0]?.message?.content?.trim() || '';
-                                }
-                                else {
-                                    console.error(`[CskhAutoCare] Lỗi OpenAI API:`, response.status);
-                                }
-                            }
-                            catch (err) {
-                                console.error(`[CskhAutoCare] Lỗi kết nối OpenAI:`, err);
-                            }
-                        }
-                        // Nếu không dùng OpenAI hoặc gọi lỗi, dùng bản mẫu dự phòng
-                        if (!messageBody) {
-                            messageBody = `<p>Chào ${customer.name || 'quý khách'},</p>
-<p>Chúng tôi liên hệ từ bộ phận hỗ trợ khách hàng tự động để gửi lời chúc tốt đẹp nhất tới bạn và công ty ${customer.company || 'của bạn'}.</p>
-<p>Chúng tôi luôn sẵn sàng đồng hành cùng bạn để tối ưu hóa lưu lượng truy cập và cải thiện hiệu quả SEO. Nếu bạn cần bất kỳ sự hỗ trợ nào, đừng ngần ngại liên hệ nhé!</p>
-<p>Trân trọng,<br>Đội ngũ hỗ trợ</p>`;
-                        }
-                        // Xử lý tiêu đề
-                        let subject = config.autoCareEmailSubject || 'Tin nhắn chăm sóc khách hàng';
-                        subject = subject.replace(/{{name}}/g, customer.name || 'Quý khách')
-                            .replace(/{{company}}/g, customer.company || 'Doanh nghiệp')
-                            .replace(/{{email}}/g, customer.email || '');
+                        // 4. Sinh email AI RAG chăm sóc
+                        const { generateEmailWithRag } = await Promise.resolve().then(() => __importStar(require('../services/ragEmailService')));
+                        const emailResult = await generateEmailWithRag(workspaceId, 'FOLLOWUP', {
+                            customerId: customer.id,
+                            customerName: customer.name,
+                            customerEmail: customer.email,
+                            customMessage: config.autoCareEmailBody || ''
+                        });
+                        let subject = emailResult.subject;
+                        let messageBody = emailResult.htmlContent;
                         // Thực thi gửi theo kênh
                         let success = false;
                         let errorMsg = null;
+                        let logBody = messageBody;
                         if (channel === 'email') {
                             if (transporter && smtpConfig) {
                                 try {
+                                    const htmlBody = messageBody;
+                                    logBody = htmlBody;
                                     await transporter.sendMail({
                                         from: `"${smtpConfig.email.split('@')[0]}" <${smtpConfig.email}>`,
                                         to: customer.email,
                                         subject,
-                                        html: messageBody,
+                                        html: htmlBody,
                                     });
                                     success = true;
                                 }
@@ -444,7 +376,7 @@ Quy tắc:
                             data: {
                                 customerId: customer.id,
                                 subject,
-                                body: messageBody,
+                                body: logBody,
                                 status: success ? 'SENT' : 'FAILED',
                                 errorMessage: errorMsg,
                                 channel,
@@ -470,6 +402,121 @@ Quy tắc:
         console.error('[CskhAutoCare] Lỗi quét tiến trình chăm sóc tự động:', error);
     }
 }
+async function dispatchDueAbandonedCarts() {
+    try {
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+        // Tìm các đơn hàng PENDING trong khoảng 2h - 48h trước
+        const pendingOrders = await prisma_1.default.order.findMany({
+            where: {
+                status: 'PENDING',
+                createdAt: {
+                    lte: twoHoursAgo,
+                    gte: fortyEightHoursAgo,
+                },
+            },
+            include: {
+                customer: true,
+            },
+        });
+        for (const order of pendingOrders) {
+            if (!order.customer || !order.customer.email)
+                continue;
+            // Kiểm tra xem đã gửi email bỏ quên giỏ hàng cho đơn hàng này chưa (trong email log)
+            const existingLog = await prisma_1.default.customerEmailLog.findFirst({
+                where: {
+                    customerId: order.customerId,
+                    subject: {
+                        contains: order.orderNumber,
+                    },
+                    status: 'SENT',
+                },
+            });
+            if (existingLog)
+                continue; // Đã gửi rồi
+            console.log(`[AbandonedCart] Đơn hàng #${order.orderNumber} của khách hàng ${order.customer.email} bị bỏ quên quá 2 giờ. Kích hoạt email chăm sóc.`);
+            // Trigger sự kiện ABANDONED
+            const { triggerEmailEvent } = await Promise.resolve().then(() => __importStar(require('../services/emailEventTrigger')));
+            await triggerEmailEvent('ABANDONED', {
+                orderId: order.id,
+                customerId: order.customerId,
+                workspaceId: order.workspaceId,
+                orderNumber: order.orderNumber,
+                email: order.customer.email,
+                customerName: order.customer.name,
+            });
+        }
+    }
+    catch (err) {
+        console.error('[AbandonedCartScanner] Lỗi quét giỏ hàng bị bỏ quên:', err);
+    }
+}
+async function dispatchDueInactiveCustomers() {
+    try {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        // Tìm khách hàng chưa gửi chăm sóc trong 30 ngày qua và không tương tác gì trong 30 ngày qua
+        const inactiveCustomers = await prisma_1.default.customer.findMany({
+            where: {
+                status: { not: 'INACTIVE' },
+                createdAt: { lte: thirtyDaysAgo },
+                AND: [
+                    {
+                        OR: [
+                            { lastContactAt: null },
+                            { lastContactAt: { lte: thirtyDaysAgo } },
+                        ],
+                    },
+                    {
+                        OR: [
+                            { lastAiCareSentAt: null },
+                            { lastAiCareSentAt: { lte: thirtyDaysAgo } },
+                        ],
+                    },
+                ],
+            },
+            include: {
+                orders: {
+                    where: {
+                        createdAt: { gte: thirtyDaysAgo },
+                    },
+                },
+                notes: {
+                    where: {
+                        createdAt: { gte: thirtyDaysAgo },
+                    },
+                },
+                chatSessions: {
+                    where: {
+                        createdAt: { gte: thirtyDaysAgo },
+                    },
+                },
+            },
+        });
+        const eligibleCustomers = inactiveCustomers.filter((c) => c.orders.length === 0 && c.notes.length === 0 && c.chatSessions.length === 0);
+        for (const customer of eligibleCustomers) {
+            console.log(`[InactiveReactivation] Khách hàng ${customer.email} không hoạt động 30 ngày qua. Kích hoạt email đánh thức.`);
+            // Cập nhật lastAiCareSentAt và chuyển status sang INACTIVE
+            await prisma_1.default.customer.update({
+                where: { id: customer.id },
+                data: {
+                    lastAiCareSentAt: new Date(),
+                    status: 'INACTIVE',
+                },
+            });
+            // Trigger sự kiện INACTIVE
+            const { triggerEmailEvent } = await Promise.resolve().then(() => __importStar(require('../services/emailEventTrigger')));
+            await triggerEmailEvent('INACTIVE', {
+                customerId: customer.id,
+                workspaceId: customer.workspaceId,
+                email: customer.email,
+                customerName: customer.name,
+            });
+        }
+    }
+    catch (err) {
+        console.error('[InactiveScanner] Lỗi quét khách hàng ngủ đông:', err);
+    }
+}
 function startCskhFollowupWorker() {
     if (connection_1.useRedis && cskhFollowupQueue_1.cskhFollowupQueue) {
         cskhFollowupQueue_1.cskhFollowupQueue.add('cskh-scanner', {}, {
@@ -488,9 +535,13 @@ function startCskhFollowupWorker() {
         // Quét ngay lập tức khi khởi chạy
         dispatchDueCskhFollowUps();
         dispatchDueCskhAutoCare();
+        dispatchDueAbandonedCarts();
+        dispatchDueInactiveCustomers();
         setInterval(async () => {
             await dispatchDueCskhFollowUps();
             await dispatchDueCskhAutoCare();
+            await dispatchDueAbandonedCarts();
+            await dispatchDueInactiveCustomers();
         }, 60_000);
     }
 }

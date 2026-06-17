@@ -11,11 +11,27 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isSocial, setIsSocial] = useState(false);
   const [agree, setAgree] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const socialEmail = params.get('socialEmail');
+      const socialName = params.get('socialName');
+      if (socialEmail) {
+        setEmail(decodeURIComponent(socialEmail));
+        setIsSocial(true);
+      }
+      if (socialName) {
+        setName(decodeURIComponent(socialName));
+      }
+    }
+  }, []);
 
   const handleSocialLogin = async (platform: string) => {
     setError('');
@@ -46,16 +62,27 @@ export default function RegisterPage() {
       const res = await fetch(apiUrl('/api/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password: isSocial ? undefined : password, isSocial }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Đăng ký thất bại');
 
-      setSuccess('Tạo tài khoản thành công! Đang chuyển hướng...');
-      setTimeout(() => {
-        router.push('/login');
-      }, 1500);
+      if (data.token) {
+        // Lưu cookie & localStorage để tự động đăng nhập luôn
+        document.cookie = `token=${data.token}; path=/; max-age=604800`;
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        setSuccess('Kết nối tài khoản thành công! Đang chuyển hướng sang thiết lập Onboarding...');
+        setTimeout(() => {
+          router.push('/onboarding');
+          router.refresh();
+        }, 1500);
+      } else {
+        setSuccess('Tạo tài khoản thành công! Đang chuyển hướng sang Đăng nhập...');
+        setTimeout(() => {
+          router.push('/login');
+        }, 1500);
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Đăng ký thất bại');
     } finally {
@@ -207,7 +234,8 @@ export default function RegisterPage() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="px-4 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350 transition-all duration-200 bg-white/50 focus:bg-white"
+                    disabled={isSocial}
+                    className="px-4 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350 transition-all duration-200 bg-white/50 focus:bg-white disabled:bg-slate-100 disabled:text-slate-450 disabled:cursor-not-allowed"
                     placeholder="name@company.com"
                     required
                   />
@@ -215,27 +243,33 @@ export default function RegisterPage() {
               </div>
 
               {/* Password Input */}
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-600 block">Mật khẩu</label>
-                <div className="relative flex items-center">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-4 pr-11 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350 transition-all duration-200 bg-white/50 focus:bg-white"
-                    placeholder="••••••••"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 text-slate-400 hover:text-slate-650 cursor-pointer text-xs font-bold"
-                  >
-                    {showPassword ? 'Ẩn' : 'Hiện'}
-                  </button>
+              {isSocial ? (
+                <div className="p-3 bg-brand-light border border-brand-muted text-brand rounded-2xl text-xs font-semibold leading-normal">
+                  🚀 Kết nối nhanh qua tài khoản Google. Hệ thống sẽ tự động xác thực và bảo mật tài khoản cho bạn mà không cần mật khẩu.
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">Mật khẩu phải chứa ít nhất 8 ký tự.</p>
-              </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-600 block">Mật khẩu</label>
+                  <div className="relative flex items-center">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-4 pr-11 py-2.5 w-full rounded-xl border border-slate-200 focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-slate-800 text-sm shadow-sm placeholder-slate-350 transition-all duration-200 bg-white/50 focus:bg-white"
+                      placeholder="••••••••"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 text-slate-400 hover:text-slate-650 cursor-pointer text-xs font-bold"
+                    >
+                      {showPassword ? 'Ẩn' : 'Hiện'}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Mật khẩu phải chứa ít nhất 8 ký tự.</p>
+                </div>
+              )}
 
               {/* Agree Terms Checkbox */}
               <label className="flex items-start gap-2.5 pt-2 select-none cursor-pointer">
