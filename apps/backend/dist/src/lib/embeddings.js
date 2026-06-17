@@ -294,8 +294,20 @@ async function retrieveRelevantChunksStructured(workspaceId, query, topN = 5) {
     }
     try {
         await initVectorDb();
-        // Check if any chunks exist for this workspace first using an optimized LIMIT 1 check
-        const existResult = await prisma_1.default.$queryRawUnsafe('SELECT 1 FROM "KnowledgeChunk" WHERE "workspaceId" = $1 LIMIT 1', workspaceId);
+        // Resolve system workspace ID (workspace with the lowest ID)
+        const firstWs = await prisma_1.default.workspace.findFirst({
+            orderBy: { id: 'asc' },
+            select: { id: true }
+        });
+        const systemWorkspaceId = firstWs?.id || 1;
+        // Check if any chunks exist first using an optimized LIMIT 1 check
+        let existResult;
+        if (workspaceId === systemWorkspaceId) {
+            existResult = await prisma_1.default.$queryRawUnsafe('SELECT 1 FROM "KnowledgeChunk" WHERE "workspaceId" = $1 LIMIT 1', workspaceId);
+        }
+        else {
+            existResult = await prisma_1.default.$queryRawUnsafe('SELECT 1 FROM "KnowledgeChunk" WHERE "workspaceId" = $1 OR "workspaceId" = $2 LIMIT 1', workspaceId, systemWorkspaceId);
+        }
         if (!existResult || existResult.length === 0) {
             return [];
         }
@@ -311,10 +323,19 @@ async function retrieveRelevantChunksStructured(workspaceId, query, topN = 5) {
                 .filter(t => t.length > 1);
             if (queryTerms.length === 0) {
                 // If query is empty or too short, return the first topN chunks
-                const results = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content"
-           FROM "KnowledgeChunk"
-           WHERE "workspaceId" = $1
-           LIMIT $2`, workspaceId, topN);
+                let results;
+                if (workspaceId === systemWorkspaceId) {
+                    results = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content"
+             FROM "KnowledgeChunk"
+             WHERE "workspaceId" = $1
+             LIMIT $2`, workspaceId, topN);
+                }
+                else {
+                    results = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content"
+             FROM "KnowledgeChunk"
+             WHERE "workspaceId" = $1 OR "workspaceId" = $2
+             LIMIT $3`, workspaceId, systemWorkspaceId, topN);
+                }
                 return results.map(r => ({
                     content: r.content,
                     source: r.source,
@@ -322,13 +343,26 @@ async function retrieveRelevantChunksStructured(workspaceId, query, topN = 5) {
                 }));
             }
             // Query database for chunks that contain any of the query terms
-            const clauses = queryTerms.map((_, idx) => `"content" ILIKE $${idx + 2}`);
-            const sql = `
-        SELECT "source", "sourceId", "content"
-        FROM "KnowledgeChunk"
-        WHERE "workspaceId" = $1 AND (${clauses.join(' OR ')})
-      `;
-            const params = [workspaceId, ...queryTerms.map(t => `%${t}%`)];
+            let sql;
+            let params;
+            if (workspaceId === systemWorkspaceId) {
+                const clauses = queryTerms.map((_, idx) => `"content" ILIKE $${idx + 2}`);
+                sql = `
+          SELECT "source", "sourceId", "content"
+          FROM "KnowledgeChunk"
+          WHERE "workspaceId" = $1 AND (${clauses.join(' OR ')})
+        `;
+                params = [workspaceId, ...queryTerms.map(t => `%${t}%`)];
+            }
+            else {
+                const clauses = queryTerms.map((_, idx) => `"content" ILIKE $${idx + 3}`);
+                sql = `
+          SELECT "source", "sourceId", "content"
+          FROM "KnowledgeChunk"
+          WHERE ("workspaceId" = $1 OR "workspaceId" = $2) AND (${clauses.join(' OR ')})
+        `;
+                params = [workspaceId, systemWorkspaceId, ...queryTerms.map(t => `%${t}%`)];
+            }
             const dbChunks = await prisma_1.default.$queryRawUnsafe(sql, ...params);
             // Score and rank the fetched chunks in memory
             const scoredChunks = dbChunks.map(chunk => {
@@ -372,10 +406,19 @@ async function retrieveRelevantChunksStructured(workspaceId, query, topN = 5) {
                 : dbChunks.slice(0, topN);
             // If we still have nothing, get any chunks from the workspace
             if (finalChunks.length === 0) {
-                const anyChunks = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content"
-           FROM "KnowledgeChunk"
-           WHERE "workspaceId" = $1
-           LIMIT $2`, workspaceId, topN);
+                let anyChunks;
+                if (workspaceId === systemWorkspaceId) {
+                    anyChunks = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content"
+             FROM "KnowledgeChunk"
+             WHERE "workspaceId" = $1
+             LIMIT $2`, workspaceId, topN);
+                }
+                else {
+                    anyChunks = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content"
+             FROM "KnowledgeChunk"
+             WHERE "workspaceId" = $1 OR "workspaceId" = $2
+             LIMIT $3`, workspaceId, systemWorkspaceId, topN);
+                }
                 return anyChunks.map(r => ({
                     content: r.content,
                     source: r.source,
@@ -390,11 +433,21 @@ async function retrieveRelevantChunksStructured(workspaceId, query, topN = 5) {
         }
         const vectorString = `[${queryVector.join(',')}]`;
         // Query Neon PostgreSQL pgvector
-        const results = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content", ("embedding" <=> CAST($1 AS vector)) as distance
-       FROM "KnowledgeChunk"
-       WHERE "workspaceId" = $2
-       ORDER BY distance ASC
-       LIMIT $3`, vectorString, workspaceId, topN);
+        let results;
+        if (workspaceId === systemWorkspaceId) {
+            results = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content", ("embedding" <=> CAST($1 AS vector)) as distance
+         FROM "KnowledgeChunk"
+         WHERE "workspaceId" = $2
+         ORDER BY distance ASC
+         LIMIT $3`, vectorString, workspaceId, topN);
+        }
+        else {
+            results = await prisma_1.default.$queryRawUnsafe(`SELECT "source", "sourceId", "content", ("embedding" <=> CAST($1 AS vector)) as distance
+         FROM "KnowledgeChunk"
+         WHERE "workspaceId" = $2 OR "workspaceId" = $3
+         ORDER BY distance ASC
+         LIMIT $4`, vectorString, workspaceId, systemWorkspaceId, topN);
+        }
         if (results && results.length > 0) {
             const parsedResults = results.map(r => ({
                 content: r.content,
