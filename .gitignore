@@ -19,8 +19,6 @@ coverage
 node_modules/
 
 # env
-.env
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -44,3 +42,4 @@ build
 .claude/
 .cursor/
 .gemini/
+config.bat
