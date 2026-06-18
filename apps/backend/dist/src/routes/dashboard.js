@@ -262,11 +262,7 @@ function calculateEstimatedCost(model, promptTokens, completionTokens) {
         promptRate = 0.02; // Chỉ tính đầu vào cho embedding
         completionRate = 0.00;
     }
-    else if (m.includes('deepseek-v4-pro') || m.includes('deepseek-v4')) {
-        promptRate = 0.435;
-        completionRate = 0.87;
-    }
-    else if (m.includes('deepseek-chat')) {
+    else if (m.includes('deepseek-v4') || m.includes('deepseek-chat')) {
         promptRate = 0.14;
         completionRate = 0.28;
     }

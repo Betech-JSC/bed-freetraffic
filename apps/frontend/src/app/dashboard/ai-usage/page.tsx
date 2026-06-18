@@ -306,7 +306,6 @@ export default function AiUsagePage() {
                 { name: 'gpt-4o-mini', input: '$0.150', output: '$0.600', provider: 'OpenAI / Trợ lý nhanh' },
                 { name: 'gpt-4o', input: '$2.500', output: '$10.000', provider: 'OpenAI / Trí tuệ cao' },
                 { name: 'gemini-2.5-flash', input: '$0.075', output: '$0.300', provider: 'Google Gemini / Trợ lý nhanh' },
-                { name: 'deepseek-v4-pro', input: '$0.435', output: '$0.870', provider: 'DeepSeek / Trí tuệ cao (Pro)' },
                 { name: 'deepseek-v4-flash', input: '$0.140', output: '$0.280', provider: 'DeepSeek / Tối ưu chi phí (Flash)' },
                 { name: 'deepseek-chat', input: '$0.140', output: '$0.280', provider: 'DeepSeek / Legacy alias' },
                 { name: 'text-embedding-3-small', input: '$0.020', output: '—', provider: 'OpenAI / Vector Embeddings' },
