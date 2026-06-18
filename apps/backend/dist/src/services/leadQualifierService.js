@@ -166,16 +166,17 @@ Quy tắc phân loại (decision) & phân biệt người bán/người mua:
 - COLD: Bài viết chỉ chia sẻ thông tin chung, không thể hiện rõ nhu cầu hoặc liên quan rất ít.
 - SPAM: Bài viết tự quảng cáo dịch vụ/sản phẩm của họ, tin rác, tuyển dụng hoặc bot tự động viết bài bán hàng.
 
-⚠️ QUAN TRỌNG VỀ SỰ LINH HOẠT VÀ ĐỘ CHÍNH XÁC THEO NGƯỠNG ĐIỂM:
-1. ĐỐI VỚI WARM (50 - 79 điểm): Hãy đánh giá thật rộng rãi và linh hoạt để tìm được CÀNG NHIỀU bài viết có liên quan CÀNG TỐT. Chỉ cần bài viết có nhắc đến khó khăn, câu hỏi thảo luận, chia sẻ kinh nghiệm hoặc bất cứ mối quan tâm nào liên quan đến chủ đề/từ khóa, hãy cho điểm từ 50 - 79 (WARM). Đừng đánh giá quá khắt khe ở khoảng điểm này để tránh bỏ sót các lead thảo luận có thể tiếp cận gián tiếp.
-2. ĐỐI VỚI HOT (80 - 100 điểm): Hãy đánh giá CỰC KỲ khắt khe và chuẩn xác tuyệt đối. Bài đăng phải thể hiện rõ ràng, trực tiếp 100% nhu cầu tìm mua, thuê dịch vụ hoặc cần hỗ trợ gấp thì mới được cho điểm từ 80 trở lên.
-3. PHÂN BIỆT NGƯỜI BÁN & NGƯỜI MUA: Bạn PHẢI phân biệt người BÁN (cung cấp dịch vụ/sản phẩm) và người MUA (đang tìm kiếm/có nhu cầu thực tế). Nếu người viết bài viết quảng cáo hoặc tự chào mời dịch vụ của họ (Ví dụ: 'Em nhận thiết kế logo...', 'Bên mình cung cấp dịch vụ SEO chuyên nghiệp...', 'Em là freelancer nhận dự án...'), bạn phải phân loại là SPAM hoặc COLD với điểm số dưới 50 (vì họ là người bán hoặc đối thủ cạnh tranh, không phải khách hàng tiềm năng mua hàng).
+⚠️ QUAN TRỌNG VỀ SỰ LINH HOẠT VÀ ĐỘ CHÍNH XÁC THEO NGƯỠNG ĐIỂM (Thang điểm từ 0 đến 10):
+1. ĐỐI VỚI WARM (Từ 6 đến 7 điểm): Hãy đánh giá thật rộng rãi và linh hoạt để tìm được CÀNG NHIỀU bài viết có liên quan CÀNG TỐT. Chỉ cần bài viết có nhắc đến khó khăn, câu hỏi thảo luận, chia sẻ kinh nghiệm hoặc bất cứ mối quan tâm nào liên quan đến chủ đề/từ khóa, hãy cho điểm từ 6 - 7 (WARM). Đừng đánh giá quá khắt khe ở khoảng điểm này để tránh bỏ sót các lead thảo luận có thể tiếp cận gián tiếp.
+2. ĐỐI VỚI HOT (Từ 8 đến 10 điểm): Hãy đánh giá CỰC KỲ khắt khe và chuẩn xác tuyệt đối. Bài đăng phải thể hiện rõ ràng, trực tiếp 100% nhu cầu tìm mua, thuê dịch vụ hoặc cần hỗ trợ gấp thì mới được cho điểm từ 8 trở lên.
+3. PHÂN BIỆT NGƯỜI BÁN & NGƯỜI MUA: Bạn PHẢI phân biệt người BÁN (cung cấp dịch vụ/sản phẩm) và người MUA (đang tìm kiếm/có nhu cầu thực tế). Nếu người viết bài viết quảng cáo hoặc tự chào mời dịch vụ của họ (Ví dụ: 'Em nhận thiết kế logo...', 'Bên mình cung cấp dịch vụ SEO chuyên nghiệp...', 'Em là freelancer nhận dự án...'), bạn phải phân loại là SPAM hoặc COLD với điểm số dưới 6 (vì họ là người bán hoặc đối thủ cạnh tranh, không phải khách hàng tiềm năng mua hàng).
+4. TRÙNG KHỚP TỪ KHÓA: BẮT BUỘC điểm số từ 6 trở lên chỉ được phép cấp khi nội dung bài đăng trùng khớp hoặc liên quan trực tiếp về mặt ngữ nghĩa/chủ đề với TỪ KHÓA ĐỊNH HƯỚNG CHIẾN DỊCH được cung cấp. Nếu nội dung bài viết hoàn toàn không liên quan gì đến từ khóa định hướng, điểm số không được vượt quá 5.
 
 Yêu cầu chấm điểm (score):
-- HOT: 80 - 100 điểm (Yêu cầu chính xác cao, nhu cầu mua/thuê trực tiếp).
-- WARM: 50 - 79 điểm (Rộng rãi, bao dung, gom mọi bài thảo luận/nỗi đau/câu hỏi liên quan để bắt được nhiều lead nhất).
-- COLD: 10 - 49 điểm.
-- SPAM: 0 - 9 điểm.
+- HOT: 8 - 10 điểm (Yêu cầu chính xác cao, nhu cầu mua/thuê trực tiếp).
+- WARM: 6 - 7 điểm (Rộng rãi, bao dung, gom mọi bài thảo luận/nỗi đau/câu hỏi liên quan để bắt được nhiều lead nhất).
+- COLD: 3 - 5 điểm.
+- SPAM: 0 - 2 điểm.
 
 Yêu cầu soạn tin nhắn phản hồi gợi ý (draftMsg):
 - Viết bằng tiếng Việt, giọng điệu tự nhiên, lịch sự, đóng vai trò là chuyên gia tư vấn tận tâm hoặc chủ doanh nghiệp thân thiện.
@@ -184,7 +185,7 @@ Yêu cầu soạn tin nhắn phản hồi gợi ý (draftMsg):
 
 BẮT BUỘC: Trả về DUY NHẤT một đối tượng JSON hợp lệ (không kèm theo lời giải thích hay ký hiệu markdown \`\`\`json), với định dạng sau:
 {
-  "score": 85,
+  "score": 8,
   "decision": "HOT",
   "reason": "Giải thích ngắn gọn lý do phân loại bằng tiếng Việt",
   "draftMsg": "Chào bạn, mình thấy bạn đang gặp vấn đề... Bên mình có giải pháp... Bạn inbox mình chia sẻ thêm nhé!"
@@ -223,8 +224,13 @@ Hãy phân tích và trả về đối tượng JSON đánh giá tiềm năng.`;
         const data = await res.json();
         const contentText = data.choices?.[0]?.message?.content?.trim() || '';
         const parsed = (0, ai_1.parseAiJson)(contentText);
+        let finalScore = typeof parsed.score === 'number' ? parsed.score : 6;
+        // Convert 0-10 score to 0-100 scale for database/UI compatibility
+        if (finalScore <= 10) {
+            finalScore = finalScore * 10;
+        }
         return {
-            score: typeof parsed.score === 'number' ? parsed.score : 50,
+            score: finalScore,
             decision: ['HOT', 'WARM', 'COLD', 'SPAM'].includes(parsed.decision) ? parsed.decision : 'WARM',
             reason: parsed.reason || 'Được phân tích bởi AI',
             draftMsg: parsed.draftMsg || ''
@@ -232,11 +238,15 @@ Hãy phân tích và trả về đối tượng JSON đánh giá tiềm năng.`;
     }
     catch (err) {
         console.error('❌ [Lead Qualifier AI Error] Lỗi gọi AI chấm điểm, chuyển sang fallback:', err.message);
-        return fallbackKeywordScoring(postContent, keywords);
+        const fallbackRes = fallbackKeywordScoring(postContent, keywords);
+        return {
+            ...fallbackRes,
+            score: fallbackRes.score * 10
+        };
     }
 }
 /**
- * Fallback scoring algorithm using keyword weights and heuristics
+ * Fallback scoring algorithm using keyword weights and heuristics (scaled to 1-10 points)
  */
 function fallbackKeywordScoring(postContent, keywords) {
     const contentLower = postContent.toLowerCase();
@@ -249,27 +259,27 @@ function fallbackKeywordScoring(postContent, keywords) {
     }
     if (matchCount === 0) {
         return {
-            score: 15,
+            score: 1,
             decision: 'COLD',
             reason: 'Không chứa từ khóa định hướng nào (Heuristic Fallback)',
             draftMsg: ''
         };
     }
-    // Look for buying intent indicators in Vietnamese
+    // Look for buying intent indicators in Vietnamese (scaled to 1-10 points)
     const highIntentWords = ['cần', 'tìm', 'gấp', 'mua', 'thuê', 'báo giá', 'inbox', 'ib', 'tư vấn', 'chỉ mình', 'xin giá', 'source code', 'ai làm'];
     let intentScore = 0;
     for (const word of highIntentWords) {
         if (contentLower.includes(word)) {
-            intentScore += 20;
+            intentScore += 2;
         }
     }
-    const baseScore = 40 + (matchCount * 10);
-    const finalScore = Math.min(baseScore + intentScore, 95);
+    const baseScore = 4 + matchCount;
+    const finalScore = Math.min(baseScore + intentScore, 10);
     let decision = 'WARM';
-    if (finalScore >= 80) {
+    if (finalScore >= 8) {
         decision = 'HOT';
     }
-    else if (finalScore < 50) {
+    else if (finalScore < 6) {
         decision = 'COLD';
     }
     const draftMsg = decision === 'COLD' ? '' : `Chào bạn, mình thấy bạn đang quan tâm về vấn đề này. Mình có giải pháp tối ưu có thể giúp bạn giải quyết nhanh gọn. Bạn kiểm tra tin nhắn chờ hoặc inbox mình trao đổi chi tiết nhé!`;

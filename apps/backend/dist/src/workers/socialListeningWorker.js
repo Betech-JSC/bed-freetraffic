@@ -45,6 +45,31 @@ const socialListeningScraper_1 = require("../services/socialListeningScraper");
 const leadQualifierService_1 = require("../services/leadQualifierService");
 const telegramService_1 = require("../services/telegramService");
 const embeddings_1 = require("../lib/embeddings");
+function cleanFacebookUrl(url) {
+    try {
+        const urlObj = new URL(url);
+        urlObj.search = '';
+        return urlObj.toString();
+    }
+    catch (e) {
+        return url;
+    }
+}
+function extractPostIdFromUrl(url) {
+    const match = url.match(/(?:\/posts\/|\/permalink\/|story_fbid=)(\d+)/);
+    return match ? match[1] : null;
+}
+const removeAccents = (str) => {
+    return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'd');
+};
+const normalizeContentForDeduplication = (str) => {
+    return removeAccents(str.toLowerCase())
+        .replace(/[^a-z0-9]/g, ''); // keep only raw alphanumeric characters
+};
 /**
  * Executes the social listening scraping, filtering, AI qualification,
  * and Telegram alert routing for a specific campaign.
@@ -83,6 +108,25 @@ async function executeCampaignScan(campaignId) {
         .filter(Boolean);
     let totalPostsScraped = 0;
     let totalLeadsFound = 0;
+    // Pre-fetch recent logs for deduplication
+    const recentLogs = await prisma_1.default.socialListeningLog.findMany({
+        where: {
+            campaignId: campaign.id,
+            isComment: false,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { postUrl: true, postContent: true, postAuthor: true }
+    });
+    const recentCommentLogs = await prisma_1.default.socialListeningLog.findMany({
+        where: {
+            campaignId: campaign.id,
+            isComment: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+        select: { commentId: true, postContent: true, postAuthor: true }
+    });
     for (const groupUrl of groupUrlsList) {
         try {
             console.log(`[Social Listening] Scraping group: ${groupUrl} for campaign: ${campaign.name}`);
@@ -95,14 +139,6 @@ async function executeCampaignScan(campaignId) {
                     data: { cookieStatus: 'ACTIVE' },
                 });
             }
-            // Accent removal helper for Vietnamese search matching
-            const removeAccents = (str) => {
-                return str
-                    .normalize('NFD')
-                    .replace(/[\u0300-\u036f]/g, '')
-                    .replace(/đ/g, 'd')
-                    .replace(/Đ/g, 'd');
-            };
             // Helper to check if a single keyword (which could be a phrase) matches the content flexibly
             const checkSingleKeywordMatch = (kw, contentLower, contentNoAccent) => {
                 // 1. Try exact match
@@ -166,16 +202,47 @@ async function executeCampaignScan(campaignId) {
                 // A. PROCESS MAIN POST
                 // ----------------------------------------------------
                 const processPost = async () => {
-                    // Check if log already exists
+                    const cleanedUrl = cleanFacebookUrl(post.postUrl);
+                    const currentPostId = extractPostIdFromUrl(post.postUrl);
+                    // 1. Check if URL already exists in recent logs (raw or cleaned, or same post ID)
+                    const isUrlDuplicate = recentLogs.some(log => {
+                        if (log.postUrl === post.postUrl || log.postUrl === cleanedUrl)
+                            return true;
+                        if (currentPostId) {
+                            const logPostId = extractPostIdFromUrl(log.postUrl);
+                            if (logPostId === currentPostId)
+                                return true;
+                        }
+                        return false;
+                    });
+                    if (isUrlDuplicate)
+                        return;
+                    // Check database directly as fallback if not in recent logs
                     const existingLog = await prisma_1.default.socialListeningLog.findFirst({
                         where: {
                             campaignId: campaign.id,
-                            postUrl: post.postUrl,
                             isComment: false,
+                            OR: [
+                                { postUrl: post.postUrl },
+                                { postUrl: cleanedUrl },
+                                ...(currentPostId ? [{ postUrl: { contains: currentPostId } }] : [])
+                            ]
                         },
                     });
                     if (existingLog)
-                        return; // Skip already processed posts
+                        return;
+                    // 2. Check if content is a duplicate (same author and text, or same long text from different author)
+                    const currentNormalized = normalizeContentForDeduplication(post.content);
+                    if (currentNormalized.length > 20) {
+                        const isContentDuplicate = recentLogs.some(log => {
+                            const logNormalized = normalizeContentForDeduplication(log.postContent);
+                            return logNormalized === currentNormalized && (currentNormalized.length > 40 || log.postAuthor === post.authorName);
+                        });
+                        if (isContentDuplicate) {
+                            console.log(`[Social Listening] Duplicate content detected for post by ${post.authorName}. Skipping.`);
+                            return;
+                        }
+                    }
                     const contentLower = post.content.toLowerCase();
                     const contentNoAccent = removeAccents(contentLower);
                     // 1. Negative keyword check first
@@ -207,7 +274,7 @@ async function executeCampaignScan(campaignId) {
                     const log = await prisma_1.default.socialListeningLog.create({
                         data: {
                             campaignId: campaign.id,
-                            postUrl: post.postUrl,
+                            postUrl: cleanedUrl,
                             postAuthor: post.authorName,
                             authorAvatar: post.authorAvatar,
                             postContent: post.content,
@@ -219,6 +286,8 @@ async function executeCampaignScan(campaignId) {
                             status: 'PENDING',
                         },
                     });
+                    // Add newly qualified log to cache to prevent duplicates within the same scan
+                    recentLogs.unshift({ postUrl: cleanedUrl, postContent: post.content, postAuthor: post.authorName });
                     // 5. Telegram Notifications
                     if (campaign.telegramEnabled && aiResult.score >= campaign.minScore && aiResult.decision !== 'SPAM') {
                         totalLeadsFound++;
@@ -228,7 +297,7 @@ async function executeCampaignScan(campaignId) {
                         const alertText = `🔥 *PHÁT HIỆN KHÁCH HÀNG TIỀM NĂNG (${aiResult.decision})* - Điểm: *${aiResult.score}/100*\n\n` +
                             `👥 *Người đăng*: ${post.authorName}\n` +
                             `📌 *Chiến dịch*: ${campaign.name}\n\n` +
-                            `📝 *Nội dung bài viết*:\n"${post.content.slice(0, 350)}${post.content.length > 350 ? '...' : ''}"\n\n` +
+                            `📝 *Nội dung bài viết*:\n"${post.content.slice(0, 100)}${post.content.length > 100 ? '...' : ''}"\n\n` +
                             `💡 *Nhận định AI*:\n${aiResult.reason}\n\n` +
                             draftMsgBlock +
                             `🔗 [Xem bài viết trên Facebook](${post.postUrl})`;
@@ -309,7 +378,11 @@ async function executeCampaignScan(campaignId) {
                 if (campaign.scrapeComments && post.comments && post.comments.length > 0) {
                     for (const comment of post.comments) {
                         const processComment = async () => {
-                            // Check if log already exists
+                            // 1. Check if comment ID already exists
+                            const isCommentIdDuplicate = recentCommentLogs.some(log => log.commentId === comment.commentId);
+                            if (isCommentIdDuplicate)
+                                return;
+                            // Check database directly as fallback
                             const existingLog = await prisma_1.default.socialListeningLog.findFirst({
                                 where: {
                                     campaignId: campaign.id,
@@ -319,6 +392,18 @@ async function executeCampaignScan(campaignId) {
                             });
                             if (existingLog)
                                 return; // Skip already processed comments
+                            // 2. Check if comment content is duplicate
+                            const currentCommentNormalized = normalizeContentForDeduplication(comment.content);
+                            if (currentCommentNormalized.length > 15) {
+                                const isCommentDuplicate = recentCommentLogs.some(log => {
+                                    const logNormalized = normalizeContentForDeduplication(log.postContent);
+                                    return logNormalized === currentCommentNormalized && log.postAuthor === comment.authorName;
+                                });
+                                if (isCommentDuplicate) {
+                                    console.log(`[Social Listening] Duplicate comment content detected by ${comment.authorName}. Skipping.`);
+                                    return;
+                                }
+                            }
                             const contentLower = comment.content.toLowerCase();
                             const contentNoAccent = removeAccents(contentLower);
                             // 1. Negative keyword check first
@@ -364,6 +449,8 @@ async function executeCampaignScan(campaignId) {
                                     status: 'PENDING',
                                 },
                             });
+                            // Add newly qualified comment to cache
+                            recentCommentLogs.unshift({ commentId: comment.commentId, postContent: comment.content, postAuthor: comment.authorName });
                             // 5. Telegram Notifications
                             if (campaign.telegramEnabled && aiResult.score >= campaign.minScore && aiResult.decision !== 'SPAM') {
                                 totalLeadsFound++;
@@ -374,7 +461,7 @@ async function executeCampaignScan(campaignId) {
                                     `👤 *Người bình luận*: ${comment.authorName}\n` +
                                     `📝 *Tại bài đăng của*: ${post.authorName}\n` +
                                     `📌 *Chiến dịch*: ${campaign.name}\n\n` +
-                                    `💬 *Nội dung bình luận*:\n"${comment.content.slice(0, 350)}${comment.content.length > 350 ? '...' : ''}"\n\n` +
+                                    `💬 *Nội dung bình luận*:\n"${comment.content.slice(0, 100)}${comment.content.length > 100 ? '...' : ''}"\n\n` +
                                     `💡 *Nhận định AI*:\n${aiResult.reason}\n\n` +
                                     draftMsgBlock +
                                     `🔗 [Xem bình luận trên Facebook](${post.postUrl})`;
