@@ -143,7 +143,7 @@ async function segmentLeadWithAi(
   sessionId: string,
   customerId: number
 ): Promise<void> {
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'chatbot');
   if (!ai.apiKey) return;
 
   try {
@@ -663,7 +663,7 @@ export async function handleVisitorMessage(
   });
   broadcastSocketMessage(workspaceId, session.id, visitorMsg);
 
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'chatbot');
 
   // Check if visitor wants to talk to a human or expresses frustration
   let takeoverIntent = detectTakeoverIntent(message);

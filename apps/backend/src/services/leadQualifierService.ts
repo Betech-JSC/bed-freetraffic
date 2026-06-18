@@ -81,7 +81,7 @@ export async function qualifyLead(
   }
 
   // 3. Try AI qualification
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'lead_qualifier');
   if (!ai.apiKey) {
     console.warn('⚠️ OPENAI_API_KEY không được cấu hình. Sử dụng heuristic từ khóa.');
     return fallbackKeywordScoring(postContent, keywords);

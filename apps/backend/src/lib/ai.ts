@@ -18,14 +18,41 @@ import prisma from './prisma';
  * @param path The API endpoint path, defaults to '/chat/completions'.
  * @returns An object containing the configured API Key, Request URL, Model Name, and Headers.
  */
-export function getAiConfig(path: string = '/chat/completions') {
+export function getAiConfig(path: string = '/chat/completions', feature?: string) {
   let apiKey = process.env.OPENAI_API_KEY || '';
   let model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-  // Custom routing for embeddings if GEMINI_API_KEY is configured
-  if (path === '/embeddings' && process.env.GEMINI_API_KEY) {
+  // 1. Feature-specific model selection & API key routing
+  if (feature === 'chatbot') {
+    if (process.env.AI_MODEL_CHATBOT) {
+      model = process.env.AI_MODEL_CHATBOT;
+    } else if (process.env.GEMINI_API_KEY) {
+      apiKey = process.env.GEMINI_API_KEY;
+      model = 'gemini-2.5-flash';
+    }
+  } else if (feature === 'lead_qualifier') {
+    if (process.env.AI_MODEL_LEAD_QUALIFIER) {
+      model = process.env.AI_MODEL_LEAD_QUALIFIER;
+    }
+  } else if (feature === 'content_generation') {
+    if (process.env.AI_MODEL_CONTENT) {
+      model = process.env.AI_MODEL_CONTENT;
+    }
+  }
+
+  // 2. Custom routing for embeddings
+  if (path === '/embeddings') {
+    if (process.env.AI_MODEL_EMBEDDING) {
+      model = process.env.AI_MODEL_EMBEDDING;
+    } else if (process.env.GEMINI_API_KEY) {
+      apiKey = process.env.GEMINI_API_KEY;
+      model = 'gemini-embedding-001';
+    }
+  }
+
+  // If the model is a gemini model and the key is not already a gemini key, use GEMINI_API_KEY if present
+  if (model.includes('gemini') && !apiKey.startsWith('AIzaSy') && process.env.GEMINI_API_KEY) {
     apiKey = process.env.GEMINI_API_KEY;
-    model = 'gemini-embedding-001';
   }
 
   let url = `https://api.openai.com/v1${path}`;
@@ -48,7 +75,8 @@ export function getAiConfig(path: string = '/chat/completions') {
       model === 'gpt-4o-mini' ||
       model.includes('free') ||
       model.includes('gemma') ||
-      model === 'gpt-4o'
+      model === 'gpt-4o' ||
+      model.includes('gemini')
     ) {
       model = 'gemini-2.5-flash';
     }

@@ -140,7 +140,7 @@ export async function buildRecommendations(workspaceId?: number): Promise<Recomm
 export async function enhanceWithOpenAi(
   items: Recommendation[]
 ): Promise<{ summary: string; items: Recommendation[] }> {
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'content_generation');
   if (!ai.apiKey) {
     return {
       summary: 'Bật OPENAI_API_KEY trong backend .env để nhận tóm tắt AI chi tiết hơn.',

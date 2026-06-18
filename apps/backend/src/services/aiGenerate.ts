@@ -24,7 +24,7 @@ export async function generateAiPostContent(
   variations?: { short: string; curious: string; cta: string };
   script?: { hook: string; body: string; cta: string };
 }> {
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'content_generation');
   if (!ai.apiKey) {
     throw new Error('Chưa cấu hình OPENAI_API_KEY trong file .env');
   }
@@ -309,7 +309,7 @@ function extractTitleContent(raw: string): { title: string; content: string } {
 
 async function translateToEnglishImagePrompt(prompt: string): Promise<string> {
   try {
-    const ai = getAiConfig('/chat/completions');
+    const ai = getAiConfig('/chat/completions', 'content_generation');
     if (!ai.apiKey) return prompt;
 
     const res = await fetchWithRetry(ai.url, {
@@ -429,7 +429,7 @@ function getSafeCategory(prompt: string): 'technology' | 'business' | 'marketing
 }
 
 export async function generateAiImage(imagePrompt: string): Promise<string | null> {
-  const ai = getAiConfig('/images/generations');
+  const ai = getAiConfig('/images/generations', 'content_generation');
 
   try {
     const englishPrompt = await translateToEnglishImagePrompt(imagePrompt);
@@ -652,7 +652,7 @@ export async function generateAiContentPlan(
   workspaceId?: number,
   useKnowledgeBase?: boolean
 ): Promise<CopilotPlanItem[]> {
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'content_generation');
   if (!ai.apiKey) {
     // Fallback/Stubs for AI content plan when OPENAI_API_KEY is not configured
     const plan: CopilotPlanItem[] = [];
@@ -808,7 +808,7 @@ export async function optimizeSeoContent(
   metaDescription: string;
   content: string;
 }> {
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'content_generation');
   if (!ai.apiKey) {
     const cleanKw = focusKeyword.trim();
     const updatedTitle = title.toLowerCase().includes(cleanKw.toLowerCase())

@@ -6,7 +6,7 @@ export async function generateSeoRecommendations(
   keywords: string,
   issues: string[]
 ): Promise<{ title: string; description: string; keywords: string }> {
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'content_generation');
   if (!ai.apiKey) {
     // Return standard professional fallback tags
     return {

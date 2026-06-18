@@ -72,7 +72,7 @@ async function getEventContext(payload) {
  */
 async function generateEmailWithRag(workspaceId, eventType, payload) {
     const context = await getEventContext(payload);
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
     // Nếu không có API Key, dùng fallback email được thiết kế đẹp mắt trực tiếp
     if (!ai.apiKey) {
         console.warn('[ragEmailService] Không cấu hình AI API Key. Sử dụng fallback email mẫu.');

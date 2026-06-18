@@ -166,7 +166,7 @@ async function extractNameFromMessage(message, email, apiKey, url, model, header
     return defaultName;
 }
 async function segmentLeadWithAi(workspaceId, sessionId, customerId) {
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'chatbot');
     if (!ai.apiKey)
         return;
     try {
@@ -618,7 +618,7 @@ async function handleVisitorMessage(workspaceId, sessionId, message, ipAddress, 
         }
     });
     broadcastSocketMessage(workspaceId, session.id, visitorMsg);
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'chatbot');
     // Check if visitor wants to talk to a human or expresses frustration
     let takeoverIntent = detectTakeoverIntent(message);
     let sentimentResult = {

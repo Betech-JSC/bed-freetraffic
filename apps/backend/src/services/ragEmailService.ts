@@ -80,7 +80,7 @@ export async function generateEmailWithRag(
   payload: any
 ): Promise<EmailGenerationResult> {
   const context = await getEventContext(payload);
-  const ai = getAiConfig('/chat/completions');
+  const ai = getAiConfig('/chat/completions', 'content_generation');
 
   // Nếu không có API Key, dùng fallback email được thiết kế đẹp mắt trực tiếp
   if (!ai.apiKey) {

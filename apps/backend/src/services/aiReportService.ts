@@ -176,7 +176,7 @@ ${auditSummary.length > 0 ? auditSummary.map(l => `- [${l.time}] ${l.user} thự
 
 Hãy phân tích toàn bộ dữ liệu trên để đưa ra báo cáo JSON chất lượng cao.`;
 
-    const aiConfig = getAiConfig();
+    const aiConfig = getAiConfig('/chat/completions', 'content_generation');
     if (!aiConfig.apiKey) {
       // Fallback response if AI Key is not configured
       return {

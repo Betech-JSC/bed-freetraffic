@@ -93,7 +93,7 @@ async function qualifyLead(workspaceId, postContent, keywords, excludeKeywords, 
         console.error('⚠️ [Lead Qualifier RAG Error] Lỗi tích hợp tri thức:', ragErr);
     }
     // 3. Try AI qualification
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'lead_qualifier');
     if (!ai.apiKey) {
         console.warn('⚠️ OPENAI_API_KEY không được cấu hình. Sử dụng heuristic từ khóa.');
         return fallbackKeywordScoring(postContent, keywords);

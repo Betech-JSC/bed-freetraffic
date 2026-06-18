@@ -45,7 +45,7 @@ const path_1 = __importDefault(require("path"));
 const ai_1 = require("../lib/ai");
 const prisma_1 = __importDefault(require("../lib/prisma"));
 async function generateAiPostContent(urlTarget, aiPrompt, contentType, workspaceId, useKnowledgeBase) {
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
     if (!ai.apiKey) {
         throw new Error('Chưa cấu hình OPENAI_API_KEY trong file .env');
     }
@@ -314,7 +314,7 @@ function extractTitleContent(raw) {
 }
 async function translateToEnglishImagePrompt(prompt) {
     try {
-        const ai = (0, ai_1.getAiConfig)('/chat/completions');
+        const ai = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
         if (!ai.apiKey)
             return prompt;
         const res = await (0, ai_1.fetchWithRetry)(ai.url, {
@@ -418,7 +418,7 @@ function getSafeCategory(prompt) {
     return 'business';
 }
 async function generateAiImage(imagePrompt) {
-    const ai = (0, ai_1.getAiConfig)('/images/generations');
+    const ai = (0, ai_1.getAiConfig)('/images/generations', 'content_generation');
     try {
         const englishPrompt = await translateToEnglishImagePrompt(imagePrompt);
         console.log(`[AI Image] Original: "${imagePrompt}" -> Translated/Optimized: "${englishPrompt}"`);
@@ -604,7 +604,7 @@ async function generateAiImage(imagePrompt) {
     }
 }
 async function generateAiContentPlan(topic, industry, tone, postCount = 5, workspaceId, useKnowledgeBase) {
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
     if (!ai.apiKey) {
         // Fallback/Stubs for AI content plan when OPENAI_API_KEY is not configured
         const plan = [];
@@ -736,7 +736,7 @@ Giọng điệu: ${tone}${ragContextText}`;
     }
 }
 async function optimizeSeoContent(title, slug, metaDescription, content, focusKeyword, workspaceId) {
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
     if (!ai.apiKey) {
         const cleanKw = focusKeyword.trim();
         const updatedTitle = title.toLowerCase().includes(cleanKw.toLowerCase())

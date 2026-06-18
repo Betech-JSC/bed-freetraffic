@@ -122,7 +122,7 @@ async function buildRecommendations(workspaceId) {
     });
 }
 async function enhanceWithOpenAi(items) {
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
     if (!ai.apiKey) {
         return {
             summary: 'Bật OPENAI_API_KEY trong backend .env để nhận tóm tắt AI chi tiết hơn.',

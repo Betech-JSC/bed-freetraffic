@@ -153,7 +153,7 @@ Hãy viết hoàn toàn bằng Tiếng Việt.`;
 ${auditSummary.length > 0 ? auditSummary.map(l => `- [${l.time}] ${l.user} thực hiện hành động: ${l.action}`).join('\n') : '- Không có hoạt động nổi bật nào ghi nhận.'}
 
 Hãy phân tích toàn bộ dữ liệu trên để đưa ra báo cáo JSON chất lượng cao.`;
-        const aiConfig = (0, ai_1.getAiConfig)();
+        const aiConfig = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
         if (!aiConfig.apiKey) {
             // Fallback response if AI Key is not configured
             return {

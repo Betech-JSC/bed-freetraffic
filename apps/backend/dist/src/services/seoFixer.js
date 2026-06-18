@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateSeoRecommendations = generateSeoRecommendations;
 const ai_1 = require("../lib/ai");
 async function generateSeoRecommendations(title, description, keywords, issues) {
-    const ai = (0, ai_1.getAiConfig)('/chat/completions');
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'content_generation');
     if (!ai.apiKey) {
         // Return standard professional fallback tags
         return {
