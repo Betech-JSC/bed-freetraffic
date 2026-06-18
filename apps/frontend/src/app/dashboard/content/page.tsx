@@ -324,6 +324,19 @@ export default function ContentEditorPage() {
         </div>
       </div>
 
+      {error && !showModal && (
+        <div className="p-4 text-xs bg-red-50 text-red-650 border border-red-200 rounded-2xl flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+          <span>⚠️ {error}</span>
+          <button type="button" onClick={() => setError('')} className="text-red-500 hover:text-red-700 font-bold ml-2 cursor-pointer">✕</button>
+        </div>
+      )}
+      {success && !showModal && (
+        <div className="p-4 text-xs bg-emerald-50 text-emerald-700 border border-emerald-250 rounded-2xl flex items-center justify-between shadow-sm animate-in fade-in duration-200">
+          <span>✅ {success}</span>
+          <button type="button" onClick={() => setSuccess('')} className="text-emerald-600 hover:text-emerald-800 font-bold ml-2 cursor-pointer">✕</button>
+        </div>
+      )}
+
       {/* Grid of Templates */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.length === 0 && !loading && (
@@ -451,6 +464,19 @@ export default function ContentEditorPage() {
             </div>
 
             {aiInfoTip && <div className="alert-info text-[11px] font-bold py-2 px-3 rounded-xl bg-orange-50/50 text-brand border border-orange-200/40">{aiInfoTip}</div>}
+
+            {error && (
+              <div className="p-3 text-xs bg-red-50 text-red-650 border border-red-200 rounded-xl flex items-center justify-between animate-in fade-in duration-200">
+                <span>⚠️ {error}</span>
+                <button type="button" onClick={() => setError('')} className="text-red-500 hover:text-red-700 font-bold ml-2 cursor-pointer">✕</button>
+              </div>
+            )}
+            {success && (
+              <div className="p-3 text-xs bg-emerald-50 text-emerald-700 border border-emerald-250 rounded-xl flex items-center justify-between animate-in fade-in duration-200">
+                <span>✅ {success}</span>
+                <button type="button" onClick={() => setSuccess('')} className="text-emerald-600 hover:text-emerald-800 font-bold ml-2 cursor-pointer">✕</button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               {/* Cột trái (7/12): Form soạn thảo chính */}

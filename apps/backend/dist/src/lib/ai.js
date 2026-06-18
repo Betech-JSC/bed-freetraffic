@@ -27,7 +27,7 @@ const prisma_1 = __importDefault(require("./prisma"));
  */
 function getAiConfig(path = '/chat/completions', feature) {
     let apiKey = process.env.OPENAI_API_KEY || '';
-    let model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    let model = process.env.OPENAI_MODEL || 'deepseek-chat';
     // 1. Feature-specific model selection & API key routing
     if (feature === 'chatbot') {
         if (process.env.AI_MODEL_CHATBOT) {
@@ -83,7 +83,8 @@ function getAiConfig(path = '/chat/completions', feature) {
             model.includes('free') ||
             model.includes('gemma') ||
             model === 'gpt-4o' ||
-            model.includes('gemini')) {
+            model.includes('gemini') ||
+            model.includes('deepseek')) {
             model = 'gemini-2.5-flash';
         }
     }
