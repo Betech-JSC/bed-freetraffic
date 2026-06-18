@@ -271,17 +271,11 @@ router.get('/notifications', async (req: AuthRequest, res: Response): Promise<vo
 function calculateEstimatedCost(model: string, promptTokens: number, completionTokens: number): number {
   const m = model.toLowerCase();
   
-  // Mức giá trung bình trên 1 triệu tokens (USD)
-  let promptRate = 0.15; // mặc định gpt-4o-mini
-  let completionRate = 0.60;
+  // Mức giá mặc định (DeepSeek Flash)
+  let promptRate = 0.14; 
+  let completionRate = 0.28;
 
-  if (m.includes('gpt-4o-mini')) {
-    promptRate = 0.15;
-    completionRate = 0.60;
-  } else if (m.includes('gpt-4o') && !m.includes('mini')) {
-    promptRate = 2.50;
-    completionRate = 10.00;
-  } else if (m.includes('gemini-2.5-flash')) {
+  if (m.includes('gemini-2.5-flash')) {
     promptRate = 0.075;
     completionRate = 0.30;
   } else if (m.includes('gemini-embedding') || m.includes('embedding')) {
