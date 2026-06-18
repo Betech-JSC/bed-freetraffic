@@ -321,8 +321,77 @@ router.get('/public/script/:id', async (req, res) => {
         const revenue = conversions * orderVal;
         
         const formatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
-        resDiv.innerHTML = '<div style="font-size:12px; color:#64748b;">Doanh thu ước tính hàng tháng</div><div style="font-size:22px; font-weight:800; color:' + themeColor + '; margin-top:4px;">' + formatter.format(revenue) + '</div><div style="font-size:11px; color:#94a3b8; margin-top:6px;">Chuyển đổi thành công: ' + Math.round(conversions) + ' đơn hàng</div>';
+        resDiv.innerHTML = '<div style="font-size:12px; color:#64748b;">Doanh thu ước tính hàng tháng</div><div style="font-size:22px; font-weight:800; color:\' + themeColor + \'; margin-top:4px;">\' + formatter.format(revenue) + \'</div><div style="font-size:11px; color:#94a3b8; margin-top:6px;">Chuyển đổi thành công: \' + Math.round(conversions) + \' đơn hàng</div>\';
       }
+    } else if (type === 'AI_REPORT') {
+      // Render AI Growth/SEO Report Form
+      const formDiv = document.createElement('div');
+      formDiv.style.cssText = "display:flex; flex-direction:column; gap:12px; margin-bottom:20px;";
+      
+      formDiv.innerHTML = ' \\
+        <div> \\
+          <label style="display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:5px;">Họ và tên của bạn</label> \\
+          <input type="text" name="name" placeholder="Nguyễn Văn A" required style="width:93%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px;"> \\
+        </div> \\
+        <div> \\
+          <label style="display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:5px;">Địa chỉ Email nhận báo cáo</label> \\
+          <input type="email" name="email" placeholder="name@company.com" required style="width:93%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px;"> \\
+        </div> \\
+        <div> \\
+          <label style="display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:5px;">URL Website cần phân tích</label> \\
+          <input type="url" name="targetUrl" placeholder="https://mycompany.com" required style="width:93%; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px;"> \\
+        </div> \\
+      \';
+      container.appendChild(formDiv);
+
+      const subBtn = document.createElement('button');
+      subBtn.style.cssText = "width:100%; padding:12px; background:\' + themeColor + \'; color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;";
+      subBtn.innerText = "Nhận Báo Cáo AI Miễn Phí";
+      
+      const statusDiv = document.createElement('div');
+      statusDiv.style.cssText = "display:none; font-size:12px; margin-top:10px; text-align:center; line-height:1.5;";
+      container.appendChild(statusDiv);
+
+      subBtn.onclick = async () => {
+        const nameInput = formDiv.querySelector(\'input[name="name"]\');
+        const emailInput = formDiv.querySelector(\'input[name="email"]\');
+        const targetUrlInput = formDiv.querySelector(\'input[name="targetUrl"]\');
+        
+        if (!nameInput.value || !emailInput.value || !targetUrlInput.value) {
+          alert(\'Vui lòng điền đầy đủ tất cả thông tin.\');
+          return;
+        }
+
+        subBtn.disabled = true;
+        subBtn.innerText = "Đang phân tích website bằng AI...";
+        
+        try {
+          const res = await fetch("\' + apiHost + \'/api/public/lead-magnet/generate", {
+            method: \'POST\',
+            headers: { \'Content-Type\': \'application/json\' },
+            body: JSON.stringify({
+              targetUrl: targetUrlInput.value,
+              email: emailInput.value,
+              name: nameInput.value,
+              workspaceId: \' + widget.workspaceId + \'
+            })
+          });
+          const resData = await res.json();
+          if (res.ok) {
+            container.innerHTML = \'<div style="text-align:center; padding:10px 0;"><div style="font-size:36px; font-weight:800; color:\' + themeColor + \';">✓ Gửi Thành Công</div><div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:12px;">Đang lập báo cáo tăng trưởng!</div><p style="font-size:13px; color:#64748b; line-height:1.5; margin:10px 0 0 0;">\' + (resData.message || \'Báo cáo đang được khởi tạo bằng AI và sẽ gửi qua email của bạn trong vài phút!\') + \'</p></div>\';
+          } else {
+            throw new Error(resData.error || \'Lỗi không xác định\');
+          }
+        } catch(err) {
+          console.error("Failed to trigger lead magnet:", err);
+          subBtn.disabled = false;
+          subBtn.innerText = "Nhận Báo Cáo AI Miễn Phí";
+          statusDiv.style.display = \'block\';
+          statusDiv.style.color = \'#e11d48\';
+          statusDiv.innerText = "Có lỗi xảy ra: " + err.message;
+        }
+      };
+      container.appendChild(subBtn);
     }
   }
 

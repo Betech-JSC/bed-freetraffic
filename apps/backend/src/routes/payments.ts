@@ -6,8 +6,38 @@ import PayOS from '@payos/node';
 import Stripe from 'stripe';
 import crypto from 'crypto';
 import { logActivity } from '../lib/auditLogger';
+import { getIo } from '../lib/socket';
 
 const router = Router();
+
+async function notifyOrderPaid(orderId: number, orderNumber: string, customerId: number, workspaceId: number) {
+  try {
+    const session = await prisma.chatSession.findFirst({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    if (session) {
+      const io = getIo();
+      if (io) {
+        io.to(`session:${session.id}`).emit('order_paid', { orderNumber });
+        
+        const botMsg = await prisma.chatMessage.create({
+          data: {
+            sessionId: session.id,
+            sender: 'bot',
+            content: `🎉 Xác nhận thanh toán thành công cho đơn hàng ${orderNumber}! Cảm ơn quý khách đã tin dùng sản phẩm của chúng tôi.`
+          }
+        });
+        
+        io.to(`session:${session.id}`).emit('new_message', botMsg);
+        io.to(`workspace:${workspaceId}`).emit('new_message', botMsg);
+      }
+    }
+  } catch (err) {
+    console.error('[Socket.io Webhook Notification] Error:', err);
+  }
+}
 
 // Load Payment Config
 router.get('/config', authenticate, workspaceMiddleware, async (req: WorkspaceRequest, res: Response): Promise<void> => {
@@ -229,6 +259,9 @@ router.post('/payos-webhook', async (req: Request, res: Response): Promise<void>
         data: { status: 'ACTIVE' },
       });
 
+      // Notify real-time socket
+      void notifyOrderPaid(order.id, order.orderNumber, order.customerId, order.workspaceId);
+
       // Kích hoạt gửi email cảm ơn mua hàng tự động
       const { triggerEmailEvent } = await import('../services/emailEventTrigger');
       void triggerEmailEvent('PURCHASE', {
@@ -307,6 +340,9 @@ router.post('/stripe-webhook', async (req: Request, res: Response): Promise<void
         where: { id: order.customerId },
         data: { status: 'ACTIVE' },
       });
+
+      // Notify real-time socket
+      void notifyOrderPaid(order.id, order.orderNumber, order.customerId, order.workspaceId);
 
       // Kích hoạt gửi email cảm ơn mua hàng tự động
       const { triggerEmailEvent } = await import('../services/emailEventTrigger');
@@ -425,6 +461,9 @@ router.post('/sepay-webhook', async (req: Request, res: Response): Promise<void>
         where: { id: order.customerId },
         data: { status: 'ACTIVE' },
       });
+
+      // Notify real-time socket
+      void notifyOrderPaid(order.id, order.orderNumber, order.customerId, order.workspaceId);
 
       // Kích hoạt gửi email cảm ơn mua hàng tự động
       const { triggerEmailEvent } = await import('../services/emailEventTrigger');

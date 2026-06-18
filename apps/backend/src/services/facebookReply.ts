@@ -1,8 +1,8 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { extractGroupId } from './socialListeningScraper';
+import { extractGroupId, normalizeCookie } from './socialListeningScraper';
 
-const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+const MOBILE_USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1';
 
 /**
  * Parses a Facebook URL or Post ID to construct the mbasic story URL.
@@ -44,11 +44,12 @@ export async function postFacebookComment(
     throw new Error('Facebook Cookie is required to post a comment.');
   }
 
+  const rawCookie = normalizeCookie(cookie);
   const resolvedUrl = getMbasicUrl(postUrl);
   console.log(`[FB Reply Service] Fetching page: ${resolvedUrl}`);
 
   const axiosHeaders = {
-    'Cookie': cookie,
+    'Cookie': rawCookie,
     'User-Agent': MOBILE_USER_AGENT,
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
     'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -119,13 +120,21 @@ export async function postFacebookComment(
     let form = $('form[action^="/a/comment.php"]').first();
     if (!form.length) {
       form = $('form').filter((_, el) => {
-        return $(el).find('input[name="fb_dtsg"]').length > 0;
+        const action = ($(el).attr('action') || '').toLowerCase();
+        return (action.includes('/a/comment.php') || action.includes('comment')) && 
+               $(el).find('input[name="fb_dtsg"]').length > 0;
       }).first();
     }
 
     if (!form.length) {
-      // Check if page contains login prompt
-      if (html.includes('login_form') || html.includes('/login.php') || html.includes('id="login_single_factor_form"')) {
+      // Check if page contains login prompt or we are logged out
+      const hasLoginPrompt = 
+        html.includes('login_form') || 
+        html.includes('/login.php') || 
+        html.includes('id="login_single_factor_form"') ||
+        html.includes('id="login_form"');
+        
+      if (hasLoginPrompt || !html.includes('fb_dtsg')) {
         throw new Error('COOKIE_EXPIRED');
       }
       throw new Error('Could not find Facebook comment input form. The cookie might not have permission or page layout changed.');
@@ -157,8 +166,10 @@ export async function postFacebookComment(
       // Find any textarea or input text
       const alternative = form.find('textarea, input[type="text"]').first();
       const altName = alternative.attr('name');
-      if (altName) {
+      if (altName && (altName === 'comment_text' || altName.includes('text') || altName.includes('body'))) {
         commentField = altName;
+      } else {
+        throw new Error('COOKIE_EXPIRED'); // Missing comment field, likely logged out or page layout block
       }
     }
 

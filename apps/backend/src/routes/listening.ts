@@ -615,6 +615,44 @@ router.post('/logs/:id/toggle-autopilot', requireWrite, async (req: AuthRequest,
 });
 
 /**
+ * POST /api/listening/logs/:id/generate-outreach
+ * Generates an AI outreach suggestion for comment or DM
+ */
+router.post('/logs/:id/generate-outreach', async (req: AuthRequest, res: Response): Promise<void> => {
+  const logId = parseInt(req.params.id as string, 10);
+  const { customPrompt, tone, type } = req.body; // type: 'comment' | 'dm'
+
+  const log = await prisma.socialListeningLog.findFirst({
+    where: { id: logId, campaign: { workspaceId: req.workspaceId } },
+    include: { campaign: true }
+  });
+
+  if (!log) {
+    res.status(404).json({ error: 'Không tìm thấy nhật ký bài viết này.' });
+    return;
+  }
+
+  try {
+    const { generateCustomOutreach } = await import('../services/leadQualifierService');
+    const outreach = await generateCustomOutreach(
+      req.workspaceId!,
+      log.postContent,
+      log.campaign.keywords,
+      log.campaign.targetAudience,
+      customPrompt,
+      tone || 'lịch sự',
+      type || 'comment',
+      log.campaignId
+    );
+
+    res.json({ success: true, outreach });
+  } catch (err: any) {
+    console.error('❌ Failed to generate custom AI outreach:', err);
+    res.status(500).json({ error: err.message || 'Lỗi hệ thống khi sinh kịch bản tiếp cận.' });
+  }
+});
+
+/**
  * POST /api/listening/logs/:id/reply
  * Posts a simulated Facebook comment reply using the campaign's cookie
  */

@@ -44,7 +44,34 @@ const node_1 = __importDefault(require("@payos/node"));
 const stripe_1 = __importDefault(require("stripe"));
 const crypto_1 = __importDefault(require("crypto"));
 const auditLogger_1 = require("../lib/auditLogger");
+const socket_1 = require("../lib/socket");
 const router = (0, express_1.Router)();
+async function notifyOrderPaid(orderId, orderNumber, customerId, workspaceId) {
+    try {
+        const session = await prisma_1.default.chatSession.findFirst({
+            where: { customerId },
+            orderBy: { createdAt: 'desc' }
+        });
+        if (session) {
+            const io = (0, socket_1.getIo)();
+            if (io) {
+                io.to(`session:${session.id}`).emit('order_paid', { orderNumber });
+                const botMsg = await prisma_1.default.chatMessage.create({
+                    data: {
+                        sessionId: session.id,
+                        sender: 'bot',
+                        content: `🎉 Xác nhận thanh toán thành công cho đơn hàng ${orderNumber}! Cảm ơn quý khách đã tin dùng sản phẩm của chúng tôi.`
+                    }
+                });
+                io.to(`session:${session.id}`).emit('new_message', botMsg);
+                io.to(`workspace:${workspaceId}`).emit('new_message', botMsg);
+            }
+        }
+    }
+    catch (err) {
+        console.error('[Socket.io Webhook Notification] Error:', err);
+    }
+}
 // Load Payment Config
 router.get('/config', auth_1.authenticate, workspace_1.workspaceMiddleware, async (req, res) => {
     try {
@@ -243,6 +270,8 @@ router.post('/payos-webhook', async (req, res) => {
                 where: { id: order.customerId },
                 data: { status: 'ACTIVE' },
             });
+            // Notify real-time socket
+            void notifyOrderPaid(order.id, order.orderNumber, order.customerId, order.workspaceId);
             // Kích hoạt gửi email cảm ơn mua hàng tự động
             const { triggerEmailEvent } = await Promise.resolve().then(() => __importStar(require('../services/emailEventTrigger')));
             void triggerEmailEvent('PURCHASE', {
@@ -313,6 +342,8 @@ router.post('/stripe-webhook', async (req, res) => {
                 where: { id: order.customerId },
                 data: { status: 'ACTIVE' },
             });
+            // Notify real-time socket
+            void notifyOrderPaid(order.id, order.orderNumber, order.customerId, order.workspaceId);
             // Kích hoạt gửi email cảm ơn mua hàng tự động
             const { triggerEmailEvent } = await Promise.resolve().then(() => __importStar(require('../services/emailEventTrigger')));
             void triggerEmailEvent('PURCHASE', {
@@ -417,6 +448,8 @@ router.post('/sepay-webhook', async (req, res) => {
                 where: { id: order.customerId },
                 data: { status: 'ACTIVE' },
             });
+            // Notify real-time socket
+            void notifyOrderPaid(order.id, order.orderNumber, order.customerId, order.workspaceId);
             // Kích hoạt gửi email cảm ơn mua hàng tự động
             const { triggerEmailEvent } = await Promise.resolve().then(() => __importStar(require('../services/emailEventTrigger')));
             void triggerEmailEvent('PURCHASE', {

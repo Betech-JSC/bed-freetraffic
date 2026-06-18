@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildRecommendations = buildRecommendations;
 exports.enhanceWithOpenAi = enhanceWithOpenAi;
+exports.generateCmoReport = generateCmoReport;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const ai_1 = require("../lib/ai");
 async function buildRecommendations(workspaceId) {
@@ -148,4 +149,148 @@ async function enhanceWithOpenAi(items) {
     catch {
         return { summary: '', items };
     }
+}
+async function generateCmoReport(workspaceId) {
+    const since7 = new Date();
+    since7.setDate(since7.getDate() - 7);
+    // 1. Traffic Snapshots
+    const snapshots = await prisma_1.default.analyticsSnapshot.findMany({
+        where: { date: { gte: since7 }, workspaceId },
+    });
+    const totalTraffic = snapshots.reduce((s, r) => s + r.sessions, 0);
+    const totalBounce = snapshots.reduce((s, r) => s + (r.bounceRate || 0), 0);
+    const avgBounceRate = snapshots.length > 0 ? totalBounce / snapshots.length : 0;
+    // 2. CRM Leads
+    const totalLeads = await prisma_1.default.customer.count({ where: { workspaceId } });
+    const newLeads7Days = await prisma_1.default.customer.count({ where: { workspaceId, createdAt: { gte: since7 } } });
+    const leadMagnetLeads = await prisma_1.default.customer.count({ where: { workspaceId, trafficSource: 'LEAD_MAGNET' } });
+    // 3. Social Listening
+    const listeningLogsScanned = await prisma_1.default.socialListeningLog.count({
+        where: { campaign: { workspaceId }, createdAt: { gte: since7 } }
+    });
+    const listeningLogsHot = await prisma_1.default.socialListeningLog.count({
+        where: { campaign: { workspaceId }, aiDecision: 'HOT', createdAt: { gte: since7 } }
+    });
+    // 4. Email Campaign Statistics
+    const emailCampaignStats = await prisma_1.default.emailCampaign.aggregate({
+        where: { workspaceId },
+        _sum: { sentCount: true, openCount: true }
+    });
+    const emailsSent = emailCampaignStats._sum.sentCount || 0;
+    const emailsOpened = emailCampaignStats._sum.openCount || 0;
+    // 5. SEO Keywords
+    const seoKeywordsCount = await prisma_1.default.seoKeyword.count({ where: { workspaceId } });
+    // 6. Orders & Revenue
+    const totalOrders = await prisma_1.default.order.count({ where: { workspaceId, status: 'PAID' } });
+    const revenueObj = await prisma_1.default.order.aggregate({
+        where: { workspaceId, status: 'PAID' },
+        _sum: { totalAmount: true }
+    });
+    const totalRevenue = revenueObj._sum.totalAmount || 0;
+    const stats = {
+        totalTraffic,
+        avgBounceRate,
+        totalLeads,
+        newLeads7Days,
+        leadMagnetLeads,
+        listeningLogsScanned,
+        listeningLogsHot,
+        emailsSent,
+        emailsOpened,
+        seoKeywordsCount,
+        totalOrders,
+        totalRevenue
+    };
+    // 7. Get AI recommendation summary using DeepSeek/OpenAI config
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'chatbot');
+    if (!ai.apiKey) {
+        return {
+            performanceReview: "Hãy thiết lập mã API Key ở file .env của backend để AI CMO phân tích chi tiết dữ liệu tiếp thị thực tế.",
+            growthOpportunities: "Các kênh Social Listening và Phễu Lead Magnet tự động là cơ hội tăng trưởng lớn.",
+            recommendedTasks: [
+                {
+                    task: "Kết nối tài khoản Google Analytics để đồng bộ dữ liệu traffic thực tế.",
+                    reason: "Hiện tại hệ thống chưa nhận được dữ liệu GA4.",
+                    priority: "high",
+                    actionPath: "/dashboard/settings",
+                    actionLabel: "Kết nối ngay"
+                }
+            ],
+            stats
+        };
+    }
+    const prompt = `Bạn là Giám đốc Marketing AI (AI CMO) chuyên nghiệp.
+Dưới đây là báo cáo các chỉ số tiếp thị và kinh doanh thực tế trong 7 ngày qua của doanh nghiệp:
+- Tổng lưu lượng truy cập (sessions): ${totalTraffic}
+- Tỷ lệ thoát trung bình (bounce rate): ${avgBounceRate.toFixed(1)}%
+- Tổng số khách hàng trong CRM: ${totalLeads}
+- Khách hàng mới trong 7 ngày qua: ${newLeads7Days}
+- Khách hàng đăng ký nhận PDF Lead Magnet: ${leadMagnetLeads}
+- Tin đăng social quét từ Social Listening: ${listeningLogsScanned}
+- Khách hàng HOT tiềm năng phát hiện từ Social Listening: ${listeningLogsHot}
+- Số lượng Email tiếp thị đã gửi: ${emailsSent}
+- Số lượng Email tiếp thị đã mở: ${emailsOpened}
+- Số từ khóa SEO đang theo dõi: ${seoKeywordsCount}
+- Số đơn hàng đã thanh toán thành công: ${totalOrders}
+- Tổng doanh thu (VNĐ): ${totalRevenue.toLocaleString('vi-VN')} VNĐ
+
+Nhiệm vụ của bạn: Hãy phân tích các chỉ số trên và đưa ra báo cáo định hướng chiến lược.
+Báo cáo phải trả về dưới dạng JSON thô, không chứa markdown block (không viết \`\`\`json), khớp chính xác cấu trúc sau:
+{
+  "performanceReview": "Tóm tắt đánh giá ngắn gọn khoảng 3-4 câu về sức khỏe và hiệu suất marketing tuần qua của doanh nghiệp.",
+  "growthOpportunities": "Phân tích 2-3 dòng chỉ ra cơ hội tăng trưởng tiềm năng (ví dụ tối ưu tỷ lệ chuyển độ, tập trung email drip campaign, khai thác social listening logs).",
+  "recommendedTasks": [
+    {
+      "task": "Nhiệm vụ cụ thể cần làm (Ví dụ: Thiết lập chiến dịch email tự động follow-up khách hàng từ Lead Magnet)",
+      "reason": "Lý do ưu tiên nhiệm vụ này dựa trên dữ liệu",
+      "priority": "high",
+      "actionPath": "/dashboard/email",
+      "actionLabel": "Thiết lập Email"
+    }
+  ]
+}`;
+    try {
+        const res = await (0, ai_1.fetchWithRetry)(ai.url, {
+            method: 'POST',
+            headers: ai.headers,
+            body: JSON.stringify({
+                model: ai.model,
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.5,
+                max_tokens: 1200,
+            }),
+            signal: AbortSignal.timeout(25000)
+        }, 2, 1200, workspaceId, 'lead_qualifier');
+        if (res.ok) {
+            const data = await res.json();
+            const rawText = data.choices?.[0]?.message?.content?.trim() || '';
+            // Basic JSON parser
+            const cleanJsonText = rawText.replace(/^```json|```$/g, '').trim();
+            const parsed = JSON.parse(cleanJsonText);
+            return {
+                performanceReview: parsed.performanceReview || '',
+                growthOpportunities: parsed.growthOpportunities || '',
+                recommendedTasks: parsed.recommendedTasks || [],
+                stats
+            };
+        }
+    }
+    catch (err) {
+        console.error('[AI CMO Report] Failed to fetch AI CMO analysis, falling back:', err.message);
+    }
+    // Fallback
+    return {
+        performanceReview: "Hệ thống ghi nhận hoạt động tiếp thị ổn định. Tổng lượng khách hàng mới đạt mức trung bình tốt.",
+        growthOpportunities: "Cần tăng cường khai thác dữ liệu từ các bài đăng Social Listening phát hiện được để tiếp cận chủ động.",
+        recommendedTasks: [
+            {
+                task: "Xem lại danh sách tin đăng từ Social Listening",
+                reason: "Hệ thống đang quét được tin bài nhưng chưa phản hồi hết.",
+                priority: "medium",
+                actionPath: "/dashboard/listening",
+                actionLabel: "Social Listening"
+            }
+        ],
+        stats
+    };
 }

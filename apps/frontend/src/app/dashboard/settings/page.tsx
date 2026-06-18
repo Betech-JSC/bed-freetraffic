@@ -115,6 +115,13 @@ export default function SettingsPage() {
   const [tgError, setTgError] = useState('');
   const [tgSuccess, setTgSuccess] = useState('');
 
+  // Telegram recent chats states
+  const [recentChats, setRecentChats] = useState<Array<{ chatId: string; chatTitle: string; chatType: string }>>([]);
+  const [loadingRecentChats, setLoadingRecentChats] = useState(false);
+  const [showRecentChats, setShowRecentChats] = useState(false);
+  const [tgDetectError, setTgDetectError] = useState('');
+  const [tgDetectSuccess, setTgDetectSuccess] = useState('');
+
   // Reddit state
   const [redditMode, setRedditMode] = useState<'idle' | 'form'>('idle');
   const [rdClientId, setRdClientId] = useState('');
@@ -362,6 +369,49 @@ export default function SettingsPage() {
       }
     } catch { setTgError(t('Lỗi kết nối máy chủ')); }
     setTgLoading(false);
+  };
+
+  const handleFetchRecentChats = async () => {
+    if (!tgBotToken.trim()) {
+      setTgDetectError(t('Vui lòng nhập Telegram Bot Token trước.'));
+      return;
+    }
+    setLoadingRecentChats(true);
+    setTgDetectError('');
+    setTgDetectSuccess('');
+    setShowRecentChats(true);
+    try {
+      const chats = await apiJson<any[]>('/listening/telegram/recent-chats', {
+        method: 'POST',
+        body: JSON.stringify({ botToken: tgBotToken.trim() }),
+      });
+      setRecentChats(chats);
+    } catch (err: any) {
+      setTgDetectError(err.message || t('Không tìm thấy tương tác nào. Vui lòng chat /start với Bot trước.'));
+      setRecentChats([]);
+    } finally {
+      setLoadingRecentChats(false);
+    }
+  };
+
+  const handleSelectRecentChat = async (chat: { chatId: string; chatTitle: string; chatType: string }) => {
+    setTgChatId(chat.chatId);
+    setTgDetectError('');
+    setTgDetectSuccess('');
+    try {
+      await apiJson<any>('/listening/telegram/send-welcome', {
+        method: 'POST',
+        body: JSON.stringify({
+          botToken: tgBotToken.trim(),
+          chatId: chat.chatId,
+          chatTitle: chat.chatTitle
+        }),
+      });
+      setTgDetectSuccess(`${t('Đã chọn cuộc trò chuyện:')} "${chat.chatTitle}" (${chat.chatType}). ${t('Đã gửi tin nhắn test thành công!')}`);
+      setShowRecentChats(false);
+    } catch (err: any) {
+      setTgDetectError(err.message || t('Không gửi được tin nhắn test chào mừng.'));
+    }
   };
 
   // ===== REDDIT =====
@@ -965,8 +1015,68 @@ export default function SettingsPage() {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{t('Telegram Chat hoặc Channel ID (Ví dụ: -100xxx hoặc @tenchannel)')}</label>
                   <input type="text" value={tgChatId} onChange={e => setTgChatId(e.target.value)} placeholder="e.g. -100123456789" className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-200 outline-none" />
+                  <button
+                    type="button"
+                    onClick={handleFetchRecentChats}
+                    className="mt-1.5 text-xs text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    🔍 {t('Quét & chọn ID chat gần đây')}
+                  </button>
                 </div>
               </div>
+
+              {showRecentChats && (
+                <div className="bg-slate-900 text-slate-200 p-4 rounded-xl border border-slate-800 space-y-3.5 mt-2">
+                  <div className="flex justify-between items-center border-b border-slate-800 pb-1.5">
+                    <span className="text-xs font-bold text-slate-400">{t('Chọn cuộc trò chuyện:')}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowRecentChats(false)}
+                      className="text-xs text-slate-550 hover:text-slate-250 cursor-pointer"
+                    >
+                      ✕ {t('Đóng')}
+                    </button>
+                  </div>
+                  {loadingRecentChats ? (
+                    <div className="flex items-center gap-2 text-xs text-slate-400 justify-center py-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand"></div>
+                      {t('Đang quét tương tác gần đây...')}
+                    </div>
+                  ) : recentChats.length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-2">
+                      {t('Không tìm thấy tương tác mới. Vui lòng chat /start hoặc gửi tin nhắn cho Bot trên Telegram trước rồi thử lại.')}
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
+                      {recentChats.map((c) => (
+                        <button
+                          key={c.chatId}
+                          type="button"
+                          onClick={() => handleSelectRecentChat(c)}
+                          className="w-full text-left p-2 hover:bg-slate-800 active:bg-slate-700 rounded-lg text-xs flex items-center justify-between border border-slate-800/40 transition-colors cursor-pointer"
+                        >
+                          <span>
+                            {c.chatType === 'Cá nhân' ? '👤' : '👥'} <span className="font-bold text-white">{c.chatTitle}</span> ({c.chatType})
+                          </span>
+                          <span className="text-brand font-mono">ID: {c.chatId} &rarr;</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tgDetectError && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-semibold leading-relaxed">
+                  ⚠️ {tgDetectError}
+                </div>
+              )}
+              {tgDetectSuccess && (
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-700 font-semibold leading-relaxed">
+                  ✓ {tgDetectSuccess}
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <button onClick={() => setTelegramMode('idle')} className="px-4 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200">{t('Hủy')}</button>
                 <button onClick={handleTelegramConnect} disabled={!tgBotToken || !tgChatId || tgLoading} className="px-5 py-2 text-white text-sm font-bold rounded-lg shadow-sm disabled:opacity-50" style={{ background: '#26A5E4' }}>

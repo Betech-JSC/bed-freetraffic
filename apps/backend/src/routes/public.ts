@@ -499,6 +499,49 @@ router.post('/forms/submit', publicSpamLimiter, async (req: Request, res: Respon
   }
 });
 
+/**
+ * POST /api/public/lead-magnet/generate
+ * Public endpoint to submit lead magnet target URL and email.
+ * Generates an AI report PDF, creates/updates the Customer in CRM, and emails the PDF.
+ */
+router.post('/lead-magnet/generate', async (req: Request, res: Response): Promise<void> => {
+  const { targetUrl, email, name, workspaceId } = req.body;
+
+  if (!targetUrl || !targetUrl.trim() || !email || !email.trim()) {
+    res.status(400).json({ error: 'targetUrl và email là bắt buộc.' });
+    return;
+  }
+
+  // Use provided workspaceId or default to the first workspace in the system
+  let finalWorkspaceId = parseInt(workspaceId, 10);
+  if (isNaN(finalWorkspaceId)) {
+    const firstWorkspace = await prisma.workspace.findFirst({ select: { id: true } });
+    finalWorkspaceId = firstWorkspace?.id || 1;
+  }
+
+  try {
+    const { generateAndSendLeadReport } = await import('../services/leadMagnetService');
+    
+    // Trigger in the background so the HTTP request returns quickly
+    // This provides a smooth user experience on the landing page
+    setImmediate(async () => {
+      try {
+        await generateAndSendLeadReport(finalWorkspaceId, targetUrl.trim(), email.trim(), name);
+      } catch (err: any) {
+        console.error('❌ Failed to run background lead report generator:', err.message);
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Báo cáo đang được khởi tạo bằng AI và sẽ gửi qua email của bạn trong vài phút!'
+    });
+  } catch (err: any) {
+    console.error('❌ Failed to trigger lead magnet generation:', err);
+    res.status(500).json({ error: err.message || 'Lỗi hệ thống khi khởi chạy dịch vụ.' });
+  }
+});
+
 // Retrieve published landing page HTML with Pixel scripts injected (Public)
 router.get('/pages/:slug/html', async (req: Request, res: Response): Promise<void> => {
   try {

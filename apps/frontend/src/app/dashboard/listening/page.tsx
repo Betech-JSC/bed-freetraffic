@@ -119,6 +119,12 @@ export default function SocialListeningPage() {
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
 
+  // AI Outreach States
+  const [outreachType, setOutreachType] = useState<'comment' | 'dm'>('comment');
+  const [outreachTone, setOutreachTone] = useState<string>('lịch sự');
+  const [outreachPrompt, setOutreachPrompt] = useState<string>('');
+  const [generatingOutreach, setGeneratingOutreach] = useState<boolean>(false);
+
   // Test Scan Status
   const [scanningId, setScanningId] = useState<number | null>(null);
   const [testResult, setTestResult] = useState<{ id: number; data: any } | null>(null);
@@ -424,6 +430,33 @@ export default function SocialListeningPage() {
       setError(err.message || 'Không thể gửi bình luận phản hồi.');
     } finally {
       setSendingReply(false);
+    }
+  };
+
+  const handleGenerateOutreach = async () => {
+    if (!replyingLog) return;
+    setGeneratingOutreach(true);
+    setError('');
+    try {
+      const data = await apiJson<{ success: boolean; outreach: string }>(
+        `/listening/logs/${replyingLog.id}/generate-outreach`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            customPrompt: outreachPrompt.trim(),
+            tone: outreachTone,
+            type: outreachType
+          })
+        }
+      );
+      if (data.success) {
+        setReplyText(data.outreach);
+        setSuccess(t('Đã tự động tạo kịch bản tiếp cận bằng AI!'));
+      }
+    } catch (err: any) {
+      setError(err.message || 'Lỗi khi gọi AI tạo tin nhắn tiếp cận.');
+    } finally {
+      setGeneratingOutreach(false);
     }
   };
 
@@ -1555,15 +1588,76 @@ export default function SocialListeningPage() {
                 </p>
               </div>
 
+              {/* Trợ lý AI Outreach Panel */}
+              <div className="bg-orange-50/20 border border-orange-500/10 rounded-2xl p-4 space-y-3">
+                <span className="text-xs font-bold text-orange-600 flex items-center gap-1.5 uppercase tracking-wide">
+                  🪄 Trợ lý AI Outreach
+                </span>
+                
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Hình thức tiếp cận</label>
+                    <select
+                      className="w-full py-1.5 px-2 bg-white border border-slate-200 rounded-lg text-xs"
+                      value={outreachType}
+                      onChange={(e) => setOutreachType(e.target.value as 'comment' | 'dm')}
+                    >
+                      <option value="comment">Bình luận (Comment)</option>
+                      <option value="dm">Gửi tin nhắn (Direct Message)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tone giọng AI</label>
+                    <select
+                      className="w-full py-1.5 px-2 bg-white border border-slate-200 rounded-lg text-xs"
+                      value={outreachTone}
+                      onChange={(e) => setOutreachTone(e.target.value)}
+                    >
+                      <option value="lịch sự">Lịch sự</option>
+                      <option value="thân thiện">Thân thiện</option>
+                      <option value="hóm hỉnh">Hóm hỉnh</option>
+                      <option value="thuyết phục">Thuyết phục</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase">Yêu cầu bổ sung cho AI (tùy chọn)</label>
+                  <input
+                    type="text"
+                    placeholder="VD: nhấn mạnh vào quà tặng ebook miễn phí..."
+                    className="w-full py-1.5 px-3 bg-white border border-slate-200 rounded-lg text-xs"
+                    value={outreachPrompt}
+                    onChange={(e) => setOutreachPrompt(e.target.value)}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateOutreach}
+                  disabled={generatingOutreach}
+                  className="w-full py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-xs transition duration-200 flex items-center justify-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {generatingOutreach ? (
+                    <>
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                      Đang sinh kịch bản...
+                    </>
+                  ) : (
+                    '🪄 AI Tự động viết kịch bản tiếp cận'
+                  )}
+                </button>
+              </div>
+
               {/* Reply Text input */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-500 uppercase flex justify-between">
-                  <span>Nội dung bình luận phản hồi</span>
-                  <span className="text-slate-400 font-normal normal-case">Bạn có thể chỉnh sửa lại trước khi gửi</span>
+                  <span>Nội dung kịch bản phản hồi</span>
+                  <span className="text-slate-400 font-normal normal-case">Bạn có thể chỉnh sửa lại trước khi áp dụng</span>
                 </label>
                 <textarea
-                  rows={6}
-                  placeholder="Nhập nội dung phản hồi bình luận..."
+                  rows={5}
+                  placeholder={outreachType === 'dm' ? "Nhập nội dung tin nhắn gửi khách..." : "Nhập nội dung phản hồi bình luận..."}
                   className="input w-full font-sans text-xs border-orange-100 focus:border-brand"
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
@@ -1573,7 +1667,9 @@ export default function SocialListeningPage() {
               <div className="text-[10px] text-slate-400 leading-normal flex items-start gap-1">
                 <span>💡</span>
                 <span>
-                  Bình luận này sẽ được gửi trực tiếp lên bài viết/bình luận Facebook bằng tài khoản đã cấu hình Cookie của chiến dịch. Quá trình này mô phỏng trình duyệt mbasic nên cực kỳ an toàn.
+                  {outreachType === 'dm' 
+                    ? 'Lưu ý: Vì lý do bảo mật, Facebook không cho phép gửi tin nhắn riêng trực tiếp bằng API/Cookie tự động. Nút hành động sẽ giúp bạn copy tin nhắn này và mở bài viết Facebook để bạn gửi tay.'
+                    : 'Bình luận này sẽ được gửi trực tiếp lên bài viết/bình luận Facebook bằng tài khoản đã cấu hình Cookie của chiến dịch. Quá trình này mô phỏng trình duyệt mbasic nên cực kỳ an toàn.'}
                 </span>
               </div>
 
@@ -1587,20 +1683,35 @@ export default function SocialListeningPage() {
                 >
                   Hủy bỏ
                 </button>
-                <button
-                  onClick={handleSendReply}
-                  disabled={sendingReply || !replyText.trim()}
-                  className="btn-primary text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-brand/10 font-bold flex items-center gap-1.5"
-                >
-                  {sendingReply ? (
-                    <>
-                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
-                      Đang gửi bình luận...
-                    </>
-                  ) : (
-                    'Gửi bình luận ngay'
-                  )}
-                </button>
+                {outreachType === 'dm' ? (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(replyText);
+                      alert('Đã sao chép kịch bản tin nhắn vào Clipboard! Đang mở bài viết Facebook để bạn nhắn tin...');
+                      window.open(replyingLog.postUrl, '_blank');
+                      setReplyingLog(null);
+                    }}
+                    disabled={!replyText.trim()}
+                    className="btn-primary text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-brand/10 font-bold flex items-center gap-1.5"
+                  >
+                    📋 Sao chép & Mở Facebook
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSendReply}
+                    disabled={sendingReply || !replyText.trim()}
+                    className="btn-primary text-xs px-5 py-2.5 rounded-xl shadow-lg shadow-brand/10 font-bold flex items-center gap-1.5"
+                  >
+                    {sendingReply ? (
+                      <>
+                        <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
+                        Đang gửi bình luận...
+                      </>
+                    ) : (
+                      'Gửi bình luận ngay'
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>

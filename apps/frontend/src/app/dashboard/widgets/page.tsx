@@ -24,7 +24,7 @@ type WidgetConfig = {
 type MarketingWidget = {
   id: number;
   name: string;
-  type: 'QUIZ' | 'CALCULATOR';
+  type: 'QUIZ' | 'CALCULATOR' | 'AI_REPORT';
   title: string;
   description: string;
   configJson: string;
@@ -47,7 +47,7 @@ export default function WidgetsPage() {
 
   // Form states
   const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<'QUIZ' | 'CALCULATOR'>('QUIZ');
+  const [formType, setFormType] = useState<'QUIZ' | 'CALCULATOR' | 'AI_REPORT'>('QUIZ');
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
   const [formTheme, setFormTheme] = useState('#e85d26');
@@ -119,7 +119,7 @@ export default function WidgetsPage() {
     const config: WidgetConfig = JSON.parse(widget.configJson || '{}');
     if (widget.type === 'QUIZ') {
       setQuestions(config.questions || []);
-    } else {
+    } else if (widget.type === 'CALCULATOR') {
       setCalcInputs(config.inputs || []);
     }
 
@@ -168,7 +168,7 @@ export default function WidgetsPage() {
     const configObj: WidgetConfig = {};
     if (formType === 'QUIZ') {
       configObj.questions = questions;
-    } else {
+    } else if (formType === 'CALCULATOR') {
       configObj.inputs = calcInputs;
     }
 
@@ -326,11 +326,12 @@ export default function WidgetsPage() {
                 <select
                   disabled={!!selectedWidget}
                   value={formType}
-                  onChange={(e) => setFormType(e.target.value as 'QUIZ' | 'CALCULATOR')}
+                  onChange={(e) => setFormType(e.target.value as 'QUIZ' | 'CALCULATOR' | 'AI_REPORT')}
                   className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 disabled:bg-gray-50"
                 >
                   <option value="QUIZ">Khảo sát trắc nghiệm (AI Quiz)</option>
                   <option value="CALCULATOR">Bảng tính ROI (ROI Calculator)</option>
+                  <option value="AI_REPORT">Biểu mẫu nhận báo cáo tăng trưởng AI (AI Lead Magnet)</option>
                 </select>
               </div>
 
@@ -560,6 +561,57 @@ export default function WidgetsPage() {
                 </div>
               )}
 
+              {/* AI_REPORT CONFIG */}
+              {formType === 'AI_REPORT' && (
+                <div className="space-y-6">
+                  <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-2xl space-y-4">
+                    <h4 className="text-sm font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>✨ Biểu Mẫu Nhận Báo Cáo AI (AI Lead Magnet)</span>
+                    </h4>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      Widget này sẽ hiển thị một form thu thập thông tin bao gồm: 
+                      <strong> Họ tên</strong>, <strong> Địa chỉ Email</strong>, và <strong> URL Website</strong>.
+                    </p>
+                    <div className="space-y-2 text-xs text-amber-700">
+                      <div className="flex gap-2">
+                        <span className="text-amber-500">•</span>
+                        <span>Khách truy cập nhập link website của họ và bấm đăng ký.</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-amber-500">•</span>
+                        <span>Hệ thống tự động phân tích website (Scrape metadata, AI SEO & Growth Audit).</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-amber-500">•</span>
+                        <span>Tạo file PDF báo cáo chuyên nghiệp có gắn nhãn thương hiệu và tự động gửi qua email đính kèm cho khách.</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <span className="text-amber-500">•</span>
+                        <span>Thông tin khách hàng lập tức được thêm vào CRM với nguồn tag <code>LEAD_MAGNET</code>.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                    <h5 className="text-xs font-bold text-slate-700">🎨 Xem trước các trường hiển thị của Form:</h5>
+                    <div className="space-y-2 opacity-75 pointer-events-none">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Họ và tên của bạn</label>
+                        <input type="text" placeholder="Nguyễn Văn A" className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Địa chỉ Email nhận báo cáo</label>
+                        <input type="email" placeholder="name@company.com" className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">URL Website cần phân tích</label>
+                        <input type="url" placeholder="https://mycompany.com" className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex gap-3 pt-6 border-t border-gray-100 justify-end">
                 <button
@@ -616,6 +668,7 @@ export default function WidgetsPage() {
               {widgets.map((widget) => {
                 const config: WidgetConfig = JSON.parse(widget.configJson || '{}');
                 const isQuiz = widget.type === 'QUIZ';
+                const isCalc = widget.type === 'CALCULATOR';
                 const itemsCount = isQuiz ? (config.questions?.length || 0) : (config.inputs?.length || 0);
 
                 return (
@@ -625,9 +678,11 @@ export default function WidgetsPage() {
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                           isQuiz 
                             ? 'bg-amber-50 text-amber-600 border border-amber-200' 
-                            : 'bg-blue-50 text-blue-600 border border-blue-200'
+                            : isCalc
+                              ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                              : 'bg-emerald-50 text-emerald-600 border border-emerald-200'
                         }`}>
-                          {isQuiz ? 'AI Quiz' : 'ROI Calculator'}
+                          {isQuiz ? 'AI Quiz' : isCalc ? 'ROI Calculator' : 'AI Lead Magnet'}
                         </span>
                         
                         <div className="flex items-center space-x-1.5">
@@ -642,7 +697,12 @@ export default function WidgetsPage() {
                           Tiêu đề: {widget.title}
                         </div>
                         <div className="text-xs text-gray-400">
-                          {isQuiz ? `${itemsCount} Câu hỏi trắc nghiệm` : `${itemsCount} Tham số đầu vào`}
+                          {isQuiz 
+                            ? `${itemsCount} Câu hỏi trắc nghiệm` 
+                            : isCalc 
+                              ? `${itemsCount} Tham số đầu vào`
+                              : 'Biểu mẫu phân tích website & Gửi PDF tự động'
+                          }
                         </div>
                       </div>
                     </div>

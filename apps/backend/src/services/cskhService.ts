@@ -450,7 +450,7 @@ export function cleanReplyText(text: string): string {
   return text.replace(/<call:[a-zA-Z0-9_]+(?:\s+[^>]+?)?\s*\/>/g, '').trim();
 }
 
-async function executeTool(workspaceId: number, toolName: string, args: Record<string, string>): Promise<string> {
+async function executeTool(workspaceId: number, toolName: string, args: Record<string, string>, sessionId?: string): Promise<string> {
   console.log(`[ReAct Tool] Executing tool ${toolName} with args:`, args);
   try {
     switch (toolName) {
@@ -562,6 +562,155 @@ async function executeTool(workspaceId: number, toolName: string, args: Record<s
               price: item.price
             }))
           }))
+        });
+      }
+
+      case 'generateCheckoutLink': {
+        const productIdStr = args.productId || '';
+        const email = args.email || '';
+        const name = args.name || '';
+        
+        if (!productIdStr) return JSON.stringify({ error: 'Thiếu mã sản phẩm (productId).' });
+        const productId = parseInt(productIdStr, 10);
+        if (isNaN(productId)) return JSON.stringify({ error: 'Mã sản phẩm (productId) không hợp lệ.' });
+        
+        // 1. Find product
+        const product = await prisma.product.findUnique({
+          where: { id: productId }
+        });
+        if (!product) return JSON.stringify({ error: `Không tìm thấy sản phẩm với ID ${productId}.` });
+        
+        // 2. Find or create Customer
+        let customer = null;
+        if (email.trim()) {
+          customer = await prisma.customer.findFirst({
+            where: { email: email.trim().toLowerCase(), workspaceId }
+          });
+          if (!customer) {
+            customer = await prisma.customer.create({
+              data: {
+                workspaceId,
+                email: email.trim().toLowerCase(),
+                name: name.trim() || email.split('@')[0],
+                status: 'NEW',
+                trafficSource: 'CSKH Chatbot Sales'
+              }
+            });
+          }
+        } else if (sessionId) {
+          const sess = await prisma.chatSession.findUnique({
+            where: { id: sessionId },
+            include: { customer: true }
+          });
+          if (sess?.customerId) {
+            customer = sess.customer;
+          }
+        }
+        
+        if (!customer) {
+          return JSON.stringify({
+            error: "Vui lòng cung cấp email của bạn để em lập đơn hàng thanh toán nhé."
+          });
+        }
+        
+        // 3. Create Order
+        const orderNumber = `ORD-${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+        const order = await prisma.order.create({
+          data: {
+            orderNumber,
+            customerId: customer.id,
+            totalAmount: product.price,
+            status: 'PENDING',
+            paymentMethod: 'PAYOS',
+            source: 'CHATBOT',
+            workspaceId,
+            items: {
+              create: [
+                {
+                  productId: product.id,
+                  quantity: 1,
+                  price: product.price
+                }
+              ]
+            }
+          }
+        });
+        
+        // 4. Generate payment link using Config
+        const paymentConfig = await prisma.paymentConfig.findUnique({
+          where: { workspaceId }
+        });
+        
+        let checkoutUrl = '';
+        let qrCode = '';
+        
+        if (paymentConfig?.payosClientId && paymentConfig?.payosApiKey && paymentConfig?.payosChecksumKey) {
+          try {
+            const PayOS = (await import('@payos/node')).default;
+            const payos = new (PayOS as any)(paymentConfig.payosClientId, paymentConfig.payosApiKey, paymentConfig.payosChecksumKey);
+            const orderCode = parseInt(orderNumber.replace(/[^\d]/g, '')) || Math.floor(100000 + Math.random() * 900000);
+            const paymentData = {
+              orderCode,
+              amount: Math.round(product.price),
+              description: `Checkout ${orderNumber}`.substring(0, 25),
+              items: [{
+                name: product.name.substring(0, 20),
+                quantity: 1,
+                price: Math.round(product.price)
+              }],
+              returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout/success`,
+              cancelUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout/cancel`
+            };
+            const paymentLinkRes = await payos.createPaymentLink(paymentData);
+            checkoutUrl = paymentLinkRes.checkoutUrl;
+            qrCode = paymentLinkRes.qrCode || '';
+          } catch (err: any) {
+            console.error('[cskhService] PayOS link creation failed, falling back:', err.message);
+          }
+        }
+        
+        if (!checkoutUrl && paymentConfig?.stripeSecretKey) {
+          try {
+            const Stripe = (await import('stripe')).default;
+            const stripe = new Stripe(paymentConfig.stripeSecretKey, { apiVersion: '2023-10-16' as any });
+            const stripeSession = await stripe.checkout.sessions.create({
+              payment_method_types: ['card'],
+              line_items: [{
+                price_data: {
+                  currency: product.currency.toLowerCase() || 'vnd',
+                  product_data: { name: product.name },
+                  unit_amount: Math.round(product.price),
+                },
+                quantity: 1,
+              }],
+              mode: 'payment',
+              success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout/success`,
+              cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout/cancel`,
+              customer_email: customer.email
+            });
+            checkoutUrl = stripeSession.url || '';
+          } catch (err: any) {
+            console.error('[cskhService] Stripe link creation failed, falling back:', err.message);
+          }
+        }
+        
+        // Fallback: VietQR Bank Transfer
+        if (!checkoutUrl) {
+          const bankCode = paymentConfig?.sepayBankCode || 'MB';
+          const accNumber = paymentConfig?.sepayAccountNumber || '0999999999';
+          const accName = paymentConfig?.sepayAccountName || 'Be Traffic System';
+          checkoutUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/checkout?order=${orderNumber}`;
+          qrCode = `https://img.vietqr.io/image/${bankCode}-${accNumber}-compact.png?amount=${product.price}&addInfo=${orderNumber}&accountName=${encodeURIComponent(accName)}`;
+        }
+        
+        return JSON.stringify({
+          orderNumber,
+          productName: product.name,
+          price: product.price,
+          currency: product.currency,
+          checkoutUrl,
+          qrCode,
+          message: `Em đã tạo đơn hàng ${orderNumber} cho sản phẩm ${product.name}. Quý khách có thể thanh toán trực tiếp qua link hoặc mã QR này.`
         });
       }
       
@@ -917,7 +1066,7 @@ Dưới đây là tri thức của hệ thống (Knowledge Base):
 ${effectiveKb}
 ---
 
-Bạn cũng được cung cấp một số công cụ (Tools) dạng thẻ XML để truy vấn thông tin thực tế từ hệ thống. Khi khách hàng hỏi về thông tin sản phẩm hoặc đơn hàng, bạn BẮT BUỘC phải gọi công cụ này để lấy thông tin chính xác thay vì tự bịa ra thông tin.
+Bạn cũng được cung cấp một số công cụ (Tools) dạng thẻ XML để truy vấn thông tin thực tế từ hệ thống. Khi khách hàng hỏi về thông tin sản phẩm, muốn mua hàng hoặc kiểm tra đơn hàng, bạn BẮT BUỘC phải gọi công cụ này để lấy thông tin chính xác thay vì tự bịa ra thông tin.
 
 Các công cụ sẵn có:
 1. Tìm kiếm sản phẩm:
@@ -929,19 +1078,24 @@ Các công cụ sẵn có:
 3. Kiểm tra danh sách đơn hàng của khách hàng bằng Email hoặc Số điện thoại:
    Cú pháp: <call:checkCustomerOrders query="email hoặc số điện thoại" />
    Ví dụ: <call:checkCustomerOrders query="0987654321" /> hoặc <call:checkCustomerOrders query="khachhang@gmail.com" />
+4. Tạo liên kết thanh toán và lập đơn hàng cho sản phẩm:
+   Cú pháp: <call:generateCheckoutLink productId="mã sản phẩm" email="email khách hàng" name="tên khách hàng" />
+   Ví dụ: <call:generateCheckoutLink productId="5" email="customer@gmail.com" name="Nguyễn Văn A" />
+   * Lưu ý quan trọng: Khi khách hàng đồng ý mua một sản phẩm cụ thể, bạn CẦN gọi công cụ này. Nếu khách hàng chưa từng cung cấp email trong lịch sử trò chuyện, hãy lịch sự hỏi xin địa chỉ email của họ trước tiên để tiến hành khởi tạo đơn hàng.
 
 Quy trình sử dụng công cụ:
-- Khi nhận được tin nhắn cần thông tin đơn hàng/sản phẩm, hãy viết thẻ <call:toolName param="value" /> tương ứng trong phản hồi. Hãy kết thúc câu trả lời ngay sau khi gọi công cụ để hệ thống xử lý.
+- Khi nhận được tin nhắn cần thông tin đơn hàng/sản phẩm hoặc khi khách đồng ý chốt đơn, hãy viết thẻ <call:toolName param="value" /> tương ứng trong phản hồi. Hãy kết thúc câu trả lời ngay sau khi gọi công cụ để hệ thống xử lý.
 - Sau khi hệ thống trả về kết quả truy vấn, bạn sẽ nhận được thông tin. Lúc này, hãy sử dụng kết quả đó để trả lời khách hàng một cách tự nhiên và chính xác nhất.
 - Tuyệt đối không tự bịa đặt mã đơn hàng, sản phẩm hoặc thông tin trạng thái đơn hàng nếu chưa gọi công cụ và nhận được kết quả.
 - Khi trả lời khách hàng, hãy trả lời bằng tiếng Việt thân thiện, rõ ràng. Không lặp lại thẻ gọi công cụ nếu đã có kết quả.
 
 Nhiệm vụ của bạn:
 1. Trả lời câu hỏi của khách hàng dựa trên thông tin Tri thức hoặc kết quả trả về của các công cụ một cách lịch sự, thân thiện và chuyên nghiệp.
-2. Hãy tư vấn linh hoạt và trả lời trực tiếp câu hỏi của khách dựa trên Tri thức. Tránh việc chào hỏi lặp lại nhiều lần nếu khách đã ở trong cuộc hội thoại.
-3. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức và không thể truy vấn qua công cụ, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
-4. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
-5. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
+2. Chủ động tư vấn, giới thiệu và đề xuất sản phẩm phù hợp khi khách hàng tìm hiểu giải pháp. Hướng dẫn khách chốt đơn và gửi link thanh toán/mã QR để hoàn tất mua hàng.
+3. Tránh việc chào hỏi lặp lại nhiều lần nếu khách đã ở trong cuộc hội thoại.
+4. Chỉ trả lời dựa trên Tri thức được cung cấp. Nếu thông tin không có trong Tri thức và không thể truy vấn qua công cụ, bạn KHÔNG tự ý bịa đặt thông tin. Thay vào đó, hãy lịch sự đề xuất khách hàng để lại Email hoặc Số điện thoại để chuyên viên của chúng tôi liên hệ hỗ trợ trực tiếp.
+5. Luôn giữ thái độ phục vụ chu đáo, xưng hô phù hợp (ví dụ: dạ, em, mình, quý khách).
+6. Hãy viết câu trả lời ngắn gọn, rõ ràng, tập trung vào câu hỏi của khách.`;
 
       let loopCount = 0;
       const maxLoops = 3;
@@ -998,7 +1152,7 @@ Nhiệm vụ của bạn:
 
               const results: string[] = [];
               for (const call of toolCalls) {
-                const result = await executeTool(workspaceId, call.toolName, call.args);
+                const result = await executeTool(workspaceId, call.toolName, call.args, session.id);
                 results.push(`[Kết quả ${call.toolName}]: ${result}`);
               }
 

@@ -37,6 +37,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.qualifyLead = qualifyLead;
+exports.generateCustomOutreach = generateCustomOutreach;
 const prisma_1 = __importDefault(require("../lib/prisma"));
 const ai_1 = require("../lib/ai");
 /**
@@ -289,4 +290,98 @@ function fallbackKeywordScoring(postContent, keywords) {
         reason: `Trùng khớp ${matchCount} từ khóa chiến dịch. Có dấu hiệu nhu cầu mức độ ${decision} (Heuristic Fallback).`,
         draftMsg
     };
+}
+/**
+ * Generates a customized outreach message (comment or DM) for a qualified lead using AI,
+ * incorporating workspace RAG context and custom prompts/tones.
+ */
+async function generateCustomOutreach(workspaceId, postContent, campaignKeywords, targetAudience, customPrompt, tone = 'lịch sự', type = 'comment', campaignId) {
+    // 1. Fetch RAG Context (Knowledge Base) if workspaceId is provided
+    let ragContextText = '';
+    try {
+        const { retrieveRelevantChunksStructured } = await Promise.resolve().then(() => __importStar(require('../lib/embeddings')));
+        let sourceIds = undefined;
+        if (campaignId) {
+            const campaignWithSources = await prisma_1.default.socialListeningCampaign.findUnique({
+                where: { id: campaignId },
+                include: { knowledgeSources: { select: { id: true } } }
+            });
+            if (campaignWithSources && campaignWithSources.knowledgeSources.length > 0) {
+                sourceIds = campaignWithSources.knowledgeSources.map(s => s.id);
+            }
+        }
+        const structuredChunks = await retrieveRelevantChunksStructured(workspaceId, postContent.slice(0, 300), 3, sourceIds);
+        const config = await prisma_1.default.cskhConfig.findUnique({
+            where: { workspaceId }
+        });
+        const kbText = config?.knowledgeBaseText || '';
+        const relevantChunks = structuredChunks.map(s => `[Nguồn: ${s.source}]\n${s.content}`);
+        const mergedChunks = [...relevantChunks];
+        if (kbText && !mergedChunks.some(c => c.includes(kbText.slice(0, 30)))) {
+            mergedChunks.unshift(`[Nguồn: Hướng dẫn & Ghi chú nhanh]\n${kbText}`);
+        }
+        if (mergedChunks.length > 0) {
+            ragContextText = `\n\n--- THÔNG TIN DOANH NGHIỆP CỦA BẠN (Sử dụng để đối chiếu xem nhu cầu của bài viết và soạn tin nhắn nháp): ---\n${mergedChunks.join('\n\n')}\n--- KẾT THÚC THÔNG TIN DOANH NGHIỆP ---`;
+        }
+    }
+    catch (ragErr) {
+        console.error('⚠️ [Outreach RAG Error] Lỗi tích hợp tri thức:', ragErr);
+    }
+    const ai = (0, ai_1.getAiConfig)('/chat/completions', 'lead_qualifier');
+    if (!ai.apiKey) {
+        throw new Error('Chưa cấu hình OPENAI_API_KEY ở backend để sử dụng AI Outreach.');
+    }
+    let targetAudienceText = '';
+    if (targetAudience) {
+        targetAudienceText = `\n\n--- CHÂN DUNG KHÁCH HÀNG MỤC TIÊU & DỊCH VỤ CỦA CHIẾN DỊCH NÀY: ---\n${targetAudience}\n--- KẾT THÚC CHÂN DUNG KHÁCH HÀNG MỤC TIÊU ---`;
+    }
+    const systemPrompt = `Bạn là một chuyên gia viết kịch bản tiếp cận khách hàng tiềm năng (AI Outreach Copywriter).
+Nhiệm vụ của bạn là soạn thảo một tin nhắn tiếp cận (${type === 'dm' ? 'Tin nhắn riêng tư - Direct Message' : 'Bình luận công khai - Comment'}) gửi tới tác giả bài viết mạng xã hội.
+
+Quy tắc viết kịch bản:
+1. Viết bằng tiếng Việt, giọng điệu tự nhiên, chân thành, ${tone === 'hóm hỉnh' ? 'hóm hỉnh, hài hước, dùng một vài emoji tự nhiên' :
+        tone === 'thân thiện' ? 'thân thiện, gần gũi và cởi mở' :
+            tone === 'thuyết phục' ? 'thuyết phục, đánh mạnh vào lợi ích và tính chuyên nghiệp' :
+                'lịch sự, trang trọng và tôn trọng khách hàng'}.
+2. ${type === 'dm'
+        ? 'Vì là tin nhắn riêng tư (Inbox), hãy bắt đầu bằng việc chào hỏi lịch sự, đề cập đến bài viết/bình luận của họ một cách tự nhiên để họ không thấy bị làm phiền. Giới thiệu ngắn gọn lý do inbox.'
+        : 'Vì là bình luận công khai (Comment), hãy trả lời ngắn gọn dưới 3-4 câu, tập trung chia sẻ giá trị hữu ích hoặc bày tỏ sự đồng cảm trước, sau đó giới thiệu giải pháp khéo léo.'}
+3. Tuyệt đối không spam chào mời bán hàng lộ liễu ngay từ những dòng đầu tiên. Hãy cá nhân hóa dựa trên nội dung bài viết và thông tin doanh nghiệp được cung cấp bên dưới.
+4. Kêu gọi hành động (CTA) nhẹ nhàng: ${type === 'dm'
+        ? 'hỏi xem họ có muốn xem thử tài liệu, dùng thử miễn phí hoặc trao đổi ngắn 5 phút qua cuộc gọi/chat không.'
+        : 'kêu gọi check tin nhắn chờ hoặc inbox riêng để nhận thêm tư vấn/tài liệu chi tiết.'}
+${customPrompt ? `5. BẮT BUỘC TUÂN THỦ YÊU CẦU BỔ SUNG NÀY TỪ NGƯỜI DÙNG: "${customPrompt}"` : ''}
+
+BẮT BUỘC: Chỉ trả về nội dung tin nhắn tiếp cận cuối cùng, tuyệt đối không kèm theo bất kỳ lời mở đầu, lời dẫn giải, hay ký hiệu markdown (ví dụ như \`\`\`) nào ngoài phần văn bản gửi khách.`;
+    const userPrompt = `NỘI DUNG BÀI VIẾT CỦA KHÁCH HÀNG:
+"""
+${postContent}
+"""
+
+TỪ KHÓA ĐỊNH HƯỚNG CHIẾN DỊCH:
+${campaignKeywords}
+${targetAudienceText}
+${ragContextText}
+
+Hãy tạo tin nhắn tiếp cận phù hợp nhất.`;
+    const res = await (0, ai_1.fetchWithRetry)(ai.url, {
+        method: 'POST',
+        headers: ai.headers,
+        body: JSON.stringify({
+            model: ai.model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.6,
+            max_tokens: 1000
+        }),
+        signal: AbortSignal.timeout(20000)
+    });
+    if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`AI API status ${res.status}: ${errText}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || 'Chào bạn, mình thấy bạn đang quan tâm vấn đề này. Hãy liên hệ mình nhé!';
 }

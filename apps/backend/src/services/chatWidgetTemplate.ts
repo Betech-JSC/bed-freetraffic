@@ -321,6 +321,33 @@ export function getChatWidgetHtml(workspaceId: number): string {
 
     let renderedCount = 0;
     let syncInterval = null;
+    
+    // Socket.io initialization for real-time order/checkout update
+    let socket = null;
+    function initSocket() {
+      if (socket) return;
+      const socketScript = document.createElement('script');
+      socketScript.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+      document.head.appendChild(socketScript);
+      socketScript.onload = () => {
+        const socketIoHost = window.location.origin;
+        socket = io(socketIoHost);
+        if (sessionId) {
+          socket.emit('join_session', sessionId);
+        }
+        
+        socket.on('order_paid', (data) => {
+          appendMessage('🎉 Xác nhận thanh toán thành công cho đơn hàng ' + data.orderNumber + '! Hệ thống đã ghi nhận giao dịch của bạn.', 'bot');
+          scrollToBottom();
+        });
+
+        socket.on('new_message', (msg) => {
+          if (msg.sender !== 'visitor') {
+            syncMessages();
+          }
+        });
+      };
+    }
 
     async function syncMessages() {
       if (!sessionId) return;
@@ -346,6 +373,7 @@ export function getChatWidgetHtml(workspaceId: number): string {
       panel.classList.toggle('hidden');
       if (!panel.classList.contains('hidden')) {
         input.focus();
+        initSocket();
         syncMessages();
         scrollToBottom();
         if (!syncInterval) {
@@ -405,8 +433,12 @@ export function getChatWidgetHtml(workspaceId: number): string {
         typingIndicator.classList.add('hidden');
 
         if (data.sessionId) {
+          const oldSessionId = sessionId;
           sessionId = data.sessionId;
           localStorage.setItem(STORAGE_KEY, sessionId);
+          if (socket && oldSessionId !== sessionId) {
+            socket.emit('join_session', sessionId);
+          }
         }
 
         if (data.reply) {
@@ -430,8 +462,60 @@ export function getChatWidgetHtml(workspaceId: number): string {
       msgDiv.className = 'ai-message ' + sender + ' fade-in';
       
       if (sender === 'bot') {
+        // Parse Payment Checkout Cards
+        const checkoutUrlMatch = text.match(/(https?:\/\/[^\s]+(?:checkout|pay\.payos\.vn|stripe\.com|pay\.stripe\.com|ORD-)[^\s]*)/i);
+        const qrUrlMatch = text.match(/(https?:\/\/img\.vietqr\.io\/image\/[^\s]+)/i);
+        
+        if (checkoutUrlMatch || qrUrlMatch) {
+          const checkoutUrl = checkoutUrlMatch ? checkoutUrlMatch[1].replace(/[.,;:"]$/, '') : '';
+          const qrUrl = qrUrlMatch ? qrUrlMatch[1].replace(/[.,;:"]$/, '') : '';
+          
+          let cleanText = text;
+          if (checkoutUrl) cleanText = cleanText.replace(checkoutUrl, '');
+          if (qrUrl) cleanText = cleanText.replace(qrUrl, '');
+          cleanText = cleanText.replace(/(Link thanh toán:|Mã QR:|Quét mã QR để thanh toán:)/gi, '').trim();
+          
+          msgDiv.innerHTML = '<div style="margin-bottom:8px;">' + cleanText + '</div>';
+          
+          const card = document.createElement('div');
+          card.style.cssText = "background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-top:8px; box-shadow:0 2px 4px rgba(0,0,0,0.05); display:flex; flex-direction:column; align-items:center; gap:8px;";
+          
+          const cardTitle = document.createElement('div');
+          cardTitle.style.cssText = "font-size:13px; font-weight:700; color:#374151; width:100%; text-align:left; border-bottom:1px solid #f3f4f6; padding-bottom:6px; display:flex; align-items:center; gap:6px;";
+          cardTitle.innerHTML = '💳 <span>Đơn Hàng & Thanh Toán</span>';
+          card.appendChild(cardTitle);
+          
+          if (qrUrl) {
+            const qrImg = document.createElement('img');
+            qrImg.src = qrUrl;
+            qrImg.style.cssText = "width:140px; height:140px; border-radius:8px; border:1px solid #f3f4f6; transition:transform 0.2s;";
+            qrImg.onmouseover = () => qrImg.style.transform = 'scale(1.05)';
+            qrImg.onmouseout = () => qrImg.style.transform = 'scale(1)';
+            card.appendChild(qrImg);
+            
+            const qrHint = document.createElement('div');
+            qrHint.style.cssText = "font-size:10px; color:#6b7280; font-style:italic;";
+            qrHint.innerText = "Quét mã VietQR bằng ứng dụng ngân hàng";
+            card.appendChild(qrHint);
+          }
+          
+          if (checkoutUrl) {
+            const payBtn = document.createElement('a');
+            payBtn.href = checkoutUrl;
+            payBtn.target = "_blank";
+            payBtn.style.cssText = "width:100%; text-align:center; padding:8px 12px; background:linear-gradient(135deg, #e85d26, #f97316); color:#fff; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none; box-shadow:0 2px 4px rgba(232,93,38,0.2); transition:all 0.2s;";
+            payBtn.innerText = "Thanh toán trực tuyến";
+            payBtn.onmouseover = () => { payBtn.style.filter = 'brightness(1.05)'; };
+            payBtn.onmouseout = () => { payBtn.style.filter = 'brightness(1)'; };
+            card.appendChild(payBtn);
+          }
+          
+          msgDiv.appendChild(card);
+          messagesContainer.appendChild(msgDiv);
+          return;
+        }
+
         const citationRegex = /\\\*\\(Tham khảo từ:\\s\*([^\\)]+)\\)\\\*/;
-        // fallback regex for non-escaped matches
         const citationRegexAlt = /\*\(Tham khảo từ:\s*([^\)]+)\)\*/;
         const match = text.match(citationRegex) || text.match(citationRegexAlt);
         if (match) {
