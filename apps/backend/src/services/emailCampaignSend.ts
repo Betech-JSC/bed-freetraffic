@@ -34,7 +34,8 @@ export async function sendEmailCampaign(campaignId: number): Promise<SendCampaig
 
   for (const email of list) {
     const trackOpen = `${baseUrl}/api/email-campaigns/track/open/${campaignId}?r=${encodeURIComponent(email)}`;
-    const html = campaign.htmlContent
+    const trackingHtml = `<div style="display:none !important; font-size:1px; line-height:1px; max-height:0px; max-width:0px; opacity:0; overflow:hidden;">Ref: ${email}</div>`;
+    const html = (campaign.htmlContent + trackingHtml)
       // Double curly brackets (compatibility)
       .replace(/\{\{track_open\}\}/g, `<img src="${trackOpen}" width="1" height="1" alt="" />`)
       .replace(/\{\{email\}\}/g, email)
