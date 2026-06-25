@@ -57,6 +57,16 @@ export function normalizeCookie(cookieInput: string | null | undefined): string 
       if (parsed.cookie && typeof parsed.cookie === 'string') {
         return parsed.cookie;
       }
+      
+      // Case 5: Standard JSON array of cookie objects (from chrome extensions like EditThisCookie, Cookie-Editor)
+      if (Array.isArray(parsed)) {
+        const cookieParts = parsed
+          .filter((item: any) => item && typeof item === 'object' && item.name && item.value !== undefined)
+          .map((item: any) => `${item.name}=${item.value}`);
+        if (cookieParts.length > 0) {
+          return cookieParts.join('; ');
+        }
+      }
     } catch (e) {
       // Ignore JSON parse error, treat as raw string
     }

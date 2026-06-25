@@ -312,6 +312,16 @@ export default function SocialListeningPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!formState.groupUrls.trim()) {
+      setError('Danh sách nhóm Facebook (URL hoặc ID) là bắt buộc. Hãy nhập ít nhất một nhóm.');
+      return;
+    }
+    if (!formState.keywords.trim()) {
+      setError('Từ khóa lọc tìm kiếm là bắt buộc. Hãy nhập ít nhất một từ khóa.');
+      return;
+    }
+
     try {
       const payload = {
         ...formState,
@@ -1130,16 +1140,90 @@ export default function SocialListeningPage() {
               <div className="space-y-2.5">
                 <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                   <span>Danh sách Nhóm Facebook (URL hoặc ID)</span>
-                  <span className="text-slate-400 font-medium normal-case text-sm">Cách nhau bằng dấu phẩy</span>
+                  <span className="text-slate-400 font-medium normal-case text-sm">Nhấn Enter hoặc dấu phẩy để tạo nhãn (tag)</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ví dụ: https://www.facebook.com/groups/12345678, my-target-group"
-                  className="input w-full py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200 focus:border-brand/55 focus:ring-brand/10"
-                  value={formState.groupUrls}
-                  onChange={(e) => setFormState(prev => ({ ...prev, groupUrls: e.target.value }))}
-                />
+                <div className="w-full min-h-[56px] p-2.5 rounded-2xl shadow-sm border border-slate-200 focus-within:border-brand/55 focus-within:ring-4 focus-within:ring-brand/10 bg-white transition-all flex flex-wrap gap-2 items-center">
+                  {formState.groupUrls
+                    .split(',')
+                    .map(u => u.trim())
+                    .filter(u => u.length > 0)
+                    .map((url, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-800 rounded-xl text-sm font-bold border border-slate-200/40 transition-all max-w-[320px] truncate"
+                      >
+                        <span className="truncate">{url}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentList = formState.groupUrls
+                              .split(',')
+                              .map(u => u.trim())
+                              .filter(u => u.length > 0);
+                            currentList.splice(index, 1);
+                            setFormState(prev => ({ ...prev, groupUrls: currentList.join(', ') }));
+                          }}
+                          className="w-4.5 h-4.5 rounded-full hover:bg-slate-300 text-slate-500 hover:text-slate-850 flex items-center justify-center font-black text-xs cursor-pointer transition-all active:scale-90"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  <input
+                    type="text"
+                    placeholder={
+                      formState.groupUrls
+                        .split(',')
+                        .map(u => u.trim())
+                        .filter(u => u.length > 0).length > 0
+                        ? "Thêm nhóm khác..."
+                        : "Ví dụ: https://www.facebook.com/groups/12345678, my-target-group"
+                    }
+                    className="flex-1 min-w-[220px] border-0 outline-none focus:ring-0 text-base font-semibold py-1.5 px-2 bg-transparent text-slate-850 placeholder:text-slate-400"
+                    onKeyDown={(e) => {
+                      const target = e.target as HTMLInputElement;
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        const val = target.value.trim().replace(/,/g, '');
+                        if (val) {
+                          const currentList = formState.groupUrls
+                            .split(',')
+                            .map(u => u.trim())
+                            .filter(u => u.length > 0);
+                          if (!currentList.includes(val)) {
+                            currentList.push(val);
+                            setFormState(prev => ({ ...prev, groupUrls: currentList.join(', ') }));
+                          }
+                          target.value = '';
+                        }
+                      } else if (e.key === 'Backspace' && !target.value) {
+                        const currentList = formState.groupUrls
+                          .split(',')
+                          .map(u => u.trim())
+                          .filter(u => u.length > 0);
+                        if (currentList.length > 0) {
+                          currentList.pop();
+                          setFormState(prev => ({ ...prev, groupUrls: currentList.join(', ') }));
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const target = e.target as HTMLInputElement;
+                      const val = target.value.trim().replace(/,/g, '');
+                      if (val) {
+                        const currentList = formState.groupUrls
+                          .split(',')
+                          .map(u => u.trim())
+                          .filter(u => u.length > 0);
+                        if (!currentList.includes(val)) {
+                          currentList.push(val);
+                          setFormState(prev => ({ ...prev, groupUrls: currentList.join(', ') }));
+                        }
+                        target.value = '';
+                      }
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Keywords */}
@@ -1147,29 +1231,179 @@ export default function SocialListeningPage() {
                 <div className="space-y-2.5">
                   <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                     <span>Từ khóa lọc tìm kiếm</span>
-                    <span className="text-slate-400 font-medium normal-case text-sm">Cách nhau bằng dấu phẩy</span>
+                    <span className="text-slate-400 font-medium normal-case text-sm">Nhấn Enter hoặc dấu phẩy</span>
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="cần làm web, thiết kế web, tuyển code"
-                    className="input w-full py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200 focus:border-brand/55 focus:ring-brand/10"
-                    value={formState.keywords}
-                    onChange={(e) => setFormState(prev => ({ ...prev, keywords: e.target.value }))}
-                  />
+                  <div className="w-full min-h-[56px] p-2.5 rounded-2xl shadow-sm border border-slate-200 focus-within:border-brand/55 focus-within:ring-4 focus-within:ring-brand/10 bg-white transition-all flex flex-wrap gap-2 items-center">
+                    {formState.keywords
+                      .split(',')
+                      .map(k => k.trim())
+                      .filter(k => k.length > 0)
+                      .map((kw, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-850 rounded-xl text-sm font-bold border border-orange-100 transition-all max-w-[200px] truncate"
+                        >
+                          <span className="truncate">{kw}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentList = formState.keywords
+                                .split(',')
+                                .map(k => k.trim())
+                                .filter(k => k.length > 0);
+                              currentList.splice(index, 1);
+                              setFormState(prev => ({ ...prev, keywords: currentList.join(', ') }));
+                            }}
+                            className="w-4.5 h-4.5 rounded-full hover:bg-orange-200 text-orange-500 hover:text-orange-900 flex items-center justify-center font-black text-xs cursor-pointer transition-all active:scale-90"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    <input
+                      type="text"
+                      placeholder={
+                        formState.keywords
+                          .split(',')
+                          .map(k => k.trim())
+                          .filter(k => k.length > 0).length > 0
+                          ? "Thêm từ khóa..."
+                          : "Ví dụ: thiết kế web, cần code"
+                      }
+                      className="flex-1 min-w-[150px] border-0 outline-none focus:ring-0 text-base font-semibold py-1.5 px-2 bg-transparent text-slate-850 placeholder:text-slate-400"
+                      onKeyDown={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (e.key === 'Enter' || e.key === ',') {
+                          e.preventDefault();
+                          const val = target.value.trim().replace(/,/g, '');
+                          if (val) {
+                            const currentList = formState.keywords
+                              .split(',')
+                              .map(k => k.trim())
+                              .filter(k => k.length > 0);
+                            if (!currentList.includes(val)) {
+                              currentList.push(val);
+                              setFormState(prev => ({ ...prev, keywords: currentList.join(', ') }));
+                            }
+                            target.value = '';
+                          }
+                        } else if (e.key === 'Backspace' && !target.value) {
+                          const currentList = formState.keywords
+                            .split(',')
+                            .map(k => k.trim())
+                            .filter(k => k.length > 0);
+                          if (currentList.length > 0) {
+                            currentList.pop();
+                            setFormState(prev => ({ ...prev, keywords: currentList.join(', ') }));
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        const val = target.value.trim().replace(/,/g, '');
+                        if (val) {
+                          const currentList = formState.keywords
+                            .split(',')
+                            .map(k => k.trim())
+                            .filter(k => k.length > 0);
+                          if (!currentList.includes(val)) {
+                            currentList.push(val);
+                            setFormState(prev => ({ ...prev, keywords: currentList.join(', ') }));
+                          }
+                          target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-2.5">
                   <label className="text-sm font-extrabold text-slate-700 uppercase tracking-wider flex justify-between">
                     <span>Từ khóa phủ định (loại trừ)</span>
-                    <span className="text-slate-400 font-medium normal-case text-sm">Cách nhau bằng dấu phẩy</span>
+                    <span className="text-slate-400 font-medium normal-case text-sm">Nhấn Enter hoặc dấu phẩy</span>
                   </label>
-                  <input
-                    type="text"
-                    placeholder="học, khóa học, chia sẻ tài liệu"
-                    className="input w-full py-4.5 px-6 text-base font-semibold rounded-2xl shadow-sm border-slate-200 focus:border-brand/55 focus:ring-brand/10"
-                    value={formState.excludeKeywords}
-                    onChange={(e) => setFormState(prev => ({ ...prev, excludeKeywords: e.target.value }))}
-                  />
+                  <div className="w-full min-h-[56px] p-2.5 rounded-2xl shadow-sm border border-slate-200 focus-within:border-brand/55 focus-within:ring-4 focus-within:ring-brand/10 bg-white transition-all flex flex-wrap gap-2 items-center">
+                    {formState.excludeKeywords
+                      .split(',')
+                      .map(k => k.trim())
+                      .filter(k => k.length > 0)
+                      .map((kw, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-bold border border-slate-200 transition-all max-w-[200px] truncate"
+                        >
+                          <span className="truncate">{kw}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentList = formState.excludeKeywords
+                                .split(',')
+                                .map(k => k.trim())
+                                .filter(k => k.length > 0);
+                              currentList.splice(index, 1);
+                              setFormState(prev => ({ ...prev, excludeKeywords: currentList.join(', ') }));
+                            }}
+                            className="w-4.5 h-4.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center font-black text-xs cursor-pointer transition-all active:scale-90"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    <input
+                      type="text"
+                      placeholder={
+                        formState.excludeKeywords
+                          .split(',')
+                          .map(k => k.trim())
+                          .filter(k => k.length > 0).length > 0
+                          ? "Thêm từ khóa loại trừ..."
+                          : "Ví dụ: học, khóa học"
+                      }
+                      className="flex-1 min-w-[150px] border-0 outline-none focus:ring-0 text-base font-semibold py-1.5 px-2 bg-transparent text-slate-850 placeholder:text-slate-400"
+                      onKeyDown={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        if (e.key === 'Enter' || e.key === ',') {
+                          e.preventDefault();
+                          const val = target.value.trim().replace(/,/g, '');
+                          if (val) {
+                            const currentList = formState.excludeKeywords
+                              .split(',')
+                              .map(k => k.trim())
+                              .filter(k => k.length > 0);
+                            if (!currentList.includes(val)) {
+                              currentList.push(val);
+                              setFormState(prev => ({ ...prev, excludeKeywords: currentList.join(', ') }));
+                            }
+                            target.value = '';
+                          }
+                        } else if (e.key === 'Backspace' && !target.value) {
+                          const currentList = formState.excludeKeywords
+                            .split(',')
+                            .map(k => k.trim())
+                            .filter(k => k.length > 0);
+                          if (currentList.length > 0) {
+                            currentList.pop();
+                            setFormState(prev => ({ ...prev, excludeKeywords: currentList.join(', ') }));
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const target = e.target as HTMLInputElement;
+                        const val = target.value.trim().replace(/,/g, '');
+                        if (val) {
+                          const currentList = formState.excludeKeywords
+                            .split(',')
+                            .map(k => k.trim())
+                            .filter(k => k.length > 0);
+                          if (!currentList.includes(val)) {
+                            currentList.push(val);
+                            setFormState(prev => ({ ...prev, excludeKeywords: currentList.join(', ') }));
+                          }
+                          target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 

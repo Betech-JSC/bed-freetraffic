@@ -120,7 +120,7 @@ function formatHtmlToContent(html: string): string {
 }
 
 type TemplateMetadata = {
-  style: 'simple' | 'newsletter' | 'promotion' | 'announcement';
+  style: 'simple' | 'newsletter' | 'promotion' | 'announcement' | 'welcome' | 'thankyou' | 'event' | 'monthly_news' | 'ai_showcase' | 'enterprise_services';
   primaryColor: string;
   headerTitle: string;
   ctaText?: string;
@@ -156,7 +156,7 @@ function compileEmailHtml(bodyText: string, metadata: TemplateMetadata, trackOpe
 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: Arial, sans-serif; padding: 40px 10px; margin: 0;">
   <tr>
     <td align="center">
-      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border: 1px solid #e2e8f0; border-top: 6px solid ${primaryColor}; border-radius: 12px; overflow: hidden;">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border: 1px solid #e2e8f0; border-top: 6px solid ${primaryColor}; border-radius: 12px; overflow: hidden;">
         ${headerTitle ? `
         <tr>
           <td style="padding: 28px 32px 10px 32px; text-align: center;">
@@ -199,7 +199,7 @@ function compileEmailHtml(bodyText: string, metadata: TemplateMetadata, trackOpe
 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px 10px; margin: 0;">
   <tr>
     <td align="center">
-      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
         <tr>
           <td style="background: linear-gradient(135deg, ${primaryColor} 0%, ${gradColor} 100%); padding: 32px; text-align: center;">
             <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.15);">${headerTitle || 'BẢN TIN'}</h1>
@@ -240,7 +240,7 @@ function compileEmailHtml(bodyText: string, metadata: TemplateMetadata, trackOpe
 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fafafa; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px 10px; margin: 0;">
   <tr>
     <td align="center">
-      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #eaeaea; box-shadow: 0 10px 15px rgba(0,0,0,0.03);">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #eaeaea; box-shadow: 0 10px 15px rgba(0,0,0,0.03);">
         <tr>
           <td height="10" style="background: linear-gradient(90deg, ${primaryColor} 0%, #a855f7 50%, #ec4899 100%);"></td>
         </tr>
@@ -286,7 +286,7 @@ function compileEmailHtml(bodyText: string, metadata: TemplateMetadata, trackOpe
 <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f3f4f6; font-family: Arial, sans-serif; padding: 30px 10px; margin: 0;">
   <tr>
     <td align="center">
-      <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden;">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 12px; overflow: hidden;">
         <tr>
           <td style="padding: 32px 32px 16px 32px; border-bottom: 1px solid #f3f4f6;">
             <table border="0" cellpadding="0" cellspacing="0" width="100%">
@@ -320,6 +320,726 @@ function compileEmailHtml(bodyText: string, metadata: TemplateMetadata, trackOpe
           <td style="background-color: #f9fafb; padding: 24px 32px; text-align: left; font-size: 11px; color: #6b7280; border-top: 1px solid #f3f4f6;">
             <p style="margin: 0; line-height: 1.5;">${footerText || 'Đây là thông báo chính thức từ hệ thống.'}</p>
             <p style="margin: 8px 0 0 0; font-size: 10px; color: #9ca3af;">Vui lòng không trả lời trực tiếp email này. Đây là hộp thư tự động.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'welcome':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+        <!-- Header -->
+        <tr>
+          <td style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid #f1f5f9;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td align="left">
+                  <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">Betech</span>
+                </td>
+                <td align="right">
+                  ${ctaUrl ? `<a href="${ctaUrl}" style="font-size: 13px; font-weight: 700; color: ${primaryColor}; text-decoration: none;">Bắt đầu ngay</a>` : ''}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Hero Section -->
+        <tr>
+          <td style="background: linear-gradient(135deg, ${primaryColor} 0%, #1e293b 100%); padding: 48px 32px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0 0 12px 0; font-size: 26px; font-weight: 800; line-height: 1.3; color: #ffffff;">Chào mừng bạn đến với Betech</h1>
+            <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #e2e8f0; font-weight: 500;">Chúng tôi rất vui mừng được đồng hành cùng bạn trên hành trình chuyển đổi số và phát triển giải pháp công nghệ bền vững.</p>
+          </td>
+        </tr>
+        <!-- Hero Image -->
+        <tr>
+          <td style="padding: 0;">
+            <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80" alt="Office" width="100%" style="display: block; width: 100%; max-width: 100%; border: 0; height: auto;" />
+          </td>
+        </tr>
+        <!-- Body Content -->
+        <tr>
+          <td style="padding: 36px 32px; background-color: #ffffff;">
+            <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #0f172a;">${headerTitle || 'Khám phá sức mạnh công nghệ'}</h3>
+            <div style="font-size: 15px; color: #334155; line-height: 1.6; margin-bottom: 32px;">
+              ${paragraphsHtml}
+            </div>
+            
+            <!-- Stepper -->
+            <div style="margin-bottom: 36px; padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
+              <h4 style="margin: 0 0 20px 0; font-size: 15px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Bắt đầu như thế nào?</h4>
+              
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 16px;">
+                <tr>
+                  <td width="36" valign="top">
+                    <div style="width: 24px; height: 24px; line-height: 24px; border-radius: 50%; background-color: ${primaryColor}; color: #ffffff; text-align: center; font-size: 12px; font-weight: 750;">1</div>
+                  </td>
+                  <td style="padding-left: 12px;">
+                    <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 700; color: #0f172a;">Tư vấn</h5>
+                    <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;">Lắng nghe nhu cầu và phân tích chuyên sâu để tìm ra giải pháp tối ưu nhất cho doanh nghiệp.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 16px;">
+                <tr>
+                  <td width="36" valign="top">
+                    <div style="width: 24px; height: 24px; line-height: 24px; border-radius: 50%; background-color: ${primaryColor}; color: #ffffff; text-align: center; font-size: 12px; font-weight: 750;">2</div>
+                  </td>
+                  <td style="padding-left: 12px;">
+                    <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 700; color: #0f172a;">Thiết kế</h5>
+                    <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;">Xây dựng kiến trúc hệ thống và giao diện người dùng hiện đại, tinh tế và dễ sử dụng.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td width="36" valign="top">
+                    <div style="width: 24px; height: 24px; line-height: 24px; border-radius: 50%; background-color: ${primaryColor}; color: #ffffff; text-align: center; font-size: 12px; font-weight: 750;">3</div>
+                  </td>
+                  <td style="padding-left: 12px;">
+                    <h5 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 700; color: #0f172a;">Khởi chạy</h5>
+                    <p style="margin: 0; font-size: 13px; color: #64748b; line-height: 1.5;">Triển khai dự án, tối ưu hóa hiệu suất và hỗ trợ vận hành chuyên nghiệp 24/7.</p>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Bottom Promo & CTA -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #eff6ff; border-radius: 12px; border: 1px solid #dbeafe; padding: 24px; text-align: center;">
+              <tr>
+                <td>
+                  <h4 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 800; color: #1e3a8a;">Sẵn sàng để bắt đầu chưa?</h4>
+                  <p style="margin: 0 0 16px 0; font-size: 13px; color: #1e40af; line-height: 1.5;">Hãy để các chuyên gia của Betech giúp bạn thực hiện hóa ý tưởng ngay hôm nay.</p>
+                  ${ctaText && ctaUrl ? `
+                    <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 28px; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                      ${ctaText}
+                    </a>
+                  ` : ''}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #0f172a; padding: 32px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #334155;">
+            <p style="margin: 0 0 8px 0; line-height: 1.5; font-weight: 750; color: #ffffff; text-transform: uppercase; letter-spacing: 1px;">Betech</p>
+            <p style="margin: 0 0 16px 0; line-height: 1.5;">${footerText || '© 2024 Betech Digital Solutions. Bảo lưu mọi quyền.'}</p>
+            <p style="margin: 0; font-size: 11px; color: #64748b;">Bạn nhận được email này vì bạn là thành viên của hệ thống Betech.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'thankyou':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+        <!-- Logo Header -->
+        <tr>
+          <td style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid #f1f5f9;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td align="left">
+                  <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">Betech</span>
+                </td>
+                <td align="right">
+                  ${ctaUrl ? `<a href="${ctaUrl}" style="font-size: 13px; font-weight: 700; color: ${primaryColor}; text-decoration: none;">Bắt đầu ngay</a>` : ''}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Hero Section -->
+        <tr>
+          <td style="background: linear-gradient(135deg, ${primaryColor} 0%, #0f172a 100%); padding: 56px 32px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0 0 12px 0; font-size: 28px; font-weight: 800; line-height: 1.3; color: #ffffff; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">${headerTitle || 'Cảm ơn Sự tin tưởng của Bạn'}</h1>
+            <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #cbd5e1;">Chúng tôi rất vinh dự được đồng hành cùng bạn trong hành trình chuyển đổi số. Sự hợp tác của bạn là động lực để chúng tôi đổi mới mỗi ngày.</p>
+          </td>
+        </tr>
+        <!-- Body Content -->
+        <tr>
+          <td style="padding: 36px 32px; background-color: #ffffff;">
+            <div style="width: 48px; height: 4px; background-color: ${primaryColor}; margin-bottom: 24px; border-radius: 2px;"></div>
+            <h4 style="margin: 0 0 16px 0; font-size: 15px; font-weight: 750; color: #0f172a;">Kính gửi Đối tác thân thiết,</h4>
+            <div style="font-size: 15px; color: #334155; line-height: 1.7; margin-bottom: 32px;">
+              ${paragraphsHtml}
+            </div>
+
+            <!-- Signature block -->
+            <table border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 36px;">
+              <tr>
+                <td width="48" valign="top">
+                  <img src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=120&h=120&q=80" alt="Arthur Sterling" width="48" height="48" style="border-radius: 50%; display: block;" />
+                </td>
+                <td style="padding-left: 12px;">
+                  <h5 style="margin: 0 0 2px 0; font-size: 14px; font-weight: 800; color: #0f172a;">Arthur Sterling</h5>
+                  <p style="margin: 0; font-size: 12px; color: #64748b;">CEO, Betech Digital Solutions</p>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Promo Gift Card -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff; border-radius: 12px; border: 2px dashed ${primaryColor}; padding: 28px; text-align: center; margin-bottom: 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+              <tr>
+                <td>
+                  <div style="font-size: 32px; margin-bottom: 8px;">🎁</div>
+                  <h4 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 800; color: #0f172a;">Món quà Tri ân</h4>
+                  <p style="margin: 0 0 20px 0; font-size: 14px; color: #475569; line-height: 1.5;">Để cảm ơn sự hợp tác bền chặt của bạn, chúng tôi xin gửi tặng ưu đãi độc quyền: <strong style="color: ${primaryColor};">Tín dụng Doanh nghiệp 25%</strong> cho lần nâng cấp dịch vụ tiếp theo.</p>
+                  ${ctaText && ctaUrl ? `
+                    <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 32px; font-size: 14px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">
+                      ${ctaText}
+                    </a>
+                  ` : ''}
+                </td>
+              </tr>
+            </table>
+
+            <!-- Stats -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top: 1px solid #e2e8f0; padding-top: 28px;">
+              <tr>
+                <td width="33%" align="center">
+                  <div style="font-size: 20px; font-weight: 800; color: ${primaryColor};">500+</div>
+                  <div style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 4px; text-transform: uppercase;">Đối tác</div>
+                </td>
+                <td width="33%" align="center" style="border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;">
+                  <div style="font-size: 20px; font-weight: 800; color: ${primaryColor};">99.9%</div>
+                  <div style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 4px; text-transform: uppercase;">Hoạt động</div>
+                </td>
+                <td width="33%" align="center">
+                  <div style="font-size: 20px; font-weight: 800; color: ${primaryColor};">24/7</div>
+                  <div style="font-size: 11px; font-weight: bold; color: #64748b; margin-top: 4px; text-transform: uppercase;">Hỗ trợ</div>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #0f172a; padding: 32px; text-align: center; font-size: 12px; color: #94a3b8;">
+            <p style="margin: 0 0 8px 0; line-height: 1.5; font-weight: 750; color: #ffffff;">Betech</p>
+            <p style="margin: 0 0 16px 0; line-height: 1.5;">${footerText || '© 2024 Betech Digital Solutions. Bảo lưu mọi quyền.'}</p>
+            <p style="margin: 0; font-size: 11px; color: #64748b;">Bạn nhận được email này từ đối tác Betech Digital.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'event':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+        <!-- Header -->
+        <tr>
+          <td style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid #f1f5f9;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td align="left">
+                  <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">Betech</span>
+                </td>
+                <td align="right">
+                  ${ctaUrl ? `<a href="${ctaUrl}" style="font-size: 13px; font-weight: 700; color: ${primaryColor}; text-decoration: none;">Bắt đầu ngay</a>` : ''}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Main Event Block -->
+        <tr>
+          <td style="padding: 40px 32px; background-color: #ffffff;">
+            <span style="font-size: 11px; font-weight: 800; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 8px;">Hội thảo công nghệ 2024</span>
+            <h1 style="margin: 0 0 24px 0; font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.3;">${headerTitle || 'Tham gia Hội thảo Trực tuyến Độc quyền của Chúng tôi'}</h1>
+
+            <!-- Info Card -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 28px;">
+              <tr>
+                <td valign="top" style="padding-right: 12px;">
+                  <table border="0" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="font-size: 13px; color: #475569; padding-bottom: 8px;">
+                        📅 <strong>Ngày:</strong> 24 tháng 10 năm 2024
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-size: 13px; color: #475569; padding-bottom: 8px;">
+                        ⏰ <strong>Giờ:</strong> 10:00 SA — 11:30 SA (Giờ EST)
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-size: 13px; color: #475569;">
+                        📍 <strong>Địa điểm:</strong> Trực tuyến (Zoom Meeting)
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td width="150" align="center" style="border-left: 1px solid #e2e8f0; padding-left: 12px;">
+                  <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=120&h=120&q=80" alt="Speaker" width="48" height="48" style="border-radius: 50%; display: block; margin-bottom: 6px;" />
+                  <div style="font-size: 12px; font-weight: 800; color: #0f172a; line-height: 1.2;">TS. Julian Vance</div>
+                  <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Giám đốc Chiến lược</div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Register Button -->
+            ${ctaText && ctaUrl ? `
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 36px;">
+                <tr>
+                  <td align="center">
+                    <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 14px 40px; font-size: 15px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 80%; text-align: center;">
+                      ${ctaText}
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            ` : ''}
+
+            <!-- Event Agenda -->
+            <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 800; color: #0f172a; border-bottom: 2px solid #f1f5f9; padding-bottom: 8px;">Nội dung bạn sẽ nhận được</h3>
+            
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 16px;">
+              <tr>
+                <td width="28" valign="top">
+                  <div style="color: ${primaryColor}; font-weight: bold; font-size: 16px;">✓</div>
+                </td>
+                <td>
+                  <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 750; color: #0f172a;">Chiến lược Chuyển đổi Doanh nghiệp</h4>
+                  <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">Khám phá các khung quy trình cụ thể mà Betech sử dụng để mở rộng cơ sở hạ tầng kỹ thuật số lên 300% trong vòng một năm tài chính.</p>
+                </td>
+              </tr>
+            </table>
+
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 16px;">
+              <tr>
+                <td width="28" valign="top">
+                  <div style="color: ${primaryColor}; font-weight: bold; font-size: 16px;">✓</div>
+                </td>
+                <td>
+                  <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 750; color: #0f172a;">Nâng cao Hiệu quả bằng Trí tuệ Nhân tạo (AI)</h4>
+                  <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">Các nghiên cứu thực tế chứng minh cách quy trình làm việc tự động giúp giảm chi phí vận hành trong các startup đang tăng trưởng nhanh.</p>
+                </td>
+              </tr>
+            </table>
+
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td width="28" valign="top">
+                  <div style="color: ${primaryColor}; font-weight: bold; font-size: 16px;">✓</div>
+                </td>
+                <td>
+                  <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 750; color: #0f172a;">Tương lai của Quản trị Kỹ thuật số</h4>
+                  <p style="margin: 0; font-size: 13px; color: #475569; line-height: 1.5;">Hiểu rõ các yêu cầu tuân thủ bảo mật mới nổi cho thế hệ ứng dụng điện toán đám mây tiếp theo.</p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Quote Banner -->
+        <tr>
+          <td style="background-image: url('https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=600&q=80'); background-size: cover; background-position: center; padding: 48px 32px; text-align: center;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td align="center">
+                  <div style="background-color: rgba(15, 23, 42, 0.85); padding: 24px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); max-width: 500px;">
+                    <p style="margin: 0 0 8px 0; font-size: 16px; font-style: italic; color: #ffffff; line-height: 1.5; font-weight: 500;">"Sự chính xác trong thực thi là dấu ấn của đổi mới hiện đại."</p>
+                    <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">Tuyên ngôn Kỹ thuật số Betech</p>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #0f172a; padding: 32px; text-align: center; font-size: 12px; color: #94a3b8;">
+            <p style="margin: 0 0 8px 0; line-height: 1.5; font-weight: 750; color: #ffffff;">Betech</p>
+            <p style="margin: 0 0 16px 0; line-height: 1.5;">${footerText || '© 2024 Betech Digital Solutions. Bảo lưu mọi quyền.'}</p>
+            <p style="margin: 0; font-size: 11px; color: #64748b;">Vui lòng không trả lời trực tiếp email này. Đây là hòm thư tự động gửi lời mời.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'monthly_news':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+        <!-- Header -->
+        <tr>
+          <td style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid #f1f5f9;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td align="left">
+                  <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">Betech</span>
+                </td>
+                <td align="right" style="font-size: 12px; font-weight: 700; color: #64748b;">
+                  Tin chuyên sâu • Mạng lưới
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Banner Title -->
+        <tr>
+          <td style="padding: 32px 32px 10px 32px; background-color: #ffffff;">
+            <span style="font-size: 11px; font-weight: 800; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 6px;">Số #42 • Tháng 01/2025</span>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #0f172a;">${headerTitle || 'Điểm tin Hàng tháng'}</h1>
+          </td>
+        </tr>
+        <!-- Featured Image -->
+        <tr>
+          <td style="padding: 16px 32px 0 32px; background-color: #ffffff;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td style="position: relative; border-radius: 12px; overflow: hidden;">
+                  <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80" alt="Featured News" width="100%" style="display: block; width: 100%; border: 0; height: auto;" />
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Featured Article Detail -->
+        <tr>
+          <td style="padding: 24px 32px 32px 32px; background-color: #ffffff; border-bottom: 8px solid #f8fafc;">
+            <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.4;">Xu hướng Chuyển đổi Số 2025: Định hướng Biên giới Mới</h2>
+            <p style="margin: 0 0 16px 0; font-size: 14px; color: #475569; line-height: 1.6;">Khi bước sang năm 2025, bối cảnh công nghệ doanh nghiệp đang chuyển dịch từ tự động hóa đơn thuần sang tích hợp nhận thức sâu rộng. Khám phá cách các tổ chức hàng đầu đang tận dụng kiến trúc từ biên đến đám mây để định nghĩa lại sự xuất sắc trong vận hành.</p>
+            ${ctaUrl ? `<a href="${ctaUrl}" style="color: ${primaryColor}; font-size: 13px; font-weight: 750; text-decoration: none;">Đọc toàn bộ bài viết →</a>` : ''}
+          </td>
+        </tr>
+        <!-- Secondary News Blocks -->
+        <tr>
+          <td style="padding: 32px; background-color: #ffffff;">
+            <div style="font-size: 15px; color: #334155; line-height: 1.6; margin-bottom: 28px;">
+              ${paragraphsHtml}
+            </div>
+
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <!-- Card 1 -->
+                <td width="48%" valign="top" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                  <div style="font-size: 16px; margin-bottom: 8px;">💡</div>
+                  <h4 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 800; color: #0f172a;">Quản trị AI Tạo sinh</h4>
+                  <p style="margin: 0 0 12px 0; font-size: 11px; color: #64748b; line-height: 1.4;">Thiết lập các khung quy chuẩn chặt chẽ để triển khai AI đạo đức trong quy trình nội bộ.</p>
+                  <a href="#" style="color: ${primaryColor}; font-size: 11px; font-weight: bold; text-decoration: none;">TÌM HIỂU THÊM →</a>
+                </td>
+                <td width="4%"></td>
+                <!-- Card 2 -->
+                <td width="48%" valign="top" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                  <div style="font-size: 16px; margin-bottom: 8px;">☁️</div>
+                  <h4 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 800; color: #0f172a;">Phục hồi Đa đám mây</h4>
+                  <p style="margin: 0 0 12px 0; font-size: 11px; color: #64748b; line-height: 1.4;">Cách hạ tầng phân tán đang bảo vệ doanh nghiệp khỏi các sự cố ngừng hoạt động khu vực.</p>
+                  <a href="#" style="color: ${primaryColor}; font-size: 11px; font-weight: bold; text-decoration: none;">TÌM HIỂU THÊM →</a>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Bottom Call to Action Box -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; text-align: center; margin-top: 28px;">
+              <tr>
+                <td>
+                  <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 800; color: #0f172a;">Sẵn sàng để bứt phá?</h3>
+                  <p style="margin: 0 0 16px 0; font-size: 13px; color: #64748b; line-height: 1.5;">Đặt lịch tư vấn với các chuyên gia chiến lược của chúng tôi để đánh giá hiện trạng công nghệ của bạn.</p>
+                  ${ctaText && ctaUrl ? `
+                    <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 28px; font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">
+                      ${ctaText}
+                    </a>
+                  ` : ''}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #0f172a; padding: 32px; text-align: center; font-size: 12px; color: #94a3b8;">
+            <p style="margin: 0 0 8px 0; line-height: 1.5; font-weight: 750; color: #ffffff;">Betech</p>
+            <p style="margin: 0 0 16px 0; line-height: 1.5;">${footerText || '© 2024 Betech Digital Solutions. Bảo lưu mọi quyền.'}</p>
+            <p style="margin: 0; font-size: 11px; color: #64748b;">Bạn nhận được email này vì đã đăng ký nhận bản tin từ hệ thống.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'ai_showcase':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+        <!-- Header -->
+        <tr>
+          <td style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid #f1f5f9;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td align="left">
+                  <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">Betech</span>
+                </td>
+                <td align="right" style="font-size: 12px; font-weight: 700; color: #64748b;">
+                  Tin tức AI • Dịch vụ
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Hero Section -->
+        <tr>
+          <td style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 48px 32px; text-align: center; color: #ffffff; border-bottom: 4px solid ${primaryColor};">
+            <span style="font-size: 11px; font-weight: 850; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 8px;">Tương lai của Web</span>
+            <h1 style="margin: 0 0 16px 0; font-size: 24px; font-weight: 800; color: #ffffff; line-height: 1.3;">${headerTitle || 'Nâng tầm Website với Trí tuệ nhân tạo (AI)'}</h1>
+            <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #94a3b8; font-weight: 500;">Tích hợp các giải pháp AI đột phá để tối ưu hóa trải nghiệm người dùng và tự động hóa quy trình kinh doanh của bạn.</p>
+            ${ctaText && ctaUrl ? `
+              <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 28px; font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">
+                ${ctaText}
+              </a>
+            ` : ''}
+          </td>
+        </tr>
+        <!-- Main Screenshot Image -->
+        <tr>
+          <td style="padding: 32px 32px 0 32px; background-color: #ffffff;">
+            <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=600&q=80" alt="AI Agent Interface" width="100%" style="display: block; width: 100%; border: 0; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.08);" />
+          </td>
+        </tr>
+        <!-- Body Content -->
+        <tr>
+          <td style="padding: 32px; background-color: #ffffff;">
+            <div style="font-size: 15px; color: #334155; line-height: 1.6; margin-bottom: 28px;">
+              ${paragraphsHtml}
+            </div>
+
+            <!-- Features Cards List -->
+            <div>
+              <!-- Feature 1 -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+                <tr>
+                  <td width="48" valign="top">
+                    <div style="width: 36px; height: 36px; line-height: 36px; border-radius: 8px; background-color: #eff6ff; color: ${primaryColor}; text-align: center; font-size: 18px;">🔍</div>
+                  </td>
+                  <td>
+                    <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 800; color: #0f172a;">Gợi ý SEO Thông minh</h4>
+                    <p style="margin: 0; font-size: 12px; color: #475569; line-height: 1.5;">Hệ thống AI tự động phân tích từ khóa, cấu trúc nội dung và đề xuất tối ưu hóa để website đạt thứ hạng cao nhất trên Google.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Feature 2 -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+                <tr>
+                  <td width="48" valign="top">
+                    <div style="width: 36px; height: 36px; line-height: 36px; border-radius: 8px; background-color: #eff6ff; color: ${primaryColor}; text-align: center; font-size: 18px;">🤖</div>
+                  </td>
+                  <td>
+                    <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 800; color: #0f172a;">AI Chatbots Thế Hệ Mới</h4>
+                    <p style="margin: 0; font-size: 12px; color: #475569; line-height: 1.5;">Hỗ trợ khách hàng 24/7 với khả năng hiểu ngôn ngữ tự nhiên, tư vấn sản phẩm và chốt đơn tự động theo kịch bản thông minh.</p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Feature 3 -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;">
+                <tr>
+                  <td width="48" valign="top">
+                    <div style="width: 36px; height: 36px; line-height: 36px; border-radius: 8px; background-color: #eff6ff; color: ${primaryColor}; text-align: center; font-size: 18px;">🔄</div>
+                  </td>
+                  <td>
+                    <h4 style="margin: 0 0 4px 0; font-size: 14px; font-weight: 800; color: #0f172a;">Tự Động Hóa Quy Trình</h4>
+                    <p style="margin: 0; font-size: 12px; color: #475569; line-height: 1.5;">Giảm thiểu sai sót và tiết kiệm thời gian bằng cách tự động hóa các tác vụ lặp đi lặp lại thông qua các quy trình AI tùy chỉnh.</p>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Bottom Box -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #eff6ff; border-radius: 12px; border: 1px solid #dbeafe; padding: 24px; text-align: center; margin-top: 28px;">
+              <tr>
+                <td>
+                  <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 800; color: #1e3a8a;">Sẵn sàng để dẫn đầu xu hướng?</h3>
+                  <p style="margin: 0 0 16px 0; font-size: 13px; color: #1e40af; line-height: 1.5;">Hãy để chuyên gia của chúng tôi tư vấn giải pháp AI phù hợp nhất cho doanh nghiệp của bạn.</p>
+                  ${ctaUrl ? `
+                    <table border="0" cellpadding="0" cellspacing="0" align="center">
+                      <tr>
+                        <td>
+                          <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 10px 20px; font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 6px; display: inline-block;">
+                            Đặt lịch tư vấn
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  ` : ''}
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #0f172a; padding: 32px; text-align: center; font-size: 12px; color: #94a3b8;">
+            <p style="margin: 0 0 8px 0; line-height: 1.5; font-weight: 750; color: #ffffff;">Betech</p>
+            <p style="margin: 0 0 16px 0; line-height: 1.5;">${footerText || '© 2024 Betech Digital Solutions. Bảo lưu mọi quyền.'}</p>
+            <p style="margin: 0; font-size: 11px; color: #64748b;">Bạn nhận được email này vì đã quan tâm dịch vụ AI từ Betech.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+      break;
+
+    case 'enterprise_services':
+      html = `
+<table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px 10px; margin: 0;">
+  <tr>
+    <td align="center">
+      <table border="0" cellpadding="0" cellspacing="0" width="600" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;">
+        <!-- Header -->
+        <tr>
+          <td style="padding: 24px 32px; background-color: #ffffff; border-bottom: 1px solid #f1f5f9;">
+            <table border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td align="left">
+                  <span style="font-size: 20px; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;">Betech</span>
+                </td>
+                <td align="right">
+                  ${ctaUrl ? `<a href="${ctaUrl}" style="background-color: ${primaryColor}; color: #ffffff; padding: 8px 16px; font-size: 12px; font-weight: 700; text-decoration: none; border-radius: 6px;">Bắt đầu ngay</a>` : ''}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Hero Section -->
+        <tr>
+          <td style="background: #1e293b; padding: 48px 32px; text-align: center; color: #ffffff;">
+            <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 800; color: #ffffff; line-height: 1.3;">Biến ý tưởng trở thành sản phẩm công nghệ hoàn chỉnh</h1>
+            <p style="margin: 0 20px 20px 20px; font-size: 14px; line-height: 1.5; color: #cbd5e1;">Chúng tôi xây dựng hạ tầng tăng trưởng dựa trên kiến trúc hiệu suất cao và tích hợp AI cho doanh nghiệp của bạn.</p>
+            ${ctaText && ctaUrl ? `
+              <a href="${ctaUrl}" target="_blank" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 28px; font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 8px; display: inline-block;">
+                ${ctaText}
+              </a>
+            ` : ''}
+          </td>
+        </tr>
+        <!-- Body Content -->
+        <tr>
+          <td style="padding: 32px; background-color: #ffffff;">
+            <span style="font-size: 11px; font-weight: 800; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 6px;">Dịch vụ của chúng tôi</span>
+            <h3 style="margin: 0 0 24px 0; font-size: 18px; font-weight: 800; color: #0f172a;">${headerTitle || 'Giải pháp doanh nghiệp toàn diện'}</h3>
+
+            <div style="font-size: 15px; color: #334155; line-height: 1.6; margin-bottom: 28px;">
+              ${paragraphsHtml}
+            </div>
+
+            <!-- 3 Grid Boxes -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 28px;">
+              <tr>
+                <td width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: block;">
+                  <h4 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 800; color: #0f172a;">💻 Phát triển Website</h4>
+                  <p style="margin: 0; font-size: 12px; color: #64748b; line-height: 1.4;">Sự kết hợp tinh tế giữa độc đáo, chất lượng và trải nghiệm người dùng xuất sắc.</p>
+                </td>
+              </tr>
+              <tr>
+                <td width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px; display: block;">
+                  <h4 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 800; color: #0f172a;">🖊 Nhận Diện Thương Hiệu</h4>
+                  <p style="margin: 0; font-size: 12px; color: #64748b; line-height: 1.4;">Nâng tầm thương hiệu của bạn với bộ nhận diện chuyên nghiệp.</p>
+                </td>
+              </tr>
+              <tr>
+                <td width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; display: block;">
+                  <h4 style="margin: 0 0 4px 0; font-size: 13px; font-weight: 800; color: #0f172a;">📢 Tiếp Thị Đa Kênh</h4>
+                  <p style="margin: 0; font-size: 12px; color: #64748b; line-height: 1.4;">Tối ưu hóa chi phí và thu hút khách hàng tiềm năng hiệu quả.</p>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Testimonial -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #eff6ff; border-radius: 12px; border: 1px solid #dbeafe; padding: 24px; margin-bottom: 28px;">
+              <tr>
+                <td>
+                  <div style="color: #fbbf24; font-size: 14px; margin-bottom: 10px;">★★★★★</div>
+                  <p style="margin: 0 0 16px 0; font-size: 13px; color: #1e3a8a; font-style: italic; line-height: 1.6;">"Betech tự hào là đơn vị cung cấp dịch vụ website cao cấp được các doanh nghiệp tin tưởng để xây dựng thương hiệu."</p>
+                  <table border="0" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="32">
+                        <div style="width: 32px; height: 32px; line-height: 32px; border-radius: 50%; background-color: ${primaryColor}; color: #ffffff; text-align: center; font-size: 14px; font-weight: 800;">B</div>
+                      </td>
+                      <td style="padding-left: 10px;">
+                        <div style="font-size: 12px; font-weight: 800; color: #1e3a8a;">Hội đồng quản trị</div>
+                        <div style="font-size: 10px; color: #60a5fa;">Betech Digital Solutions</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Screenshot image -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 28px;">
+              <tr>
+                <td>
+                  <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80" alt="Website on devices" width="100%" style="display: block; width: 100%; border: 0; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);" />
+                </td>
+              </tr>
+            </table>
+
+            <!-- Bottom Contact -->
+            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; text-align: center;">
+              <tr>
+                <td>
+                  <h4 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 800; color: #0f172a;">Sẵn sàng để bứt phá?</h4>
+                  <p style="margin: 0 0 16px 0; font-size: 12px; color: #64748b; line-height: 1.5;">Liên hệ với chúng tôi ngay hôm nay để nhận tư vấn miễn phí.</p>
+                  <table border="0" cellpadding="0" cellspacing="0" align="center">
+                    <tr>
+                      <td style="padding-right: 12px;">
+                        <a href="tel:0775600351" style="background-color: #1e293b; color: #ffffff; padding: 10px 20px; font-size: 12px; font-weight: 700; text-decoration: none; border-radius: 6px; display: inline-block;">
+                          📞 0775600351
+                        </a>
+                      </td>
+                      <td>
+                        <a href="mailto:admin@betech-digital.com" style="background-color: #ffffff; border: 1px solid #e2e8f0; color: #1e293b; padding: 10px 20px; font-size: 12px; font-weight: 700; text-decoration: none; border-radius: 6px; display: inline-block;">
+                          ✉ Gửi Email
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background-color: #0f172a; padding: 32px; text-align: center; font-size: 11px; color: #94a3b8;">
+            <p style="margin: 0 0 8px 0; line-height: 1.5; font-weight: 750; color: #ffffff;">Betech</p>
+            <p style="margin: 0 0 8px 0; line-height: 1.4;">📍 92A-94 Bạch Đằng, P.2, Q.Tân Bình, TP.HCM</p>
+            <p style="margin: 0 0 16px 0; line-height: 1.4;">✉ admin@betech-digital.com</p>
+            <p style="margin: 0 0 8px 0; line-height: 1.5;">${footerText || '© 2024 Betech Digital Solutions. Bảo lưu mọi quyền.'}</p>
+            <p style="margin: 0; font-size: 10px; color: #64748b;">Bạn nhận được email này vì bạn là đối tác của Betech Digital.</p>
           </td>
         </tr>
       </table>
@@ -385,7 +1105,7 @@ export default function EmailCampaignsPage() {
   const [showInlineSelector, setShowInlineSelector] = useState(false);
 
   // Template customizer states
-  const [templateStyle, setTemplateStyle] = useState<'simple' | 'newsletter' | 'promotion' | 'announcement'>('simple');
+  const [templateStyle, setTemplateStyle] = useState<TemplateMetadata['style']>('simple');
   const [primaryColor, setPrimaryColor] = useState('#3b82f6');
   const [headerTitle, setHeaderTitle] = useState('');
   const [ctaText, setCtaText] = useState('');
@@ -1063,6 +1783,12 @@ export default function EmailCampaignsPage() {
                     <option value="newsletter">{t('Bản tin (Newsletter)')}</option>
                     <option value="promotion">{t('Khuyến mãi (Promotion)')}</option>
                     <option value="announcement">{t('Thông báo (Announcement)')}</option>
+                    <option value="welcome">{t('Chào mừng (Welcome)')}</option>
+                    <option value="thankyou">{t('Tri ân (Appreciation)')}</option>
+                    <option value="event">{t('Sự kiện (Event)')}</option>
+                    <option value="monthly_news">{t('Bản tin tháng (Monthly Newsletter)')}</option>
+                    <option value="ai_showcase">{t('Giải pháp AI (AI Showcase)')}</option>
+                    <option value="enterprise_services">{t('Dịch vụ doanh nghiệp (Enterprise)')}</option>
                   </select>
                 </div>
 
