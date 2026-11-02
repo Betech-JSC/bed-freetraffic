@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon",
+    "dev": "node init && nodemon",
     "worker": "ts-node --transpile-only src/worker-entry.ts",
-    "build": "tsc",
+    "build": "node init && tsc",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "test": "jest"
