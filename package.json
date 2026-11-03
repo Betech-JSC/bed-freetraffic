@@ -7,9 +7,9 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "node init && npx concurrently \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
-    "build": "node init && npm run build --workspaces --if-present",
-    "start": "node init && npm run start --workspaces --if-present",
+    "dev": "npx concurrently \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
+    "build": "npm run build --workspaces --if-present",
+    "start": "npm run start --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "db:push": "npm run db:push -w apps/backend",
     "db:generate": "npm run db:generate -w apps/backend",

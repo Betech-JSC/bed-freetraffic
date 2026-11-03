@@ -87,3 +87,5 @@ build
 .gemini/
 
 config.bat
+/.vscode
+.env
